@@ -1,0 +1,12 @@
+.DS_Store
+*.swp
+*.swo
+.env
+.env.*
+.claude
+.gitnexus
+
+# Docker
+*.db
+*.db-shm
+*.db-wal

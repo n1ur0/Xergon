@@ -1,0 +1,47 @@
+[package]
+name = "xergon-agent"
+version = "0.1.0"
+edition = "2021"
+description = "Xergon Agent - Rust sidecar for Ergo nodes providing PoNW scoring and P2P peer discovery"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full", "signal"] }
+# HTTP client for probing peers
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+# Streaming support
+tokio-stream = "0.1"
+futures-util = "0.3"
+# HTTP server for our own REST API
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors"] }
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Configuration
+config = "0.14"
+# Error handling
+anyhow = "1"
+thiserror = "2"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+# Hashing (node IDs)
+sha2 = "0.10"
+hex = "0.4"
+# CLI args
+clap = { version = "4", features = ["derive"] }
+# Concurrent collections
+dashmap = "6"
+# Rate limiting
+governor = "0.7"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -1,0 +1,10 @@
+/target/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+*.swp
+*.swo
+.DS_Store
+config.toml

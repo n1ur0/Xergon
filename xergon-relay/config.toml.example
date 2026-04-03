@@ -1,0 +1,62 @@
+# Xergon Relay Configuration
+
+[relay]
+# Address to bind the relay server
+listen_addr = "0.0.0.0:9090"
+
+# CORS origins allowed (comma-separated, * for all)
+cors_origins = "*"
+
+# How often to poll providers for health (seconds)
+health_poll_interval_secs = 30
+
+# Max time to wait for a provider response before fallback (seconds)
+provider_timeout_secs = 30
+
+# Max providers to try in fallback chain
+max_fallback_attempts = 3
+
+# Anonymous rate limiting: requests per day per IP
+anonymous_rate_limit_per_day = 10
+
+# Max tokens per request for anonymous users
+anonymous_max_tokens_per_request = 500
+
+[providers]
+# Static list of known xergon-agent endpoints (legacy, still supported)
+# Format: "http://host:port"
+# These are queried for /xergon/status and /v1/chat/completions
+known_endpoints = [
+    "http://127.0.0.1:9099",
+]
+
+# Shared secret token for dynamic provider registration.
+# Agents send this as X-Provider-Token header when registering.
+# Generate: openssl rand -hex 32
+registration_token = "xergon-dev-provider-token-change-me"
+
+[credits]
+# Default credits given to new authenticated users
+new_user_credits_usd = 0.0
+
+# Credit cost per 1000 tokens (in USD)
+cost_per_1k_tokens = 0.002
+
+[auth]
+# JWT secret — CHANGE IN PRODUCTION!
+# Generate: openssl rand -base64 32
+jwt_secret = "xergon-dev-jwt-secret-change-me-in-production"
+
+[stripe]
+# Stripe secret key (leave empty for dev mode — credits added directly)
+secret_key = ""
+
+# Stripe webhook signing secret
+webhook_secret = ""
+
+# Base URL for redirect after checkout (no trailing slash)
+success_url_base = "http://localhost:3000"
+
+[database]
+# SQLite database file path
+path = "xergon.db"

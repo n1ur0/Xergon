@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  xergon-agent:
+    name: Agent (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xergon-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: xergon-agent
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+      - name: Build
+        run: cargo build --release
+      - name: Test
+        run: cargo test
+
+  xergon-relay:
+    name: Relay (Rust)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xergon-relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: xergon-relay
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+      - name: Build
+        run: cargo build --release
+      - name: Test
+        run: cargo test
+
+  xergon-marketplace:
+    name: Marketplace (Next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: xergon-marketplace
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: xergon-marketplace/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+        env:
+          RELAY_URL: http://127.0.0.1:9090

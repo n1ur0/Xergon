@@ -1,0 +1,45 @@
+# Xergon Agent Configuration
+
+[ergo_node]
+rest_url = "http://127.0.0.1:9053"
+
+[xergon]
+provider_id = "Xergon_Test"
+provider_name = "Xergon Test Node"
+region = "us-east"
+ergo_address = "9fDrtPahmtQDAPbq9AccibtZVmyPD8xmNJkrNXBbFDkejkez1kM"
+
+[peer_discovery]
+discovery_interval_secs = 60
+probe_timeout_secs = 5
+xergon_agent_port = 9099
+max_concurrent_probes = 5
+max_peers_per_cycle = 20
+peers_file = "/tmp/xergon-peers.json"
+
+[api]
+listen_addr = "0.0.0.0:9099"
+
+[settlement]
+enabled = true
+interval_secs = 86400
+dry_run = true
+ledger_file = "data/settlement_ledger.json"
+min_settlement_usd = 0.10
+
+[llama_server]
+url = "http://127.0.0.1:8080"
+health_check_interval_secs = 60
+
+[inference]
+enabled = true
+url = "http://127.0.0.1:11434"  # Ollama default port
+timeout_secs = 120
+
+# Relay registration — connect to xergon-relay for dynamic provider discovery
+# Set register_on_start = true and fill in relay_url + token to enable
+[relay]
+register_on_start = false
+relay_url = "http://127.0.0.1:9090"   # Relay base URL
+token = "xergon-dev-provider-token-change-me"  # Must match relay's providers.registration_token
+heartbeat_interval_secs = 60

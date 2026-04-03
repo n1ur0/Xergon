@@ -1,0 +1,62 @@
+[package]
+name = "xergon-relay"
+version = "0.1.0"
+edition = "2021"
+description = "Xergon Relay — Marketplace backend that proxies user inference requests to Xergon providers"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full", "signal"] }
+# HTTP server
+axum = { version = "0.8", features = ["macros"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+# HTTP client for proxying to providers
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# Configuration
+config = "0.14"
+# Error handling
+anyhow = "1"
+thiserror = "2"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+# Hashing (rate limit keys)
+sha2 = "0.10"
+hex = "0.4"
+# CLI args
+clap = { version = "4", features = ["derive"] }
+# Concurrent collections
+dashmap = "6"
+# Rate limiting (token bucket)
+governor = "0.7"
+# SSE streaming
+futures-core = "0.3"
+futures-util = "0.3"
+tokio-stream = "0.1"
+pin-project-lite = "0.2"
+bytes = "1"
+# UUID for request IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+# Database
+rusqlite = { version = "0.32", features = ["bundled"] }
+# JWT
+jsonwebtoken = "9"
+# Password hashing
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["std"] }
+# HMAC for Stripe webhook signature verification
+hmac = "0.12"
+subtle = "2.6"
+# Stripe (HTTP calls, not SDK — we build checkout sessions via REST)
+# Using reqwest already in tree
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  xergon-agent:
+    build: ./xergon-agent
+    container_name: xergon-agent
+    ports:
+      - "9099:9099"
+    volumes:
+      - ./xergon-agent/config.toml:/app/config.toml:ro
+      - xergon-agent-data:/app/data
+    environment:
+      - RUST_LOG=xergon_agent=info
+    restart: unless-stopped
+
+  xergon-relay:
+    build: ./xergon-relay
+    container_name: xergon-relay
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./xergon-relay/config.toml:/app/config.toml:ro
+      - xergon-relay-data:/app/data
+    environment:
+      - RUST_LOG=xergon_relay=info
+    depends_on:
+      - xergon-agent
+    restart: unless-stopped
+
+  xergon-marketplace:
+    build: ./xergon-marketplace
+    container_name: xergon-marketplace
+    ports:
+      - "3000:3000"
+    environment:
+      - RELAY_URL=http://xergon-relay:9090
+      - NEXT_PUBLIC_API_BASE=/api/v1
+      - NEXT_PUBLIC_XERGON_AGENT_BASE=http://xergon-agent:9099
+    depends_on:
+      - xergon-relay
+    restart: unless-stopped
+
+volumes:
+  xergon-agent-data:
+  xergon-relay-data:
