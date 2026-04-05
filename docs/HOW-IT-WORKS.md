@@ -1,3 +1,8 @@
+> **DEPRECATED**: This document describes the original Web2 design (JWT auth, Stripe payments, USD credits).
+> The current system uses **Ergo-native economics**: wallet-based auth (EIP-12/Nautilus), ERG staking boxes for balances,
+> and direct ERG payments. See [ROADMAP.md](../ROADMAP.md) for the current architecture.
+> This file is kept for historical reference only.
+
 # How Xergon Works
 
 > A visual walkthrough of the Xergon Network — from user click to ERG settlement.

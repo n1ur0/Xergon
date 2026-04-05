@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PlaygroundSection } from "@/components/playground/PlaygroundSection";
 
 export default function Page() {
   return (
@@ -11,7 +12,7 @@ export default function Page() {
             Decentralized AI{" "}
             <span className="text-brand-400">Compute</span>
           </h1>
-          <p className="mx-auto mt-6 max-w-2xl text-lg text-surface-200/80">
+          <p className="mx-auto mt-6 max-w-2xl text-lg text-surface-200/80 dark:text-surface-300/80">
             Access open-source AI models powered by the Ergo blockchain. No
             lock-in, no middlemen — just transparent, pay-per-token inference on
             a trustless network.
@@ -25,13 +26,16 @@ export default function Page() {
             </Link>
             <Link
               href="/models"
-              className="rounded-lg border border-surface-200/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/10"
+              className="rounded-lg border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/10"
             >
               View Models
             </Link>
           </div>
         </div>
       </section>
+
+      {/* Playground v2 */}
+      <PlaygroundSection />
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-6 py-24">
@@ -44,7 +48,7 @@ export default function Page() {
         <div className="mt-14 grid gap-8 sm:grid-cols-3">
           {/* Privacy-First */}
           <div className="rounded-xl border border-surface-200 bg-surface-0 p-6 shadow-sm transition-shadow hover:shadow-md">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -71,7 +75,7 @@ export default function Page() {
 
           {/* Pay-Per-Token */}
           <div className="rounded-xl border border-surface-200 bg-surface-0 p-6 shadow-sm transition-shadow hover:shadow-md">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -98,7 +102,7 @@ export default function Page() {
 
           {/* Open Network */}
           <div className="rounded-xl border border-surface-200 bg-surface-0 p-6 shadow-sm transition-shadow hover:shadow-md">
-            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/40 dark:text-brand-400">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
@@ -132,7 +136,7 @@ export default function Page() {
             How It Works
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-center text-surface-800/60">
-            From sign-up to your first inference in under two minutes.
+            From wallet connection to your first inference in under two minutes.
           </p>
           <div className="mt-14 grid gap-8 sm:grid-cols-3">
             {/* Step 1 */}
@@ -141,11 +145,10 @@ export default function Page() {
                 1
               </div>
               <h3 className="text-lg font-semibold text-surface-900">
-                Sign Up
+                Connect Wallet
               </h3>
               <p className="mt-2 text-sm text-surface-800/60">
-                Create an account and fund your balance with ERG or purchase
-                credits instantly.
+                Connect your Ergo wallet. Your public key is your identity -- no signups, no passwords.
               </p>
             </div>
 
@@ -155,11 +158,10 @@ export default function Page() {
                 2
               </div>
               <h3 className="text-lg font-semibold text-surface-900">
-                Select a Model
+                Pick a Model
               </h3>
               <p className="mt-2 text-sm text-surface-800/60">
-                Browse the model catalog — from LLMs to image generators — and
-                pick the right one for your task.
+                Browse open-source models: Llama, Qwen, Mistral, DeepSeek. Pick the right one for your task.
               </p>
             </div>
 
@@ -169,13 +171,40 @@ export default function Page() {
                 3
               </div>
               <h3 className="text-lg font-semibold text-surface-900">
-                Deploy &amp; Use
+                Start Inferencing
               </h3>
               <p className="mt-2 text-sm text-surface-800/60">
-                Send prompts via the playground or API. Responses stream back
-                from the nearest available node.
+                Send prompts via the playground or OpenAI-compatible API. Pay per token with ERG, settled on-chain.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Become a Provider CTA */}
+      <section className="bg-surface-950 text-white">
+        <div className="mx-auto max-w-6xl px-6 py-24 text-center">
+          <h2 className="text-2xl font-bold sm:text-3xl">
+            Got a GPU?{" "}
+            <span className="text-brand-400">Earn ERG.</span>
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-surface-200/80">
+            Turn idle mining hardware into an AI inference node. Earn ERG on top
+            of block rewards -- no changes to your existing Ergo setup.
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+            <Link
+              href="/become-provider"
+              className="rounded-lg bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/25 transition-colors hover:bg-brand-700"
+            >
+              Become a Provider
+            </Link>
+            <Link
+              href="/provider"
+              className="rounded-lg border border-white/20 bg-white/5 px-6 py-2.5 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/10"
+            >
+              Read the Docs
+            </Link>
           </div>
         </div>
       </section>

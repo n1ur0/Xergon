@@ -1,0 +1,54 @@
+{
+  // =========================================================================
+  // Xergon Network -- User Staking Box Guard Script (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: US-01 (CRITICAL) + US-02 (HIGH)
+  //   - Replaced *** with proveDlog(userPk)
+  //   - Added output value check: successor staking box must have value
+  //     >= minimum box value (1000000 nanoERG = 0.001 ERG)
+  //   - Added alternative: full withdrawal allowed without staking box
+  //     if all value goes to a P2PK output of the user
+  //
+  // =========================================================================
+
+  // Extract the user's public key from R4
+  val userPk = SELF.R4[GroupElement].get
+
+  // Calculate when storage rent cleanup is allowed.
+  // Ergo block interval is ~2 minutes. 4 years = ~1,051,200 blocks.
+  val creationHeight = SELF.creationInfo._1
+  val rentExpiry = creationHeight + 1051200
+
+  // Minimum box value on Ergo (~0.001 ERG)
+  val minBoxValue = 1000000L
+
+  // Path 1: The user authorizes spending via sigma protocol.
+  // Two sub-paths:
+  //   a) Partial payment/withdrawal: output must contain a staking box
+  //      with the same pk, value >= minBoxValue, and same script
+  //   b) Full withdrawal: no staking box required, but value must go
+  //      to an output the user controls (P2PK of userPk)
+  val userAuthorized = proveDlog(userPk) && {
+    // Sub-path (a): successor staking box exists with same script
+    val hasStakingBox = OUTPUTS.exists { (b: Box) =>
+      b.R4[GroupElement].isDefined &&
+      b.R4[GroupElement].get == userPk &&
+      b.propositionBytes == SELF.propositionBytes &&
+      b.value >= minBoxValue
+    }
+    // Sub-path (b): full withdrawal to user's P2PK
+    val fullWithdrawal = OUTPUTS.exists { (b: Box) =>
+      b.propositionBytes == proveDlog(userPk).propBytes &&
+      b.value >= SELF.value - 1000000L  // fee allowance
+    }
+    hasStakingBox || fullWithdrawal
+  }
+
+  // Path 2: Storage rent cleanup. After 4 years of inactivity,
+  // anyone can sweep this box to reclaim the ERG and reduce UTXO bloat.
+  val rentExpired = HEIGHT >= rentExpiry
+
+  // Either spending path is valid.
+  userAuthorized || rentExpired
+}

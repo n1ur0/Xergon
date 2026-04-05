@@ -4,11 +4,12 @@
 //! Handles:
 //! - Initial registration with provider info + models
 //! - Periodic heartbeat to maintain registration
+//! - On-chain heartbeat transaction (Phase 2, optional)
 //! - Graceful deregistration on shutdown
 //!
 //! Config section: [relay]
 //!   relay_url = "http://relay-host:9090"   # Relay base URL
-//!   token = "shared-secret-token"            # Must match relay's providers.registration_token
+//!   token="shared...oken"            # Must match relay's providers.registration_token
 //!   heartbeat_interval_secs = 60             # How often to send heartbeat (default: 60)
 //!   register_on_start = true                 # Auto-register on startup (default: true)
 
@@ -35,8 +36,12 @@ pub struct RelayClientConfig {
     pub register_on_start: bool,
 }
 
-fn default_heartbeat_interval() -> u64 { 60 }
-fn default_register_on_start() -> bool { true }
+fn default_heartbeat_interval() -> u64 {
+    60
+}
+fn default_register_on_start() -> bool {
+    true
+}
 
 impl Default for RelayClientConfig {
     fn default() -> Self {
@@ -169,7 +174,8 @@ impl RelayClient {
             ttl_secs: ttl,
         };
 
-        let resp = self.http_client
+        let resp = self
+            .http_client
             .post(&url)
             .header("X-Provider-Token", &self.config.token)
             .header("Content-Type", "application/json")
@@ -181,11 +187,7 @@ impl RelayClient {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().await.unwrap_or_default();
-            anyhow::bail!(
-                "Relay registration failed ({}): {}",
-                status,
-                body
-            );
+            anyhow::bail!("Relay registration failed ({}): {}", status, body);
         }
 
         let reg_resp: RegistrationResponse = resp
@@ -221,7 +223,8 @@ impl RelayClient {
 
         let payload = HeartbeatPayload { models };
 
-        let resp = self.http_client
+        let resp = self
+            .http_client
             .post(&url)
             .header("X-Provider-Token", &self.config.token)
             .header("X-Provider-Id", &self.provider_id)
@@ -239,7 +242,9 @@ impl RelayClient {
                 // We're no longer registered — need to re-register
                 warn!("Heartbeat returned 404 — re-registering with relay");
                 self.registered.store(false, Ordering::Relaxed);
-                Err(anyhow::anyhow!("Provider no longer registered, needs re-registration"))
+                Err(anyhow::anyhow!(
+                    "Provider no longer registered, needs re-registration"
+                ))
             }
             Ok(r) => {
                 let status = r.status();
@@ -270,7 +275,8 @@ impl RelayClient {
             self.config.relay_url.trim_end_matches('/')
         );
 
-        match self.http_client
+        match self
+            .http_client
             .delete(&url)
             .header("X-Provider-Token", &self.config.token)
             .header("X-Provider-Id", &self.provider_id)
@@ -295,11 +301,13 @@ impl RelayClient {
     ///
     /// Periodically sends heartbeats and re-registers if needed.
     /// The closure `get_models` is called each cycle to get the current model list.
-    pub fn spawn_heartbeat_loop<F>(
-        self: Arc<Self>,
-        get_models: F,
-    ) where
+    ///
+    /// The optional `on_chain_heartbeat` closure is called after a successful
+    /// HTTP heartbeat to submit an on-chain heartbeat transaction.
+    pub fn spawn_heartbeat_loop<F, FH>(self: Arc<Self>, get_models: F, on_chain_heartbeat: Option<FH>)
+    where
         F: Fn() -> Vec<String> + Send + Sync + 'static,
+        FH: Fn() + Send + Sync + 'static,
     {
         tokio::spawn(async move {
             let interval = Duration::from_secs(self.config.heartbeat_interval_secs);
@@ -312,6 +320,10 @@ impl RelayClient {
 
                 match self.heartbeat(models).await {
                     Ok(()) => {
+                        // HTTP heartbeat OK — try on-chain heartbeat if enabled
+                        if let Some(ref cb) = on_chain_heartbeat {
+                            cb();
+                        }
                         // All good, sleep until next heartbeat
                     }
                     Err(_) => {

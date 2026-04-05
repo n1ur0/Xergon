@@ -67,7 +67,7 @@ export interface SettlementRecord {
   txId: string;
   amountNanoerg: number;
   amountErg: number;
-  creditsConverted?: number;
+  nanoergConverted?: number;
   status: "pending" | "confirmed" | "failed";
   createdAt: string;
   confirmedAt: string | null;
@@ -175,6 +175,69 @@ async function agentFetch<T>(path: string): Promise<T | null> {
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Pricing API
+// ---------------------------------------------------------------------------
+
+export interface PricingModelEntry {
+  model: string;
+  price: number;
+}
+
+export interface PricingData {
+  default_price_per_1m_tokens: number;
+  models: Record<string, number>;
+}
+
+interface PricingRaw {
+  default_price_per_1m_tokens: number;
+  models: Record<string, number>;
+}
+
+interface PricingUpdateRaw {
+  ok: boolean;
+  default_price_per_1m_tokens: number;
+  models: Record<string, number>;
+}
+
+/** Fetch pricing data from xergon-agent /xergon/pricing */
+export async function fetchPricingData(): Promise<PricingData> {
+  const raw = await agentFetch<PricingRaw>("/xergon/pricing");
+  if (!raw) {
+    return {
+      default_price_per_1m_tokens: 50_000,
+      models: {},
+    };
+  }
+  return {
+    default_price_per_1m_tokens: raw.default_price_per_1m_tokens,
+    models: raw.models,
+  };
+}
+
+/** Update a model price via POST /xergon/pricing */
+export async function updateModelPrice(
+  model: string,
+  price: number
+): Promise<PricingData> {
+  const res = await fetch(`/api/xergon-agent/xergon/pricing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model, price }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "Unknown error");
+    throw new Error(`Failed to update price: ${text}`);
+  }
+
+  const raw = (await res.json()) as PricingUpdateRaw;
+  return {
+    default_price_per_1m_tokens: raw.default_price_per_1m_tokens,
+    models: raw.models,
+  };
 }
 
 // ---------------------------------------------------------------------------

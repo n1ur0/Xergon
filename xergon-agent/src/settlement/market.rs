@@ -106,7 +106,11 @@ impl MarketRateProvider {
             let guard = self.cached_rate.lock().unwrap();
             if let Some((rate, ts)) = *guard {
                 if now - ts < self.cache_ttl_secs {
-                    info!(rate = rate, age_secs = now - ts, "Using cached ERG/USD rate");
+                    info!(
+                        rate = rate,
+                        age_secs = now - ts,
+                        "Using cached ERG/USD rate"
+                    );
                     return Ok(rate);
                 }
             }

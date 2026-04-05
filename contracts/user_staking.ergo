@@ -1,0 +1,86 @@
+{
+  // =========================================================================
+  // Xergon Network -- User Staking Box Guard Script
+  // =========================================================================
+  //
+  // Holds ERG as prepaid balance. The box value IS the user's balance --
+  // there is no separate credit system or ledger. This follows the eUTXO
+  // principle of "value in the box = state".
+  //
+  // When a user wants to pay for inference:
+  //   1. User's Staking Box is spent.
+  //   2. A new Staking Box is created with reduced value (payment deducted).
+  //   3. The payment ERG is routed to the Provider Box and/or fee outputs.
+  //
+  // Register Layout (EIP-4):
+  //   R4: User public key (GroupElement) -- for proveDlog authorization
+  //
+  // Spending Conditions:
+  //   Path 1 (Normal): User spends via proveDlog of R4.
+  //                    At least one output must be a new staking box with
+  //                    the same R4 pk (balance tracking enforcement).
+  //                    Used for inference payment or full withdrawal.
+  //   Path 2 (Cleanup): Anyone can spend after the storage rent period
+  //                      expires (4 years = 1,051,200 blocks at ~2 min/block).
+  //                      This allows UTXO set cleanup for abandoned accounts.
+  //
+  // Storage Rent Note:
+  //   The minimum box value on Ergo is ~0.001 ERG. If a user's balance
+  //   drops below this threshold, they cannot create a valid staking box.
+  //   The rent expiry path ensures abandoned dust boxes are eventually
+  //   cleaned from the UTXO set.
+  //
+  // Security Notes:
+  //   - [INFO] The balance-tracking convention (same R4 pk in output) is
+  //     enforced but does not prevent a user from creating multiple staking
+  //     boxes with the same pk. Off-chain logic should track the canonical
+  //     staking box per user (e.g., the one with the highest value).
+  //   - [INFO] There is no on-chain rate limiting on spending. A compromised
+  //     user key could drain the balance instantly. Users should protect
+  //     their keys and consider hardware wallet integration.
+  //   - Storage rent: the 4-year expiry is a safety net. Active users'
+  //     boxes won't expire because they spend them regularly (inference
+  //     payments reset the creation height on the new output box).
+  //
+  // =========================================================================
+
+  // Extract the user's public key from R4
+  val userPk = SELF.R4[GroupElement].get
+
+  // Calculate when storage rent cleanup is allowed.
+  // Ergo block interval is ~2 minutes. 4 years = ~1,051,200 blocks.
+  val creationHeight = SELF.creationInfo._1
+  val rentExpiry = creationHeight + 1051200
+
+  // Minimum box value on Ergo (~0.001 ERG)
+  val minBoxValue = 1000000L
+
+  // Path 1: The user authorizes spending via sigma protocol.
+  // Two sub-paths:
+  //   a) Partial payment/withdrawal: output must contain a staking box
+  //      with the same pk, value >= minBoxValue, and same script
+  //   b) Full withdrawal: no staking box required, but value must go
+  //      to an output the user controls (P2PK of userPk)
+  val userAuthorized=proveDlog(userPk) && {
+    // Sub-path (a): successor staking box exists with same script
+    val hasStakingBox = OUTPUTS.exists { (b: Box) =>
+      b.R4[GroupElement].isDefined &&
+      b.R4[GroupElement].get == userPk &&
+      b.propositionBytes == SELF.propositionBytes &&
+      b.value >= minBoxValue
+    }
+    // Sub-path (b): full withdrawal to user's P2PK
+    val fullWithdrawal = OUTPUTS.exists { (b: Box) =>
+      b.propositionBytes == proveDlog(userPk).propBytes &&
+      b.value >= SELF.value - 1000000L  // fee allowance
+    }
+    hasStakingBox || fullWithdrawal
+  }
+
+  // Path 2: Storage rent cleanup. After 4 years of inactivity,
+  // anyone can sweep this box to reclaim the ERG and reduce UTXO bloat.
+  val rentExpired = HEIGHT >= rentExpiry
+
+  // Either spending path is valid.
+  userAuthorized || rentExpired
+}

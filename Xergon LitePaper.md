@@ -124,46 +124,99 @@ Xergon is *not* a new chain — it’s a **network overlay** built on Ergo.
 ---
 
 ## 7. Data Integrity & Reputation
-To ensure long-term verifiable reputations:
+All provider state and usage records live on-chain via 11 ErgoScript contracts deployed on Ergo:
 
-- The Xergon agent reports periodic stats (signed)
-- Marketplace relays store global cumulative metrics
-- Peer confirmations strengthen integrity
-- Future: optional NFT identities on Ergo
-- Future: lightweight rollups for on-chain anchoring  
+- **11 on-chain contracts** — Provider Registry, Provider Box, Usage Proof, Staking Box, Treasury, Rollup Commitment, GPU Rental, Relay Registry, Payment Bridge, Bootstrap, and Minting contracts
+- **Provider NFT identity** — each provider mints a unique EIP-004 NFT on Ergo at registration, serving as on-chain identity
+- **Usage proofs verified on-chain** — every inference request generates a signed proof box with user PK, provider ID, model, token count, and timestamp
+- **GPU rental via SSH tunnels** — time-boxed on-chain rental contracts meter usage per hour in ERG, with auto-refund on timeout
+- **Payment bridge for escrow** — invoice-based cross-chain payments (BTC/ETH/ADA) with refund timeouts and on-chain verification
+- **P2P reputation sharing** — providers exchange peer info and confirmations through multi-relay discovery
+- **Lightweight rollups** — batch usage proofs into Merkle tree commitment boxes for efficient epoch batching
 
-Local counters reset on restart, but global history never resets.
+Local counters reset on restart, but global on-chain history never resets.
 
 ---
 
 ## 8. Roadmap
 
-### **Phase 1 — Core PoNW (Complete)**
-- AI token tracking  
-- Node/peer validation  
-- Provider config API  
-- PoNW-scored endpoints
-- NFT identity anchors  
+### **Phase 1 — Core PoNW [DONE]**
+- Agent binary with PoNW scoring engine
+- Node health monitoring (sync, peers, tip height)
+- Peer discovery (scan Ergo peers for Xergon agents)
+- AI token tracking and work points
+- NFT identity anchors
 
-### **Phase 2 — Marketplace (In Progress)**
-- Provider discovery  
-- Model listings  
-- Leaderboards  
-- Contract-less UX  
+### **Phase 2 — Marketplace [DONE]**
+- Relay server (stateless proxy with signature verification)
+- Provider discovery and model listings
+- Leaderboards (provider ranking by PoNW score)
+- Playground UI (chat interface with model selector, streaming)
+- Contract-less UX with on-chain fallback
 
-### **Phase 3 — Economic Layer**
-- ERG payment rails  
-- Usage-based billing  
-- Verified PoNW histories  
+### **Phase 3 — Economic Layer [DONE]**
+- 11 ErgoScript contracts (Provider Registry, Provider Box, Usage Proof, Staking Box, Treasury, Rollup, GPU Rental, Relay Registry, Payment Bridge, Bootstrap, Minting)
+- ERG payment rails via node wallet API
+- Usage-based billing (ERG deducted per request)
+- On-chain provider registration with NFT identity
+- ChainCache UTXO scanner (background poll every 10s)
 
-### **Phase 4 — Network Layer**
-- Multi-relay discovery  
-- P2P reputation sharing  
-- Light rollup commitments  
+### **Phase 4 — Network Layer [DONE]**
+- Multi-relay discovery (relays register on-chain, agents auto-discover)
+- P2P reputation sharing between providers
+- GPU rental with SSH tunnel access
+- Relay registry on-chain
 
-### **Phase 5 — Full Compute Network**
+### **Phase 5 — Full Compute Network [DONE]**
 - Trust-minimized on-chain settlements
-- Cross-chain integrations
+- Usage proof verification (signed proof boxes per request)
+- Payment bridge for cross-chain escrow (BTC/ETH/ADA)
+- Lightweight rollups (Merkle tree commitment boxes)
+
+### **Phase 6 — Production Hardening [DONE]**
+- Binary distribution (musl static: linux/amd64, linux/arm64, darwin/arm64)
+- `xergon status` and `xergon update` commands
+- Integration tests (agent + relay + chain end-to-end)
+- Monitoring: health endpoints, metrics, alerting
+- Load testing: 100+ concurrent users
+
+### **Phase 7 — Testnet & Wallet Integration [DONE]**
+- Real contract compilation (ErgoScript -> ErgoTree hex)
+- Bootstrap script: mint NFT, create Treasury Box on testnet
+- EIP-12 Nautilus wallet connector
+- On-chain integration tests against testnet node
+
+### **Phase 8 — Security Audit [DONE]**
+- Comprehensive audit of all 11 ErgoScript contracts (26 findings)
+- Centralized tx safety module (7 validators, 25 unit tests)
+- Guards integrated into all tx builders
+
+### **Phase 9 — Mainnet Readiness [DONE]**
+- Prometheus + Grafana monitoring stack
+- Operator runbook and deployment docs
+- Rate limiting on relay endpoints
+- Security audit and load testing
+
+### **Phase 10 — Post-Audit Hardening [DONE]**
+- Critical security patches applied to contracts
+- ergo-lib native transaction builders
+- Contract recompilation pipeline
+- Code cleanup and stale code removal
+
+### **Phase 11 — Launch Prep [DONE]**
+- Test suite refresh (ergo-lib tx builder tests, property tests)
+- CI pipeline: auto-compile all 11 contracts on push
+- On-chain tests: 15 tests covering all contracts on testnet
+- dApp v2: wallet-connected marketplace (Nautilus/SAFEW)
+- Genesis bootstrap script for mainnet
+
+### **Phase 12 — Mainnet Deployment [NOW]**
+- Compile all 11 contracts against mainnet node
+- Deploy genesis (mint NFT, create Treasury) on mainnet
+- Release binaries with GitHub Actions CI/CD
+- Production monitoring stack (Prometheus + Grafana + Alertmanager)
+- Smoke tests (13-step lifecycle verification)
+- Community announcement and docs
 
 ---
 

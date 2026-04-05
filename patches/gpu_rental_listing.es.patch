@@ -1,0 +1,40 @@
+{
+  // =========================================================================
+  // Xergon Network -- GPU Rental Listing Box Guard Script (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: GL-01 (HIGH)
+  //   - Added NFT amount == 1 check to prevent NFT splitting
+  //
+  // =========================================================================
+
+  // Extract the provider's public key from R4
+  val providerPk = SELF.R4[GroupElement].get
+
+  // Identify our Listing NFT by its token ID (token at index 0)
+  val nftId = SELF.tokens(0)._1
+
+  // OUTPUTS(0) convention: the successor listing box must be the first output.
+  val outBox = OUTPUTS(0)
+
+  // scriptPreserved check: successor must be guarded by the same ErgoTree.
+  val scriptPreserved = outBox.propositionBytes == SELF.propositionBytes
+
+  // Verify the output box preserves the Listing NFT with exact amount.
+  // PATCH GL-01: Added _2 == 1L check
+  val outPreservesNft = outBox.tokens.size > 0 &&
+    outBox.tokens(0)._1 == nftId &&
+    outBox.tokens(0)._2 == 1L
+
+  // Verify the output box is guarded by the same provider public key.
+  val outHasCorrectGuard = outBox.R4[GroupElement].isDefined &&
+    outBox.R4[GroupElement].get == providerPk
+
+  // Value preservation: the successor box must hold at least as much ERG.
+  val valuePreserved = outBox.value >= SELF.value
+
+  // Final spending condition: all checks must pass AND the spender
+  // must prove ownership via sigma protocol (proveDlog).
+  proveDlog(providerPk) && scriptPreserved && outPreservesNft &&
+    outHasCorrectGuard && valuePreserved
+}

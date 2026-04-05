@@ -1,0 +1,85 @@
+groups:
+  - name: xergon-critical
+    rules:
+      - alert: AgentDown
+        expr: up{job="xergon-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Xergon agent is down"
+          description: "The xergon-agent instance has been unreachable for 1 minute."
+
+      - alert: RelayDown
+        expr: up{job="xergon-relay"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Xergon relay is down"
+          description: "The xergon-relay instance has been unreachable for 1 minute."
+
+      - alert: NoActiveProviders
+        expr: xergon_relay_providers_active == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No active providers"
+          description: "No healthy providers are available for inference requests."
+
+  - name: xergon-warnings
+    rules:
+      - alert: WalletBalanceLow
+        expr: xergon_agent_wallet_balance_nanoerg < 100000000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent wallet balance low"
+          description: "Wallet balance is below 0.1 ERG (current: {{ $value }} nanoERG). Fund the wallet."
+
+      - alert: NodeDesync
+        expr: xergon_agent_chain_sync_height == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ergo node may be desynced"
+          description: "Chain height reported as 0 for 5 minutes. Check node connectivity."
+
+      - alert: HighErrorRate
+        expr: rate(xergon_agent_inference_errors_total[5m]) / rate(xergon_inference_requests_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inference error rate"
+          description: "More than 50% of inference requests are failing."
+
+      - alert: RelayHighErrorRate
+        expr: rate(xergon_relay_errors_total[5m]) / rate(xergon_relay_requests_total[5m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High relay error rate"
+          description: "More than 30% of relay requests are returning errors."
+
+      - alert: NoNodePeers
+        expr: xergon_agent_chain_node_peers < 3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ergo node has few peers"
+          description: "Only {{ $value }} peers connected. Network connectivity may be degraded."
+
+      - alert: HighLatency
+        expr: xergon_agent_inference_latency_ms > 30000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inference latency"
+          description: "Inference latency is above 30 seconds (current: {{ $value }}ms)."

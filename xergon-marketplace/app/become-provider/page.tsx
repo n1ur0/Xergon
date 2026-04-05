@@ -13,9 +13,9 @@ export default function BecomeProviderPage() {
 
   function handleGetStarted() {
     if (!isAuthenticated) {
-      router.push("/signup");
+      router.push("/signin");
     } else if (!hasWallet) {
-      router.push("/settings#wallet");
+      router.push("/settings");
     } else {
       router.push("/provider");
     }
@@ -125,9 +125,9 @@ export default function BecomeProviderPage() {
         </button>
         <p className="mt-3 text-sm text-surface-200/50">
           {!isAuthenticated
-            ? "You'll be prompted to create an account first."
+            ? "You'll need to connect your wallet first."
             : !hasWallet
-              ? "You'll need to link your Ergo wallet in Settings."
+              ? "Your wallet is connected — head to the Provider Dashboard."
               : "Your wallet is linked — head to the Provider Dashboard."}
         </p>
       </section>

@@ -1,0 +1,44 @@
+{
+  // =========================================================================
+  // Xergon Network -- GPU Rating Contract (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: GRA-01 (MEDIUM)
+  //   - Added output constraints: if the rater spends to update their rating,
+  //     the output must preserve raterPK, ratedPK, and rentalBoxId,
+  //     and the new rating must also be in range 1-5.
+  //
+  // =========================================================================
+
+  // Who submitted this rating
+  val raterPK = SELF.R4[GroupElement].get
+
+  // Who is being rated (provider or renter)
+  val ratedPK = SELF.R5[GroupElement].get
+
+  // The rental box ID this rating is for
+  val rentalBoxId = SELF.R7[Coll[Byte]].get
+
+  // Rating: 1-5 stars stored as Int in R8
+  val rating = SELF.R8[Int].get
+
+  // Validate rating is in range 1-5
+  val validRating = rating >= 1 && rating <= 5
+
+  // PATCH GRA-01: If updating, output must also be a valid rating box
+  val outputValid = OUTPUTS.forall { (out: Box) =>
+    // If the output has R4 (rater), it must be a valid rating box
+    out.R4[GroupElement].forall { outRater =>
+      out.R5[GroupElement].isDefined &&
+      out.R5[GroupElement].get == ratedPK &&
+      out.R7[Coll[Byte]].isDefined &&
+      out.R7[Coll[Byte]].get == rentalBoxId &&
+      out.R8[Int].isDefined &&
+      out.R8[Int].get >= 1 &&
+      out.R8[Int].get <= 5
+    }
+  }
+
+  // Only the rater can spend (update) their rating
+  proveDlog(raterPK) && validRating && outputValid
+}

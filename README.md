@@ -14,7 +14,7 @@ Powered by [Degens World](https://degens.world)
 │  Ergo Node  │     │ Xergon Agent│     │ Xergon Relay│
 │  (9053)     │◄────│  (9099)     │────►│  (9090)     │
 │             │     │ Rust sidecar│     │ Rust backend│
-└─────────────┘     │ PoNW scoring│     │ Auth/Credits│
+└─────────────┘     │ PoNW scoring│     │ Auth/Staking│
                     │ Peer discov.│     │ Provider mgmt│
                     │ Settlement  │     │ Rate limiting│
                     └──────┬──────┘     └──────┬──────┘
@@ -29,7 +29,7 @@ Powered by [Degens World](https://degens.world)
 | Component          | Language   | Port | Purpose                                    |
 |--------------------|------------|------|--------------------------------------------|
 | xergon-agent       | Rust       | 9099 | PoNW scoring, peer discovery, inference proxy, ERG settlement |
-| xergon-relay       | Rust       | 9090 | Auth (JWT), credits, Stripe, provider routing, admin API |
+| xergon-relay       | Rust       | 9090 | Signature auth, ERG staking, provider routing |
 | xergon-marketplace | TypeScript | 3000 | Next.js 15 frontend — playground, models, pricing, provider dashboard |
 
 ---
@@ -54,7 +54,7 @@ cargo run --release
 
 ```bash
 cd xergon-relay
-cp config.toml.example config.toml  # edit jwt_secret, registration_token, etc.
+cp config.toml.example config.toml  # edit registration_token, etc.
 cargo run --release
 ```
 
@@ -78,7 +78,7 @@ Open http://localhost:3000
 cp xergon-agent/config.toml.example xergon-agent/config.toml
 cp xergon-relay/config.toml.example xergon-relay/config.toml
 
-# Edit configs — at minimum change jwt_secret and registration_token in relay config
+# Edit configs — at minimum change registration_token in relay config
 
 # Start everything
 docker compose up --build
@@ -107,10 +107,8 @@ docker compose up --build
 | Section       | Key                         | Default            | Description                         |
 |---------------|-----------------------------|--------------------|-------------------------------------|
 | `[relay]`     | `listen_addr`               | `0.0.0.0:9090`    | Relay API bind address              |
-| `[auth]`      | `jwt_secret`                | —                  | JWT signing secret (CHANGE IN PROD) |
 | `[providers]` | `registration_token`        | —                  | Provider auth token (CHANGE IN PROD) |
-| `[credits]`   | `cost_per_1k_tokens`        | `0.002`            | USD cost per 1K tokens              |
-| `[stripe]`    | `secret_key`                | `""`               | Empty = dev mode (credits added directly) |
+| `[settlement]`   | `cost_per_1k_tokens_nanoerg`  | `200000000`        | nanoERG cost per 1K tokens              |
 
 ### Environment Variables
 | Variable                      | Component  | Description                          |

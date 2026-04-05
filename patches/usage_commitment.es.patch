@@ -1,0 +1,36 @@
+{
+  // =========================================================================
+  // Xergon Network -- Usage Commitment Box Guard Script (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: UC-01 (HIGH) + UC-02 (MEDIUM)
+  //   - Changed t._2 >= 1L to t._2 == 1L to prevent NFT splitting
+  //   - Added scriptPreserved check to prevent NFT hijacking
+  //
+  // =========================================================================
+
+  val providerPK = SELF.R4[SigmaProp].get
+  val epochStart = SELF.R5[Int].get
+  val epochEnd = SELF.R6[Int].get
+  val proofCount = SELF.R7[Int].get
+  val merkleRoot = SELF.R8[Coll[Byte]].get
+  val commitmentNFT = SELF.tokens(0)._1
+
+  // Spending condition 1: only the provider can spend (or storage rent cleanup)
+  val canSpend = providerPK || {
+    val creationHeight = SELF.creationInfo._1
+    HEIGHT >= creationHeight + 1051200
+  }
+
+  // Spending condition 2: commitment NFT must be preserved with
+  // exact amount (1) AND script preserved to prevent hijacking.
+  val preservesNFT = OUTPUTS.exists { (out: Box) =>
+    out.tokens.exists { (t: (Coll[Byte], Long)) =>
+      t._1 == commitmentNFT &&
+      t._2 == 1L &&                          // PATCH UC-01: exact singleton
+      out.propositionBytes == SELF.propositionBytes  // PATCH UC-02: script preserved
+    }
+  }
+
+  canSpend && preservesNFT
+}

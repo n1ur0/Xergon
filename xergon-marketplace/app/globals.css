@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* ── Class-based dark mode for Tailwind 4 ── */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── Xergon Marketplace Theme ── */
 
 @theme {
@@ -21,6 +24,7 @@
   --color-surface-50: #f8fafc;
   --color-surface-100: #f1f5f9;
   --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
   --color-surface-800: #1e293b;
   --color-surface-900: #0f172a;
   --color-surface-950: #020617;
@@ -45,6 +49,19 @@
   --radius-xl: 1rem;
 }
 
+/* ── Dark mode surface overrides ── */
+/* surface-950 stays dark (used by hero section in both themes) */
+/* All other light/dark surface values are swapped */
+.dark {
+  --color-surface-0: #0f172a;
+  --color-surface-50: #1e293b;
+  --color-surface-100: #283548;
+  --color-surface-200: #334155;
+  --color-surface-300: #475569;
+  --color-surface-800: #cbd5e1;
+  --color-surface-900: #e2e8f0;
+}
+
 /* Base styles */
 body {
   @apply bg-surface-50 text-surface-900 font-sans antialiased;
@@ -60,4 +77,84 @@ body {
 }
 ::-webkit-scrollbar-thumb {
   @apply rounded-full bg-surface-200;
+}
+
+/* ── Skeleton shimmer animation ── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-200) 25%,
+    var(--color-surface-100) 37%,
+    var(--color-surface-200) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── Fade-in animation for content ── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* ── Mobile-safe overflow ── */
+@media (max-width: 320px) {
+  .mobile-safe-padding {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* ── Hide scrollbar utility for horizontal scroll chips ── */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Safe area inset utilities ── */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.safe-left {
+  padding-left: env(safe-area-inset-left);
+}
+.safe-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* ── dvh fallback for older browsers ── */
+@supports not (min-height: 100dvh) {
+  body {
+    min-height: 100vh;
+  }
+}
+
+/* ── Prevent pull-to-refresh on mobile ── */
+html {
+  overscroll-behavior-y: contain;
 }

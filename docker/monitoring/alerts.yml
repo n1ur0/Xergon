@@ -1,0 +1,104 @@
+# Xergon Network -- Alert Rules
+#
+# Critical alerts that should trigger immediately:
+#   - Agent down
+#   - Relay down
+#   - Inference error spike
+#
+# Warning alerts (investigate within 1 hour):
+#   - High latency
+#   - Low provider count
+#   - Wallet balance low
+
+groups:
+  - name: xergon-critical
+    rules:
+      # Agent is unreachable
+      - alert: XergonAgentDown
+        expr: up{job="xergon-agent"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Xergon agent is down"
+          description: "Agent at {{ $labels.instance }} has been down for more than 2 minutes."
+
+      # Relay is unreachable
+      - alert: XergonRelayDown
+        expr: up{job="xergon-relay"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Xergon relay is down"
+          description: "Relay at {{ $labels.instance }} has been down for more than 2 minutes."
+
+      # Inference error rate spike (> 10% in 5 minutes)
+      - alert: HighInferenceErrorRate
+        expr: >
+          (
+            rate(xergon_inference_errors_total[5m])
+            / clamp_min(rate(xergon_inference_requests_total[5m]), 0.001)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Inference error rate above 10%"
+          description: "Error rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}."
+
+  - name: xergon-warnings
+    rules:
+      # Inference latency high
+      - alert: HighInferenceLatency
+        expr: xergon_inference_latency_ms > 30000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inference latency"
+          description: "Average latency is {{ $value }}ms on {{ $labels.instance }}."
+
+      # No active providers
+      - alert: NoActiveProviders
+        expr: xergon_relay_providers_active == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No active providers"
+          description: "The relay has 0 active providers. Inference requests will fail."
+
+      # Agent wallet balance low (< 0.5 ERG)
+      - alert: LowWalletBalance
+        expr: xergon_wallet_balance_nanoerg < 500000000
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent wallet balance low"
+          description: "Wallet has {{ $value | humanize }} nanoERG (< 0.5 ERG). Fund the wallet."
+
+      # Relay 5xx error spike
+      - alert: HighRelay5xxRate
+        expr: >
+          (
+            rate(xergon_relay_errors_5xx_total[5m])
+            / clamp_min(rate(xergon_relay_requests_chat_total[5m]), 0.001)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Relay 5xx error rate above 5%"
+          description: "5xx rate is {{ $value | humanizePercentage }} on {{ $labels.instance }}."
+
+      # Chain sync lag
+      - alert: ChainSyncLag
+        expr: abs(xergon_chain_sync_height - xergon_chain_node_peers) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Chain sync lag detected"
+          description: "Node is behind by more than 10 blocks."

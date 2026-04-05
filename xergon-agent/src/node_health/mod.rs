@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use tracing::{debug, warn};
 
 /// Ergo node info from /info endpoint
@@ -66,7 +66,8 @@ impl NodeHealthChecker {
     pub async fn fetch_node_info(&self) -> Result<ErgoNodeInfo> {
         let url = format!("{}/info", self.ergo_rest_url.trim_end_matches('/'));
 
-        let resp = self.http_client
+        let resp = self
+            .http_client
             .get(&url)
             .send()
             .await
@@ -101,15 +102,10 @@ impl NodeHealthChecker {
         let local_height = info.full_height.unwrap_or(best_height);
 
         // Consider synced if full height is within 2 blocks of headers
-        let is_synced = info.full_height.is_some() &&
-            best_height.saturating_sub(local_height) <= 2;
+        let is_synced = info.full_height.is_some() && best_height.saturating_sub(local_height) <= 2;
 
         if !is_synced {
-            warn!(
-                local_height,
-                best_height,
-                "Node is not fully synced"
-            );
+            warn!(local_height, best_height, "Node is not fully synced");
         }
 
         // Derive node_id from ergo_address (stable, deterministic, unique per provider)

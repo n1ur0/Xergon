@@ -129,10 +129,7 @@ pub struct PeerDiscovery {
 }
 
 impl PeerDiscovery {
-    pub fn new(
-        config: PeerDiscoveryConfig,
-        ergo_rest_url: String,
-    ) -> Result<Self> {
+    pub fn new(config: PeerDiscoveryConfig, ergo_rest_url: String) -> Result<Self> {
         let http_client = Client::builder()
             .timeout(Duration::from_secs(config.probe_timeout_secs))
             .connect_timeout(Duration::from_secs(config.probe_timeout_secs))
@@ -159,13 +156,17 @@ impl PeerDiscovery {
     pub async fn load_peers(&self) -> Result<()> {
         if let Some(ref path) = self.peers_file {
             if path.exists() {
-                let data = fs::read_to_string(path).await
+                let data = fs::read_to_string(path)
+                    .await
                     .context("Failed to read peers file")?;
-                let peers: Vec<XergonPeer> = serde_json::from_str(&data)
-                    .context("Failed to parse peers file")?;
+                let peers: Vec<XergonPeer> =
+                    serde_json::from_str(&data).context("Failed to parse peers file")?;
                 let peer_count = peers.len();
                 for peer in &peers {
-                    self.unique_peers_seen.write().await.insert(peer.node_id.clone());
+                    self.unique_peers_seen
+                        .write()
+                        .await
+                        .insert(peer.node_id.clone());
                     self.known_peers.insert(peer.node_id.clone(), peer.clone());
                 }
                 info!(peer_count, "Loaded known peers from disk");
@@ -177,16 +178,14 @@ impl PeerDiscovery {
     /// Save known peers to disk
     pub async fn save_peers(&self) -> Result<()> {
         if let Some(ref path) = self.peers_file {
-            let peers: Vec<XergonPeer> = self.known_peers
-                .iter()
-                .map(|r| r.value().clone())
-                .collect();
-            let data = serde_json::to_string_pretty(&peers)
-                .context("Failed to serialize peers")?;
+            let peers: Vec<XergonPeer> =
+                self.known_peers.iter().map(|r| r.value().clone()).collect();
+            let data = serde_json::to_string_pretty(&peers).context("Failed to serialize peers")?;
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent).await?;
             }
-            fs::write(path, data).await
+            fs::write(path, data)
+                .await
                 .context("Failed to write peers file")?;
             debug!(peer_count = peers.len(), "Saved peers to disk");
         }
@@ -196,17 +195,15 @@ impl PeerDiscovery {
     /// Fetch all Ergo peers from the local node
     async fn fetch_ergo_peers(&self) -> Result<Vec<ErgoPeer>> {
         let url = format!("{}/peers/all", self.ergo_rest_url.trim_end_matches('/'));
-        let resp = self.http_client
+        let resp = self
+            .http_client
             .get(&url)
             .send()
             .await
             .context("Failed to fetch peers from Ergo node")?;
 
         if !resp.status().is_success() {
-            anyhow::bail!(
-                "Ergo node returned status {} for /peers/all",
-                resp.status()
-            );
+            anyhow::bail!("Ergo node returned status {} for /peers/all", resp.status());
         }
 
         let peers: Vec<ErgoPeer> = resp
@@ -220,8 +217,7 @@ impl PeerDiscovery {
     /// Parse an Ergo peer address string (e.g., "/76.119.196.68:9020") into an IP
     fn parse_peer_ip(peer: &ErgoPeer) -> Option<IpAddr> {
         // Try declared_address first, then address
-        let addr_str = peer.declared_address.as_ref()
-            .or(peer.address.as_ref())?;
+        let addr_str = peer.declared_address.as_ref().or(peer.address.as_ref())?;
 
         // Handle format "/1.2.3.4:port"
         let clean = addr_str.trim_start_matches('/');
@@ -231,16 +227,14 @@ impl PeerDiscovery {
     }
 
     #[allow(dead_code)] // TODO: will be used for active peer probing
-    async fn probe_xergon_agent(
-        &self,
-        ip: IpAddr,
-    ) -> Result<(XergonPeer, RemoteXergonStatus)> {
+    async fn probe_xergon_agent(&self, ip: IpAddr) -> Result<(XergonPeer, RemoteXergonStatus)> {
         let addr = SocketAddr::new(ip, self.config.xergon_agent_port);
         let url = format!("http://{}/xergon/status", addr);
 
         debug!(peer_addr = %addr, "Probing peer for Xergon agent");
 
-        let resp = self.http_client
+        let resp = self
+            .http_client
             .get(&url)
             .header("X-Xergon-Probe", "1")
             .send()
@@ -256,9 +250,13 @@ impl PeerDiscovery {
             .await
             .context("Failed to parse Xergon status response")?;
 
-        let provider = status.provider.as_ref()
+        let provider = status
+            .provider
+            .as_ref()
             .context("Missing provider field in Xergon status")?;
-        let pown = status.pown_status.as_ref()
+        let pown = status
+            .pown_status
+            .as_ref()
             .context("Missing pown_status field in Xergon status")?;
 
         // Validate that node_id is a valid 64-char hex string (SHA-256)
@@ -300,10 +298,7 @@ impl PeerDiscovery {
         };
 
         // Step 2: Extract IPs and limit to max per cycle
-        let mut peer_ips: Vec<IpAddr> = ergo_peers
-            .iter()
-            .filter_map(Self::parse_peer_ip)
-            .collect();
+        let mut peer_ips: Vec<IpAddr> = ergo_peers.iter().filter_map(Self::parse_peer_ip).collect();
 
         // Deduplicate IPs
         let mut seen = HashSet::new();
@@ -322,7 +317,9 @@ impl PeerDiscovery {
         }
 
         // Step 3: Probe peers concurrently
-        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.max_concurrent_probes));
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(
+            self.config.max_concurrent_probes,
+        ));
         let mut handles = Vec::new();
 
         for ip in peer_ips {
@@ -344,9 +341,11 @@ impl PeerDiscovery {
                 drop(permit);
 
                 match result {
-                    Ok(resp) if resp.status().is_success() => {
-                        resp.json::<RemoteXergonStatus>().await.ok().map(|status| (ip, status))
-                    }
+                    Ok(resp) if resp.status().is_success() => resp
+                        .json::<RemoteXergonStatus>()
+                        .await
+                        .ok()
+                        .map(|status| (ip, status)),
                     _ => None,
                 }
             }));
@@ -360,7 +359,9 @@ impl PeerDiscovery {
                 Ok(Some((ip, status))) => {
                     metrics.xergon_peers_found += 1;
 
-                    if let (Some(ref provider), Some(ref pown)) = (&status.provider, &status.pown_status) {
+                    if let (Some(ref provider), Some(ref pown)) =
+                        (&status.provider, &status.pown_status)
+                    {
                         let now = chrono::Utc::now();
                         let node_id = &pown.node_id;
 
@@ -374,12 +375,14 @@ impl PeerDiscovery {
                         }
 
                         // Update or insert peer
-                        self.known_peers.entry(node_id.clone())
+                        self.known_peers
+                            .entry(node_id.clone())
                             .and_modify(|existing| {
                                 existing.last_seen = now;
                                 existing.confirmations += 1;
                                 // Update discovered addr if we found them on a different IP
-                                existing.discovered_addr = SocketAddr::new(ip, self.config.xergon_agent_port);
+                                existing.discovered_addr =
+                                    SocketAddr::new(ip, self.config.xergon_agent_port);
                             })
                             .or_insert_with(|| XergonPeer {
                                 provider_id: provider.id.clone(),
@@ -393,7 +396,8 @@ impl PeerDiscovery {
                                 confirmations: 1,
                             });
 
-                        self.total_confirmations.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        self.total_confirmations
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                         info!(
                             provider_id = %provider.id,
@@ -415,8 +419,10 @@ impl PeerDiscovery {
 
         // Update cumulative counters
         let peers_checked = metrics.peers_probed;
-        self.total_peers_checked.fetch_add(peers_checked, std::sync::atomic::Ordering::Relaxed);
-        self.total_cycles.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.total_peers_checked
+            .fetch_add(peers_checked, std::sync::atomic::Ordering::Relaxed);
+        self.total_cycles
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         metrics.cycle_duration_ms = cycle_start.elapsed().as_millis() as u64;
 
@@ -440,27 +446,40 @@ impl PeerDiscovery {
 
     /// Get cumulative peers checked count
     pub fn peers_checked(&self) -> usize {
-        self.total_peers_checked.load(std::sync::atomic::Ordering::Relaxed)
+        self.total_peers_checked
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Get the endpoint URLs of all known Xergon peers (for P2P communication).
+    /// Returns URLs like "http://192.168.1.5:9099".
+    pub async fn get_xergon_peer_endpoints(&self) -> Vec<String> {
+        self.known_peers
+            .iter()
+            .map(|entry| {
+                let peer = entry.value();
+                format!("http://{}:{}", peer.discovered_addr.ip(), peer.discovered_addr.port())
+            })
+            .collect()
     }
 
     /// Get current peer discovery state (for the API)
     pub async fn get_state(&self, last_metrics: Option<DiscoveryMetrics>) -> PeerDiscoveryState {
-        let peers: Vec<XergonPeer> = self.known_peers
-            .iter()
-            .map(|r| r.value().clone())
-            .collect();
+        let peers: Vec<XergonPeer> = self.known_peers.iter().map(|r| r.value().clone()).collect();
 
         let unique_count = self.unique_peers_seen.read().await.len();
 
         PeerDiscoveryState {
-            peers_checked: self.total_peers_checked.load(std::sync::atomic::Ordering::Relaxed),
+            peers_checked: self
+                .total_peers_checked
+                .load(std::sync::atomic::Ordering::Relaxed),
             unique_xergon_peers_seen: unique_count,
             xergon_peers: peers,
             last_cycle_metrics: last_metrics,
             last_cycle_at: Some(chrono::Utc::now()),
             total_cycles: self.total_cycles.load(std::sync::atomic::Ordering::Relaxed),
-            total_xergon_confirmations: self.total_confirmations.load(std::sync::atomic::Ordering::Relaxed),
+            total_xergon_confirmations: self
+                .total_confirmations
+                .load(std::sync::atomic::Ordering::Relaxed),
         }
     }
-
 }

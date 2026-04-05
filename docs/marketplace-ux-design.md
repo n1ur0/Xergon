@@ -1,3 +1,8 @@
+> **DEPRECATED**: This document describes the original Web2 design (JWT auth, Stripe payments, USD credits).
+> The current system uses **Ergo-native economics**: wallet-based auth (EIP-12/Nautilus), ERG staking boxes for balances,
+> and direct ERG payments. See [ROADMAP.md](../ROADMAP.md) for the current architecture.
+> This file is kept for historical reference only.
+
 # XER-7: Marketplace UX — Invisible Blockchain Design Spec
 
 **Goal:** First-time users get value in under 60 seconds. No wallet, no ERG mentioned, no crypto jargon. Feels like a web app, not a dApp.

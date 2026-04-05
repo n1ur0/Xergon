@@ -103,7 +103,7 @@ export function PlaygroundPage() {
       const decoder = new TextDecoder();
       let accumulated = "";
       let buffer = "";
-      let usageData: { inputTokens?: number; outputTokens?: number; creditsCharged?: number } = {};
+      let usageData: { inputTokens?: number; outputTokens?: number; costNanoerg?: number } = {};
 
       while (true) {
         const { done, value } = await reader.read();
@@ -127,7 +127,7 @@ export function PlaygroundPage() {
               usageData = {
                 inputTokens: json.usage.prompt_tokens,
                 outputTokens: json.usage.completion_tokens,
-                creditsCharged: json.usage.credits_charged,
+                costNanoerg: json.usage.cost_nanoerg,
               };
             }
 

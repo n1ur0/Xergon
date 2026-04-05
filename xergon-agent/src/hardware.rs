@@ -382,12 +382,12 @@ fn detect_amd_rocminfo() -> Result<Vec<GpuInfo>, String> {
         if trimmed.starts_with("Agent ") {
             // Flush previous agent if it was a GPU
             if is_gpu_agent && (current_vram_bytes.is_some() || current_marketing_name.is_some()) {
-                let display_name = current_marketing_name
-                    .clone()
-                    .unwrap_or_else(|| current_name.clone().unwrap_or_else(|| "AMD GPU".to_string()));
-                let vram_mb = current_vram_bytes
-                    .map(|b| b / (1024 * 1024))
-                    .unwrap_or(0);
+                let display_name = current_marketing_name.clone().unwrap_or_else(|| {
+                    current_name
+                        .clone()
+                        .unwrap_or_else(|| "AMD GPU".to_string())
+                });
+                let vram_mb = current_vram_bytes.map(|b| b / (1024 * 1024)).unwrap_or(0);
 
                 gpus.push(GpuInfo {
                     name: display_name,
@@ -449,9 +449,7 @@ fn detect_amd_rocminfo() -> Result<Vec<GpuInfo>, String> {
     if is_gpu_agent && (current_vram_bytes.is_some() || current_marketing_name.is_some()) {
         let display_name = current_marketing_name
             .unwrap_or_else(|| current_name.unwrap_or_else(|| "AMD GPU".to_string()));
-        let vram_mb = current_vram_bytes
-            .map(|b| b / (1024 * 1024))
-            .unwrap_or(0);
+        let vram_mb = current_vram_bytes.map(|b| b / (1024 * 1024)).unwrap_or(0);
 
         gpus.push(GpuInfo {
             name: display_name,
@@ -566,8 +564,7 @@ fn detect_apple_silicon(ram_gb: f64) -> Result<Vec<GpuInfo>, String> {
         .output()
     {
         Ok(output) => {
-            output.status.success()
-                && String::from_utf8_lossy(&output.stdout).trim() == "1"
+            output.status.success() && String::from_utf8_lossy(&output.stdout).trim() == "1"
         }
         Err(_) => false,
     };
@@ -610,7 +607,10 @@ mod tests {
     fn detect_hardware_returns_cached_ref() {
         let a = detect_hardware() as *const HardwareInfo;
         let b = detect_hardware() as *const HardwareInfo;
-        assert_eq!(a, b, "detect_hardware should return the same pointer (cached)");
+        assert_eq!(
+            a, b,
+            "detect_hardware should return the same pointer (cached)"
+        );
     }
 
     #[test]

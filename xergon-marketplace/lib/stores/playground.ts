@@ -8,7 +8,7 @@ export interface Message {
   timestamp: number;
   inputTokens?: number;
   outputTokens?: number;
-  creditsCharged?: number;
+  costNanoerg?: number;
 }
 
 interface PlaygroundState {
@@ -20,7 +20,7 @@ interface PlaygroundState {
   setPrompt: (prompt: string) => void;
   addMessage: (message: Omit<Message, "id" | "timestamp">) => void;
   updateLastAssistantMessage: (content: string) => void;
-  updateLastAssistantMessageUsage: (usage: { inputTokens?: number; outputTokens?: number; creditsCharged?: number }) => void;
+  updateLastAssistantMessageUsage: (usage: { inputTokens?: number; outputTokens?: number; costNanoerg?: number }) => void;
   clearMessages: () => void;
   setGenerating: (generating: boolean) => void;
 }

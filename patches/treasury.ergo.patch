@@ -1,0 +1,29 @@
+{
+  // =========================================================================
+  // Xergon Network -- Treasury Box Guard Script (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: T-01 (HIGH)
+  //   - Added NFT amount == 1 check to prevent NFT splitting
+  //
+  // =========================================================================
+
+  // Deployer public key -- REPLACE WITH ACTUAL DEPLOYER ADDRESS BEFORE DEPLOYMENT
+  val deployerPk = PK("DEPLOYER_ADDRESS_HERE")
+
+  // Identify the Xergon Network NFT (token at index 0)
+  val nftId = SELF.tokens(0)._1
+
+  // Verify that the output carrying the Xergon Network NFT also preserves
+  // the same ErgoTree AND the NFT amount is exactly 1.
+  // This prevents NFT hijacking AND NFT splitting.
+  val outPreservesNftAndScript = OUTPUTS.exists { (b: Box) =>
+    b.tokens.size > 0 &&
+    b.tokens(0)._1 == nftId &&
+    b.tokens(0)._2 == 1L &&           // PATCH T-01: enforce singleton amount
+    b.propositionBytes == SELF.propositionBytes
+  }
+
+  // Final guard: deployer authorization + NFT + script preservation
+  proveDlog(deployerPk) && outPreservesNftAndScript
+}

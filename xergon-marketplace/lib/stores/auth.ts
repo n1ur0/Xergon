@@ -1,118 +1,314 @@
 import { create } from "zustand";
-import { getToken, setToken } from "@/lib/api/config";
-import { api } from "@/lib/api/client";
+import { getWalletPk, setWalletPk, getWalletAddress, setWalletAddress, RELAY_BASE } from "@/lib/api/config";
+import { connectNautilus, disconnectNautilus as nautilusDisconnect, isNautilusAvailable } from "@/lib/wallet/nautilus";
+import { parseWalletError } from "@/lib/utils/wallet-errors";
 
-export interface User {
-  id: string;
-  email: string;
-  name?: string;
-  credits: number;
-  tier: string;
-  ergoAddress?: string | null;
+export type WalletType = "cli" | "nautilus" | "ergoauth";
+
+export interface WalletUser {
+  publicKey: string;
+  ergoAddress: string;
+  balance: number; // ERG
+  walletType: WalletType;
+  /** ErgoAuth access token (opaque string or JWT), set when walletType is "ergoauth" */
+  accessToken?: string;
 }
 
 interface AuthState {
-  user: User | null;
+  user: WalletUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  setUser: (user: User | null) => void;
-  logout: () => void;
-  setLoading: (loading: boolean) => void;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  walletType: WalletType | null;
+  /** Whether to silently attempt reconnection when wallet connection drops */
+  autoReconnect: boolean;
+  /** Last wallet error message, or null */
+  lastWalletError: string | null;
+  signIn: (publicKey: string) => Promise<void>;
+  signInNautilus: () => Promise<void>;
+  /** Connect via ErgoAuth (EIP-28) or generic EIP-12 wallet with address + access token */
+  connectErgoWallet: (address: string, accessToken: string, walletType?: "ergoauth") => Promise<void>;
+  /** Disconnect an ErgoAuth wallet session */
+  disconnectErgoWallet: () => void;
+  signOut: () => void;
+  disconnectNautilus: () => Promise<void>;
   restore: () => Promise<void>;
-  refreshCredits: () => Promise<void>;
+  refreshBalance: () => Promise<void>;
+  /** Clear the last wallet error */
+  clearWalletError: () => void;
 }
 
-interface AuthResponse {
-  token: string;
-  user: {
-    id: string;
-    email: string;
-    name?: string;
-    tier: string;
-    credits_usd: number;
-  };
+const WALLET_TYPE_KEY = "xergon_wallet_type";
+
+function getStoredWalletType(): WalletType | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(WALLET_TYPE_KEY);
+  if (raw === "cli" || raw === "nautilus" || raw === "ergoauth") return raw;
+  return null;
 }
 
-interface MeResponse {
-  id: string;
-  email: string;
-  name?: string;
-  tier: string;
-  credits_usd: number;
-  ergo_address?: string | null;
-}
-
-function toUser(data: { id: string; email: string; name?: string; tier: string; credits_usd: number; ergo_address?: string | null }): User {
-  return {
-    id: data.id,
-    email: data.email,
-    name: data.name,
-    tier: data.tier,
-    credits: data.credits_usd,
-    ergoAddress: data.ergo_address ?? null,
-  };
+function setStoredWalletType(type: WalletType | null) {
+  if (typeof window === "undefined") return;
+  if (type) {
+    localStorage.setItem(WALLET_TYPE_KEY, type);
+  } else {
+    localStorage.removeItem(WALLET_TYPE_KEY);
+  }
 }
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  walletType: null,
+  autoReconnect: true,
+  lastWalletError: null,
 
-  setUser: (user) =>
+  clearWalletError: () => {
+    set({ lastWalletError: null });
+  },
+
+  signIn: async (publicKey: string) => {
+    // Verify the public key has a staking box (balance > 0) via relay
+    const res = await fetch(`${RELAY_BASE}/balance/${publicKey}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: "Verification failed" }));
+      throw new Error(body.error || "Failed to verify wallet");
+    }
+
+    const data = await res.json();
+    const ergoAddress = data.ergo_address || publicKey;
+    const balance = data.balance_erg ?? 0;
+
+    if (balance <= 0) {
+      throw new Error("NO_BALANCE");
+    }
+
+    const user: WalletUser = {
+      publicKey,
+      ergoAddress,
+      balance,
+      walletType: "cli",
+    };
+
+    setWalletPk(publicKey);
+    setWalletAddress(ergoAddress);
+    setStoredWalletType("cli");
+    set({ user, isAuthenticated: true, isLoading: false, walletType: "cli", lastWalletError: null });
+  },
+
+  signInNautilus: async () => {
+    if (!isNautilusAvailable()) {
+      set({
+        lastWalletError:
+          "Wallet extension not found. Install Nautilus from https://nautiluswallet.com/.",
+      });
+      throw new Error(
+        "Wallet extension not found. Install Nautilus from https://nautiluswallet.com/."
+      );
+    }
+
+    try {
+      // Connect to Nautilus and get the Ergo address
+      const ergoAddress = await connectNautilus();
+
+      // Verify balance via relay
+      const res = await fetch(`${RELAY_BASE}/balance/${ergoAddress}`);
+      if (!res.ok) {
+        await nautilusDisconnect();
+        const body = await res.json().catch(() => ({ error: "Verification failed" }));
+        set({ lastWalletError: body.error || "Failed to verify wallet via Nautilus" });
+        throw new Error(body.error || "Failed to verify wallet via Nautilus");
+      }
+
+      const data = await res.json();
+      const balance = data.balance_erg ?? 0;
+
+      if (balance <= 0) {
+        await nautilusDisconnect();
+        set({ lastWalletError: "NO_BALANCE" });
+        throw new Error("NO_BALANCE");
+      }
+
+      // For Nautilus, we use the ergo address as the public key identifier
+      // The relay already verified it, and Nautilus manages signing internally
+      const publicKey = data.public_key || ergoAddress;
+
+      const user: WalletUser = {
+        publicKey,
+        ergoAddress,
+        balance,
+        walletType: "nautilus",
+      };
+
+      setWalletPk(publicKey);
+      setWalletAddress(ergoAddress);
+      setStoredWalletType("nautilus");
+      set({ user, isAuthenticated: true, isLoading: false, walletType: "nautilus", lastWalletError: null });
+    } catch (err) {
+      // Parse the error and set a user-friendly message
+      const parsed = parseWalletError(err);
+      set({ lastWalletError: parsed.message });
+
+      // Re-throw the parsed message (not the raw error) so callers get the friendly text
+      throw new Error(parsed.message);
+    }
+  },
+
+  connectErgoWallet: async (address: string, accessToken: string, type: WalletType = "ergoauth") => {
+    // Verify balance via relay using the Ergo address
+    let balance = 0;
+    try {
+      const res = await fetch(`${RELAY_BASE}/balance/${address}`);
+      if (res.ok) {
+        const data = await res.json();
+        balance = data.balance_erg ?? 0;
+      }
+    } catch {
+      // Relay may be unavailable — proceed with zero balance
+    }
+
+    const user: WalletUser = {
+      publicKey: address, // Use address as public key identifier for ErgoAuth
+      ergoAddress: address,
+      balance,
+      walletType: type,
+      accessToken,
+    };
+
+    setWalletPk(address);
+    setWalletAddress(address);
+    setStoredWalletType(type);
     set({
       user,
-      isAuthenticated: user !== null,
-    }),
-
-  logout: () => {
-    setToken(null);
-    set({ user: null, isAuthenticated: false });
+      isAuthenticated: true,
+      isLoading: false,
+      walletType: type,
+      lastWalletError: null,
+    });
   },
 
-  setLoading: (isLoading) => set({ isLoading }),
-
-  signup: async (email, password, name) => {
-    const data = await api.post<AuthResponse>("/auth/signup", { email, password, name });
-    setToken(data.token);
-    set({ user: toUser(data.user), isAuthenticated: true });
+  disconnectErgoWallet: () => {
+    setWalletPk(null);
+    setWalletAddress(null);
+    setStoredWalletType(null);
+    set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
   },
 
-  login: async (email, password) => {
-    const data = await api.post<AuthResponse>("/auth/login", { email, password });
-    setToken(data.token);
-    set({ user: toUser(data.user), isAuthenticated: true });
+  signOut: () => {
+    setWalletPk(null);
+    setWalletAddress(null);
+    setStoredWalletType(null);
+    set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
+  },
+
+  disconnectNautilus: async () => {
+    try {
+      await nautilusDisconnect();
+    } catch {
+      // Wallet may already be disconnected
+    }
+    setWalletPk(null);
+    setWalletAddress(null);
+    setStoredWalletType(null);
+    set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
   },
 
   restore: async () => {
-    const token = getToken();
-    if (!token) {
+    const pk = getWalletPk();
+    const storedType = getStoredWalletType();
+    if (!pk) {
       set({ isLoading: false });
       return;
     }
 
+    // If wallet type is nautilus, try auto-reconnect silently
+    if (storedType === "nautilus" && useAuthStore.getState().autoReconnect && isNautilusAvailable()) {
+      try {
+        const ergoAddress = await connectNautilus();
+
+        // Successfully reconnected — verify balance via relay
+        const res = await fetch(`${RELAY_BASE}/balance/${ergoAddress}`);
+        if (res.ok) {
+          const data = await res.json();
+          const balance = data.balance_erg ?? 0;
+          const publicKey = data.public_key || ergoAddress;
+
+          setWalletPk(publicKey);
+          setWalletAddress(ergoAddress);
+          set({
+            user: {
+              publicKey,
+              ergoAddress,
+              balance,
+              walletType: "nautilus",
+            },
+            isAuthenticated: true,
+            isLoading: false,
+            walletType: "nautilus",
+            lastWalletError: null,
+          });
+          return;
+        }
+      } catch {
+        // Auto-reconnect failed — fall through to relay-based restore
+      }
+    }
+
+    // Fallback: restore from relay using stored PK
     try {
-      const data = await api.get<MeResponse>("/auth/me");
-      set({ user: toUser(data), isAuthenticated: true, isLoading: false });
+      const res = await fetch(`${RELAY_BASE}/balance/${pk}`);
+      if (!res.ok) {
+        // PK no longer valid or relay down
+        setWalletPk(null);
+        setWalletAddress(null);
+        setStoredWalletType(null);
+        set({ user: null, isAuthenticated: false, isLoading: false, walletType: null });
+        return;
+      }
+
+      const data = await res.json();
+      const ergoAddress = data.ergo_address || getWalletAddress() || pk;
+      const balance = data.balance_erg ?? 0;
+
+      set({
+        user: {
+          publicKey: pk,
+          ergoAddress,
+          balance,
+          walletType: storedType || "cli",
+        },
+        isAuthenticated: true,
+        isLoading: false,
+        walletType: storedType || "cli",
+      });
     } catch {
-      // Token expired or invalid
-      setToken(null);
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      // Relay down — keep PK but mark loading as done
+      const address = getWalletAddress();
+      set({
+        user: address ? { publicKey: pk, ergoAddress: address, balance: 0, walletType: storedType || "cli" } : null,
+        isAuthenticated: !!address,
+        isLoading: false,
+      });
     }
   },
 
-  refreshCredits: async () => {
+  refreshBalance: async () => {
     const { user } = get();
     if (!user) return;
 
     try {
-      const data = await api.get<MeResponse>("/auth/me");
+      const res = await fetch(`${RELAY_BASE}/balance/${user.publicKey}`);
+      if (!res.ok) return;
+
+      const data = await res.json();
       set({
-        user: { ...get().user!, credits: data.credits_usd },
+        user: {
+          ...user,
+          balance: data.balance_erg ?? user.balance,
+        },
       });
     } catch {
-      // Silently fail — credits will update on next auth check
+      // Silently fail — balance will update on next refresh
     }
   },
 }));

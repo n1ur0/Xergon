@@ -1,0 +1,67 @@
+{
+  // =========================================================================
+  // Xergon Network -- GPU Rental Contract (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: GR-01 (MEDIUM)
+  //   - Added value preservation check to extend path
+  //
+  // =========================================================================
+
+  // Extract parties and terms from registers
+  val providerPK = SELF.R4[GroupElement].get
+  val renterPK   = SELF.R5[GroupElement].get
+  val deadlineHeight = SELF.R6[Int].get
+
+  // Identify our Rental NFT by its token ID (token at index 0)
+  val rentalNft = SELF.tokens(0)._1
+
+  // OUTPUTS(0) convention: the successor rental box must be the first output.
+  val outBox = OUTPUTS(0)
+
+  // scriptPreserved check: successor must be guarded by the same ErgoTree.
+  val scriptPreserved = outBox.propositionBytes == SELF.propositionBytes
+
+  // Verify the output box preserves the Rental NFT.
+  val outPreservesNft = outBox.tokens.size > 0 && outBox.tokens(0)._1 == rentalNft
+
+  // PATCH GR-01: Value preservation check for extend path
+  val valuePreserved = outBox.value >= SELF.value
+
+  // Path 1: Provider claims payment after deadline (rental complete).
+  val providerClaim = {
+    val feeAllowance = 1000000L
+    proveDlog(providerPK) && HEIGHT >= deadlineHeight &&
+    OUTPUTS.exists { (out: Box) =>
+      out.propositionBytes == proveDlog(providerPK).propBytes &&
+      out.value >= SELF.value - feeAllowance
+    }
+  }
+
+  // Path 2: Renter refunds before deadline (cancelled).
+  val renterRefund = {
+    val feeAllowance = 1000000L
+    proveDlog(renterPK) && HEIGHT < deadlineHeight &&
+    OUTPUTS.exists { (out: Box) =>
+      out.propositionBytes == proveDlog(renterPK).propBytes &&
+      out.value >= SELF.value - feeAllowance
+    }
+  }
+
+  // Path 3: Renter extends rental (before deadline).
+  // PATCH GR-01: Added valuePreserved check
+  val sameProvider = outBox.R4[GroupElement].isDefined &&
+    outBox.R4[GroupElement].get == providerPK
+  val sameRenter = outBox.R5[GroupElement].isDefined &&
+    outBox.R5[GroupElement].get == renterPK
+  val extendedDeadline = outBox.R6[Int].isDefined &&
+    outBox.R6[Int].get > deadlineHeight
+  val extendsBeforeDeadline = HEIGHT < deadlineHeight
+  val renterExtend = proveDlog(renterPK) && extendsBeforeDeadline &&
+    sameProvider && sameRenter && extendedDeadline &&
+    scriptPreserved && outPreservesNft && valuePreserved
+
+  // Either: provider claims (NFT burned), renter refunds (NFT burned),
+  // or renter extends (NFT preserved in successor).
+  (providerClaim || renterRefund || renterExtend)
+}

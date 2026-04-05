@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
+import { SkipToContent } from "@/components/a11y/SkipToContent";
 import { useAuthStore } from "@/lib/stores/auth";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -12,9 +13,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [restore]);
 
   return (
-    <>
+    <div className="flex min-h-[100dvh] flex-col">
+      <SkipToContent />
       <Navbar />
-      <main className="flex-1">{children}</main>
-    </>
+      <main id="main-content" className="flex-1 overflow-x-hidden">
+        {children}
+      </main>
+    </div>
   );
 }

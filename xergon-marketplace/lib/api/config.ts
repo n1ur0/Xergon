@@ -1,27 +1,80 @@
 /**
- * Centralized API configuration and token helpers.
+ * Centralized API configuration and wallet auth helpers.
  *
- * API_BASE and RELAY_BASE live here so that both the ApiClient and the
- * auth store can import them without creating a circular dependency.
+ * This module now delegates to the Xergon SDK for core HTTP functionality
+ * while maintaining the same config and wallet helpers used throughout
+ * the marketplace.
  */
 
-export const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:8080';
+import { XergonClient, XergonError } from '@xergon/sdk';
+
+export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:9090') + '/v1';
 export const RELAY_BASE = API_BASE;
 
-// ── Token helpers ──
+// ── SDK Client singleton ──
 
-const TOKEN_KEY = "xergon_token";
+/** Shared SDK client instance. Configure auth via authenticate() or setPublicKey(). */
+export const sdk = new XergonClient({ baseUrl: API_BASE });
 
-export function getToken(): string | null {
+// ── Wallet auth helpers ──
+
+const PK_KEY = "xergon_wallet_pk";
+const ADDRESS_KEY = "xergon_wallet_address";
+
+export function getWalletPk(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return localStorage.getItem(PK_KEY);
 }
 
-export function setToken(token: string | null) {
+export function setWalletPk(pk: string | null) {
   if (typeof window === "undefined") return;
-  if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+  if (pk) {
+    localStorage.setItem(PK_KEY, pk);
   } else {
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PK_KEY);
   }
 }
+
+export function getWalletAddress(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ADDRESS_KEY);
+}
+
+export function setWalletAddress(addr: string | null) {
+  if (typeof window === "undefined") return;
+  if (addr) {
+    localStorage.setItem(ADDRESS_KEY, addr);
+  } else {
+    localStorage.removeItem(ADDRESS_KEY);
+  }
+}
+
+// ── Re-export SDK types for convenience ──
+
+export type {
+  ChatRole,
+  ChatMessage,
+  ChatCompletionParams,
+  ChatCompletionResponse,
+  ChatCompletionChunk,
+  ChatCompletionUsage,
+  Model,
+  Provider,
+  LeaderboardEntry,
+  BalanceResponse,
+  GpuListing,
+  GpuRental,
+  GpuPricingEntry,
+  GpuFilters,
+  RateGpuParams,
+  GpuReputation,
+  IncentiveStatus,
+  RareModel,
+  BridgeChain,
+  BridgeInvoice,
+  BridgeStatus,
+  XergonErrorType,
+  XergonErrorBody,
+} from '@xergon/sdk';
+
+export { XergonError } from '@xergon/sdk';

@@ -14,7 +14,8 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
 
-use super::models::{SettlementBatch, PaymentStatus};
+use super::models::{PaymentStatus, SettlementBatch};
+use crate::protocol::tx_safety::{validate_address_or_tree, SAFE_MIN_BOX_VALUE};
 
 /// Ergo payment request (matches node REST API).
 #[derive(Debug, Serialize)]
@@ -71,10 +72,12 @@ impl TransactionService {
         match self.http_client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 let body: serde_json::Value = resp.json().await.unwrap_or_default();
-                let is_unlocked = body.get("isUnlocked")
+                let is_unlocked = body
+                    .get("isUnlocked")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false);
-                self.wallet_unlocked.store(is_unlocked, std::sync::atomic::Ordering::Relaxed);
+                self.wallet_unlocked
+                    .store(is_unlocked, std::sync::atomic::Ordering::Relaxed);
                 Ok(is_unlocked)
             }
             Ok(resp) => {
@@ -89,14 +92,21 @@ impl TransactionService {
     }
 
     /// Send a single ERG payment to a recipient address.
-    pub async fn send_payment(
-        &self,
-        recipient: &str,
-        nanoerg_amount: u64,
-    ) -> Result<String> {
+    pub async fn send_payment(&self, recipient: &str, nanoerg_amount: u64) -> Result<String> {
         if nanoerg_amount == 0 {
             anyhow::bail!("Cannot send zero ERG");
         }
+
+        if nanoerg_amount < SAFE_MIN_BOX_VALUE {
+            anyhow::bail!(
+                "Amount {} nanoERG is below safe minimum box value {} nanoERG (dust prevention)",
+                nanoerg_amount,
+                SAFE_MIN_BOX_VALUE
+            );
+        }
+
+        validate_address_or_tree(recipient)
+            .context("Invalid recipient address")?;
 
         let url = format!(
             "{}/wallet/payment/send",
@@ -128,7 +138,8 @@ impl TransactionService {
         let body: serde_json::Value = resp.json().await.unwrap_or_default();
 
         if !status.is_success() {
-            let error_msg = body.get("detail")
+            let error_msg = body
+                .get("detail")
                 .or_else(|| body.get("error"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error");
@@ -136,7 +147,8 @@ impl TransactionService {
             anyhow::bail!("ERG payment failed ({}): {}", status, error_msg);
         }
 
-        let tx_id = body.get("txId")
+        let tx_id = body
+            .get("txId")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown")
             .to_string();
@@ -161,9 +173,8 @@ impl TransactionService {
                 return;
             }
             Err(e) => {
-                batch.status = super::models::BatchStatus::Failed(
-                    format!("Cannot check wallet: {}", e),
-                );
+                batch.status =
+                    super::models::BatchStatus::Failed(format!("Cannot check wallet: {}", e));
                 for payment in &mut batch.payments {
                     payment.status = PaymentStatus::Failed("Wallet check failed".into());
                 }
@@ -176,7 +187,10 @@ impl TransactionService {
         let total_payments = batch.payments.len();
 
         for payment in &mut batch.payments {
-            match self.send_payment(&payment.ergo_address, payment.erg_nano).await {
+            match self
+                .send_payment(&payment.ergo_address, payment.erg_nano)
+                .await
+            {
                 Ok(tx_id) => {
                     payment.tx_id = Some(tx_id);
                     payment.status = PaymentStatus::Broadcast;
@@ -208,9 +222,11 @@ impl TransactionService {
                 "Settlement batch submitted successfully"
             );
         } else {
-            batch.status = super::models::BatchStatus::Failed(
-                format!("{}/{} payments failed", batch.payments.len() - sent_count, batch.payments.len()),
-            );
+            batch.status = super::models::BatchStatus::Failed(format!(
+                "{}/{} payments failed",
+                batch.payments.len() - sent_count,
+                batch.payments.len()
+            ));
             warn!(
                 batch_id = %batch.batch_id,
                 succeeded = sent_count,
@@ -232,14 +248,15 @@ impl TransactionService {
         match self.http_client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => {
                 let body: serde_json::Value = resp.json().await?;
-                let inclusion_height = body.get("inclusionHeight")
+                let inclusion_height = body
+                    .get("inclusionHeight")
                     .and_then(|v| v.as_u64())
                     .map(|h| h as u32);
                 Ok(inclusion_height)
             }
             Ok(_resp) => {
-            // 404 = not yet in a block (still in mempool or unknown)
-            Ok(None)
+                // 404 = not yet in a block (still in mempool or unknown)
+                Ok(None)
             }
             Err(_) => Ok(None),
         }

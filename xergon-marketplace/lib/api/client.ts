@@ -1,88 +1,28 @@
-import { getToken, API_BASE } from "@/lib/api/config";
+/**
+ * API client layer -- now powered by the Xergon SDK.
+ *
+ * Maintains backward-compatible exports (ModelInfo, InferenceRequest, etc.)
+ * while delegating HTTP requests to the SDK's XergonClient.
+ */
 
-interface RequestOptions {
-  body?: unknown;
-  headers?: Record<string, string>;
-  signal?: AbortSignal;
-}
+import { getWalletPk, API_BASE, sdk } from "./config";
 
-class ApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
-  private async request<T>(
-    path: string,
-    method: string,
-    options?: RequestOptions,
-  ): Promise<T> {
-    const token = getToken();
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options?.headers,
-      },
-      body: options?.body ? JSON.stringify(options.body) : undefined,
-      signal: options?.signal,
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({ message: res.statusText }));
-      let message: string;
-      if (data.error && typeof data.error === "object") {
-        message = (data.error as { message?: string }).message ?? JSON.stringify(data.error);
-      } else if (data.error && typeof data.error === "string") {
-        message = data.error;
-      } else if (data.message) {
-        message = data.message;
-      } else {
-        message = res.statusText;
-      }
-      throw new ApiError(res.status, message);
-    }
-
-    return res.json() as Promise<T>;
-  }
-
-  async get<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>(path, "GET", options);
-  }
-
-  async post<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>(path, "POST", { ...options, body });
-  }
-
-  async put<T>(path: string, body?: unknown, options?: RequestOptions): Promise<T> {
-    return this.request<T>(path, "PUT", { ...options, body });
-  }
-
-  async del<T>(path: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>(path, "DELETE", options);
-  }
-}
-
-export class ApiError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
-export const api = new ApiClient(API_BASE);
-
-// ── Typed endpoint stubs ──
+// ── Legacy types (marketplace-specific, kept for compatibility) ──
 
 export interface ModelInfo {
   id: string;
   name: string;
   provider: string;
   tier: string;
-  pricePerInputToken: number;
-  pricePerOutputToken: number;
+  /** @deprecated Use pricePerInputTokenNanoerg for real nanoERG pricing from relay */
+  pricePerInputToken?: number;
+  /** @deprecated Use pricePerOutputTokenNanoerg for real nanoERG pricing from relay */
+  pricePerOutputToken?: number;
+  pricePerInputTokenNanoerg?: number;
+  pricePerOutputTokenNanoerg?: number;
+  minProviderPriceNanoerg?: number;
+  effectivePriceNanoerg?: number;
+  providerCount?: number;
   available: boolean;
   /** One-line description of the model's strengths */
   description?: string;
@@ -92,7 +32,7 @@ export interface ModelInfo {
   speed?: "fast" | "balanced" | "slow";
   /** Tags for filtering: "Fast" | "Smart" | "Code" | "Creative" | "Free" */
   tags?: string[];
-  /** Whether this model is free tier (no credits required) */
+  /** Whether this model is free tier (no ERG required) */
   freeTier?: boolean;
 }
 
@@ -109,52 +49,7 @@ export interface InferenceResponse {
   model: string;
   inputTokens: number;
   outputTokens: number;
-  creditsCharged: number;
-}
-
-export interface UserInfo {
-  id: string;
-  email: string;
-  name?: string;
-  credits: number;
-  tier: string;
-}
-
-/** Shape returned by the backend for /auth/me and /auth/profile */
-export interface MeResponse {
-  id: string;
-  email: string;
-  name?: string;
-  tier: string;
-  credits_usd: number;
-  ergo_address?: string | null;
-}
-
-export interface CreditBalance {
-  credits_usd: number;
-  currency: string;
-}
-
-export interface CreditPack {
-  id: string;
-  amount_usd: number;
-  display_price: string;
-  bonus_credits_usd: number;
-}
-
-export interface TransactionView {
-  id: string;
-  amount_usd: number;
-  balance_after: number;
-  kind: string;
-  description: string;
-  created_at: string;
-}
-
-export interface AutoReplenishSettings {
-  enabled: boolean;
-  pack_id: string | null;
-  threshold_usd: number;
+  costNanoerg: number;
 }
 
 export interface LeaderboardEntry {
@@ -172,73 +67,64 @@ export interface LeaderboardEntry {
   unique_models: number;
 }
 
-// ── Endpoint methods ──
+// ── Legacy ApiError ──
+
+export class ApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+// ── SDK-powered endpoint stubs ──
 
 export const endpoints = {
-  /** List available models */
-  listModels: () => api.get<ModelInfo[]>("/models"),
+  /** List available models (returns marketplace ModelInfo[]) */
+  listModels: async (): Promise<ModelInfo[]> => {
+    const models = await sdk.models.list();
+    return models.map((m) => ({
+      id: m.id,
+      name: m.id,
+      provider: m.ownedBy ?? "unknown",
+      tier: "standard",
+      pricePerInputTokenNanoerg: m.pricing ? parseInt(m.pricing, 10) : undefined,
+      pricePerOutputTokenNanoerg: m.pricing ? parseInt(m.pricing, 10) : undefined,
+      effectivePriceNanoerg: m.pricing ? parseInt(m.pricing, 10) : undefined,
+      providerCount: 1,
+      available: true,
+    }));
+  },
 
-  /** Run inference */
+  /** Run inference (OpenAI-compatible chat completion) */
   infer: (req: InferenceRequest) =>
-    api.post<InferenceResponse>("/inference", req),
+    sdk.chat.completions.create({
+      model: req.model,
+      messages: [{ role: "user", content: req.prompt }],
+      maxTokens: req.maxTokens,
+      temperature: req.temperature,
+    }),
 
-  /** Stream inference (SSE) — returns raw Response for manual streaming */
+  /** Stream inference (SSE) -- returns raw Response for manual streaming */
   inferStream: (req: InferenceRequest, signal?: AbortSignal) => {
-    const token = getToken();
-    return fetch(`${API_BASE}/inference/stream`, {
+    const walletPk = getWalletPk();
+    return fetch(`${API_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Accept": "text/event-stream",
+        ...(walletPk ? { "X-Wallet-PK": walletPk } : {}),
       },
-      body: JSON.stringify(req),
+      body: JSON.stringify({
+        model: req.model,
+        messages: [{ role: "user", content: req.prompt }],
+        max_tokens: req.maxTokens,
+        temperature: req.temperature,
+        stream: true,
+      }),
       signal,
     });
   },
 
-  /** Get current user */
-  getMe: () => api.get<UserInfo>("/auth/me"),
-
-  /** Get credit balance */
-  getBalance: () => api.get<CreditBalance>("/credits/balance"),
-
-  /** Get credit transaction history */
-  getTransactions: () => api.get<{ transactions: TransactionView[] }>("/credits/transactions"),
-
-  /** List available credit packs */
-  getPacks: () => api.get<{ packs: CreditPack[] }>("/credits/packs"),
-
-  /** Purchase credits — returns Stripe checkout URL */
-  purchaseCredits: (packId: string) =>
-    api.post<{ checkout_url: string; session_id: string }>("/credits/purchase", { pack_id: packId }),
-
-  /** Get auto-replenish settings */
-  getAutoReplenish: () => api.get<AutoReplenishSettings>("/credits/auto-replenish"),
-
-  /** Update auto-replenish settings */
-  updateAutoReplenish: (settings: AutoReplenishSettings) =>
-    api.put<AutoReplenishSettings>("/credits/auto-replenish", settings),
-
-  /** Update user profile (name/email) — returns full MeResponse */
-  updateProfile: (data: { name?: string; email?: string }) =>
-    api.put<MeResponse>("/auth/profile", data),
-
-  /** Change user password */
-  changePassword: (data: { current_password: string; new_password: string }) =>
-    api.put<{ message: string }>("/auth/password", data),
-
-  /** Request password reset email */
-  forgotPassword: (email: string) =>
-    api.post<{ message: string }>("/auth/forgot-password", { email }),
-
-  /** Reset password with token */
-  resetPassword: (token: string, new_password: string) =>
-    api.post<{ message: string }>(`/auth/reset-password`, { token, new_password }),
-
-  /** Update Ergo wallet address */
-  updateWalletAddress: (ergo_address: string | null) =>
-    api.put<UserInfo>("/auth/wallet", { ergo_address }),
-
   /** Get provider leaderboard (public) */
-  leaderboard: () => api.get<LeaderboardEntry[]>("/leaderboard"),
+  leaderboard: () => sdk.leaderboard(),
 };

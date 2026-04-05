@@ -1,0 +1,42 @@
+{
+  "name": "@xergon/sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Xergon Network -- decentralized AI inference relay on Ergo",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./wallet": {
+      "import": "./dist/wallet/index.js",
+      "types": "./dist/wallet/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "xergon",
+    "ergo",
+    "ai",
+    "inference",
+    "gpu",
+    "decentralized"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

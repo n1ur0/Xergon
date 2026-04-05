@@ -1,12 +1,12 @@
 //! GET /v1/leaderboard — Public provider leaderboard
 //!
-//! Returns per-provider usage statistics from the DB, enriched with live
-//! registration data (provider_name, region, ergo_address, models, online status).
+//! Returns per-provider stats aggregated from the in-memory usage store,
+//! live health data from the provider registry, and on-chain metadata
+//! from the ChainCache (when available).
 //!
 //! This is a PUBLIC endpoint — no authentication required.
 
 use axum::{extract::State, response::Json};
-use chrono::Utc;
 use serde::Serialize;
 use tracing::info;
 
@@ -16,91 +16,105 @@ use crate::proxy::AppState;
 #[derive(Debug, Clone, Serialize)]
 pub struct LeaderboardEntry {
     pub provider_id: String,
-    pub provider_name: String,
-    pub region: String,
-    pub ergo_address: String,
-    /// Models currently served by this provider (live from directory)
-    pub models: Vec<String>,
-    /// Whether the provider is currently online (heartbeat within TTL)
+    pub endpoint: String,
     pub online: bool,
-    pub total_requests: i64,
-    pub total_prompt_tokens: i64,
-    pub total_completion_tokens: i64,
-    pub total_tokens: i64,
-    pub total_revenue_usd: f64,
-    pub unique_models: i64,
-    pub first_seen: String,
-    pub last_seen: String,
+    pub latency_ms: u64,
+    pub total_requests: u64,
+    pub total_prompt_tokens: u64,
+    pub total_completion_tokens: u64,
+    pub total_tokens: u64,
+    /// On-chain PoNW reputation score (from ChainCache)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pown_score: Option<i32>,
+    /// Provider region (from ChainCache)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub region: Option<String>,
 }
 
 /// GET /v1/leaderboard
 pub async fn leaderboard_handler(State(state): State<AppState>) -> Json<Vec<LeaderboardEntry>> {
     info!("Leaderboard requested");
 
-    // 1. Fetch aggregated usage stats from DB
-    let db_stats = match state.db.get_provider_leaderboard() {
-        Ok(stats) => stats,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to query provider leaderboard from DB");
-            return Json(Vec::new());
-        }
-    };
+    // Aggregate usage stats from in-memory store per provider
+    let mut provider_stats: std::collections::HashMap<String, (u64, u64, u64, u64)> =
+        std::collections::HashMap::new();
 
-    // 2. Fetch all currently registered providers (including offline ones)
-    let directory = state.provider_directory.list_providers(false);
-
-    // 3. Build a lookup map from provider_id -> RegisteredProvider
-    let mut provider_map: std::collections::HashMap<String, _> = std::collections::HashMap::new();
-    let now = Utc::now();
-
-    for rp in &directory.providers {
-        let expires_at = rp.last_heartbeat + chrono::Duration::seconds(rp.ttl_secs as i64);
-        let online = now <= expires_at;
-        provider_map.insert(rp.provider_id.clone(), (rp, online));
+    for entry in state.usage_store.iter() {
+        let record = entry.value();
+        let stats = provider_stats
+            .entry(record.provider.clone())
+            .or_insert((0, 0, 0, 0));
+        stats.0 += 1; // requests
+        stats.1 += record.tokens_in as u64;
+        stats.2 += record.tokens_out as u64;
+        stats.3 += (record.tokens_in + record.tokens_out) as u64;
     }
 
-    // 4. Merge DB stats with live directory data
-    let mut entries: Vec<LeaderboardEntry> = db_stats
-        .into_iter()
-        .map(|stat| {
-            let (name, region, ergo_addr, models, online) =
-                match provider_map.get(&stat.provider_id) {
-                    Some((rp, on)) => (
-                        rp.provider_name.clone(),
-                        rp.region.clone(),
-                        rp.ergo_address.clone(),
-                        rp.models.clone(),
-                        *on,
-                    ),
-                    None => (
-                        stat.provider_id.clone(),
+    // Build a lookup for chain metadata (provider_pk, pown_score, region) keyed by endpoint
+    let chain_meta: std::collections::HashMap<String, (String, i32, String)> = state
+        .chain_cache
+        .as_ref()
+        .and_then(|cache| cache.get_providers())
+        .map(|providers| {
+            providers
+                .into_iter()
+                .map(|cp| {
+                    let ep = cp.endpoint.trim_end_matches('/').to_string();
+                    (ep, (cp.provider_pk, cp.pown_score, cp.region))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    // Build entries from all known providers (from registry — these are the ones we have health data for)
+    let mut entries: Vec<LeaderboardEntry> = state
+        .provider_registry
+        .providers
+        .iter()
+        .map(|r| {
+            let provider = r.value();
+            let ep_normalized = provider.endpoint.trim_end_matches('/').to_string();
+            let (reqs, pt, ct, tt) = provider_stats
+                .get(&provider.endpoint)
+                .copied()
+                .unwrap_or((0, 0, 0, 0));
+
+            // Enrich with chain metadata if available
+            let (provider_id, pown_score, region) = chain_meta
+                .get(&ep_normalized)
+                .cloned()
+                .unwrap_or_else(|| {
+                    (
+                        provider.endpoint.clone(),
+                        0,
                         String::new(),
-                        String::new(),
-                        Vec::new(),
-                        false,
-                    ),
-                };
+                    )
+                });
 
             LeaderboardEntry {
-                provider_id: stat.provider_id,
-                provider_name: name,
-                region,
-                ergo_address: ergo_addr,
-                models,
-                online,
-                total_requests: stat.total_requests,
-                total_prompt_tokens: stat.total_prompt_tokens,
-                total_completion_tokens: stat.total_completion_tokens,
-                total_tokens: stat.total_tokens,
-                total_revenue_usd: stat.total_revenue_usd,
-                unique_models: stat.unique_models,
-                first_seen: stat.first_seen,
-                last_seen: stat.last_seen,
+                provider_id,
+                endpoint: provider.endpoint.clone(),
+                online: provider.is_healthy,
+                latency_ms: provider.latency_ms,
+                total_requests: reqs,
+                total_prompt_tokens: pt,
+                total_completion_tokens: ct,
+                total_tokens: tt,
+                pown_score: if chain_meta.contains_key(&ep_normalized) {
+                    Some(pown_score)
+                } else {
+                    None
+                },
+                region: if chain_meta.contains_key(&ep_normalized) && !region.is_empty() {
+                    Some(region)
+                } else {
+                    None
+                },
             }
         })
         .collect();
 
-    // Sort by total_tokens descending (should already be from DB, but ensure)
+    // Sort by total_tokens descending
     entries.sort_by(|a, b| b.total_tokens.cmp(&a.total_tokens));
 
     Json(entries)

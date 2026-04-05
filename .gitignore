@@ -6,7 +6,11 @@
 .claude
 .gitnexus
 
+# Build artifacts
+dist/
+
 # Docker
 *.db
 *.db-shm
 *.db-wal
+node_modules

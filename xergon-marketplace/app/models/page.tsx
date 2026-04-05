@@ -1,10 +1,57 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { endpoints, type ModelInfo } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import { FALLBACK_MODELS } from "@/lib/constants";
+import {
+  useModels,
+  type ChainModelInfo,
+} from "@/lib/hooks/use-chain-data";
+import type { ModelInfo } from "@/lib/api/client";
+import { SkeletonCardGrid } from "@/components/ui/SkeletonCard";
+import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ModelsSkeleton } from "@/components/models/ModelsSkeleton";
+import { SuspenseWrap } from "@/components/ui/SuspenseWrap";
+
+// ── Convert chain model to the display format used by ModelCard ──
+
+interface DisplayModel {
+  id: string;
+  name: string;
+  provider: string;
+  tier: string;
+  pricePerInputTokenNanoerg: number;
+  pricePerOutputTokenNanoerg: number;
+  effectivePriceNanoerg?: number;
+  providerCount?: number;
+  available: boolean;
+  description?: string;
+  contextWindow?: number;
+  speed?: string;
+  tags?: string[];
+  freeTier?: boolean;
+}
+
+function toDisplayModel(m: ChainModelInfo | ModelInfo): DisplayModel {
+  return {
+    id: m.id,
+    name: m.name,
+    provider: m.provider,
+    tier: m.tier,
+    pricePerInputTokenNanoerg: m.pricePerInputTokenNanoerg ?? ("price_per_input_token_nanoerg" in m ? m.price_per_input_token_nanoerg : 0),
+    pricePerOutputTokenNanoerg: m.pricePerOutputTokenNanoerg ?? ("price_per_output_token_nanoerg" in m ? m.price_per_output_token_nanoerg : 0),
+    effectivePriceNanoerg: m.effective_price_nanoerg,
+    providerCount: m.provider_count,
+    available: m.available,
+    description: m.description,
+    contextWindow: m.context_window,
+    speed: m.speed as DisplayModel["speed"],
+    tags: m.tags,
+    freeTier: m.free_tier,
+  };
+}
 
 // ── Tag color map ──
 const TAG_STYLES: Record<string, string> = {
@@ -51,11 +98,26 @@ function formatContextWindow(tokens: number): string {
   return String(tokens);
 }
 
+// ── nanoERG to ERG formatter ──
+function nanoergToErg(nanoerg: number): string {
+  if (nanoerg <= 0) return "0";
+  const erg = nanoerg / 1e9;
+  // Show up to 6 decimal places, trim trailing zeros
+  return erg.toFixed(6).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+// ── Format price per 1K tokens in ERG ──
+function formatPricePer1K(nanoergPerToken: number): string {
+  if (nanoergPerToken <= 0) return "Free";
+  const nanoergPer1K = nanoergPerToken * 1000;
+  return `${nanoergToErg(nanoergPer1K)} ERG`;
+}
+
 const ALL_TAGS = ["Fast", "Smart", "Code", "Creative", "Free"] as const;
 type TagFilter = (typeof ALL_TAGS)[number];
 
 // ── Model card component ──
-function ModelCard({ model, onTry }: { model: ModelInfo; onTry: () => void }) {
+function ModelCard({ model, onTry }: { model: DisplayModel; onTry: () => void }) {
   return (
     <div
       className={cn(
@@ -115,15 +177,22 @@ function ModelCard({ model, onTry }: { model: ModelInfo; onTry: () => void }) {
 
       {/* Footer: pricing + Try It */}
       <div className="flex items-center justify-between pt-3 border-t border-surface-100">
-        <div className="flex gap-3 text-xs text-surface-800/50">
-          <span>
-            {model.pricePerInputToken === 0 ? "Free" : `$${model.pricePerInputToken}`}
-            <span className="text-surface-800/30"> /1M in</span>
-          </span>
-          <span>
-            {model.pricePerOutputToken === 0 ? "Free" : `$${model.pricePerOutputToken}`}
-            <span className="text-surface-800/30"> /1M out</span>
-          </span>
+        <div className="flex flex-col gap-1 text-xs text-surface-800/50">
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-surface-800/70">
+              {model.pricePerInputTokenNanoerg <= 0 && model.pricePerOutputTokenNanoerg <= 0
+                ? "FREE"
+                : formatPricePer1K(model.effectivePriceNanoerg ?? model.pricePerInputTokenNanoerg)}
+            </span>
+            {model.effectivePriceNanoerg != null && model.effectivePriceNanoerg > 0 && (
+              <span className="text-surface-800/30">/1K tokens</span>
+            )}
+          </div>
+          {model.providerCount != null && model.providerCount > 0 && (
+            <span className="text-surface-800/30">
+              {model.providerCount} provider{model.providerCount !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
         <button
           onClick={onTry}
@@ -145,23 +214,20 @@ function ModelCard({ model, onTry }: { model: ModelInfo; onTry: () => void }) {
 // ── Main page ──
 export default function ModelsPage() {
   const router = useRouter();
+  const { models: chainModels, isLoading, error } = useModels();
 
-  const [models, setModels] = useState<ModelInfo[]>(FALLBACK_MODELS);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState<TagFilter | null>(null);
+  // Convert chain models to display format, falling back to static fallbacks
+  const models: DisplayModel[] = useMemo(() => {
+    if (chainModels.length > 0) {
+      return chainModels.map(toDisplayModel);
+    }
+    if (!isLoading) {
+      return FALLBACK_MODELS.map(toDisplayModel);
+    }
+    return [];
+  }, [chainModels, isLoading]);
 
-  // Fetch models on mount
-  useEffect(() => {
-    endpoints
-      .listModels()
-      .then((ms) => {
-        setModels(ms.length > 0 ? ms : FALLBACK_MODELS);
-      })
-      .catch(() => {
-        // Keep fallback models when backend is unavailable
-      })
-      .finally(() => setIsLoading(false));
-  }, []);
+  const [activeFilter, setActiveFilter] = useFilterState();
 
   // Filter models by active tag
   const filteredModels = useMemo(() => {
@@ -227,59 +293,65 @@ export default function ModelsPage() {
         ))}
       </div>
 
-      {/* Loading skeleton */}
-      {isLoading ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-surface-200 bg-surface-0 p-5 animate-pulse"
-            >
-              <div className="h-5 w-2/3 rounded bg-surface-200 mb-3" />
-              <div className="h-4 w-full rounded bg-surface-100 mb-2" />
-              <div className="h-4 w-4/5 rounded bg-surface-100 mb-4" />
-              <div className="flex gap-2 mb-4">
-                <div className="h-5 w-12 rounded-full bg-surface-100" />
-                <div className="h-5 w-12 rounded-full bg-surface-100" />
-              </div>
-              <div className="flex justify-between pt-3 border-t border-surface-100">
-                <div className="h-4 w-24 rounded bg-surface-100" />
-                <div className="h-7 w-16 rounded-lg bg-surface-100" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        /* Model grid */
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredModels.map((model) => (
-            <ModelCard
-              key={model.id}
-              model={model}
-              onTry={() => handleTryIt(model.id)}
-            />
-          ))}
+      <SuspenseWrap fallback={<ModelsSkeleton />}>
+      {/* Error state */}
+      {error && !isLoading && (
+        <div className="text-center py-8">
+          <p className="text-sm text-surface-800/50 mb-2">
+            Could not load live model data. Showing available models below.
+          </p>
         </div>
       )}
 
+      <ErrorBoundary context="Model Listings">
+        {/* Loading skeleton */}
+        {isLoading && models.length === 0 ? (
+          <SkeletonCardGrid count={6} />
+        ) : (
+          /* Model grid */
+          <div className={cn(
+            "grid gap-4 sm:grid-cols-2 lg:grid-cols-3",
+            !isLoading && "animate-fade-in",
+          )}>
+            {filteredModels.map((model) => (
+              <ModelCard
+                key={model.id}
+                model={model}
+                onTry={() => handleTryIt(model.id)}
+              />
+            ))}
+          </div>
+        )}
+      </ErrorBoundary>
+
       {/* Empty state */}
-      {!isLoading && filteredModels.length === 0 && (
-        <div className="text-center py-16">
-          <p className="text-surface-800/40 text-lg mb-2">No models match this filter</p>
-          <button
-            onClick={() => setActiveFilter(null)}
-            className="text-sm text-brand-600 hover:text-brand-700 font-medium"
-          >
-            Clear filter
-          </button>
-        </div>
+      {!isLoading && filteredModels.length === 0 && activeFilter && (
+        <EmptyState
+          type="no-search-results"
+          action={{
+            label: "Clear Filter",
+            onClick: () => setActiveFilter(null),
+          }}
+        />
       )}
 
       {/* Footer note */}
       <div className="mt-10 text-sm text-surface-800/50 text-center">
-        Models with the <span className="text-emerald-600 font-medium">Free</span> badge can be used without credits.
-        Prices shown per 1M tokens.
+        Models with the <span className="text-emerald-600 font-medium">Free</span> badge can be used for free.
+        Prices shown per 1K tokens in ERG.
+        {chainModels.length > 0 && (
+          <span className="block mt-1 text-surface-800/30">
+            Live data from {chainModels.length} model(s) across all providers.
+          </span>
+        )}
       </div>
+      </SuspenseWrap>
     </div>
   );
+}
+
+// ── Small helper hook for filter state ──
+function useFilterState() {
+  const [activeFilter, setActiveFilter] = useState<TagFilter | null>(null);
+  return [activeFilter, setActiveFilter] as const;
 }

@@ -1,0 +1,32 @@
+{
+  // =========================================================================
+  // Xergon Network -- Relay Registry Contract (PATCHED)
+  // =========================================================================
+  //
+  // PATCH: RR-01 (HIGH) + RR-02 (MEDIUM)
+  //   - Added scriptPreserved check to prevent NFT hijacking
+  //   - Added NFT amount == 1 check to prevent NFT splitting
+  //
+  // =========================================================================
+
+  val relayPK = SELF.R4[SigmaProp].get
+  val relayEndpoint = SELF.R5[Coll[Byte]].get
+  val lastHeartbeat = SELF.R6[Int].get
+  val relayNFT = SELF.tokens(0)._1
+
+  // Only relay owner can update (spend guard)
+  val canSpend = relayPK
+
+  // Output must preserve the NFT with exact amount AND same script.
+  // PATCH RR-01: Added scriptPreserved check
+  // PATCH RR-02: Added t._2 == 1L check
+  val preservesNFT = OUTPUTS.exists { (out: Box) =>
+    out.tokens.exists { (t: (Coll[Byte], Long)) =>
+      t._1 == relayNFT &&
+      t._2 == 1L &&
+      out.propositionBytes == SELF.propositionBytes
+    }
+  }
+
+  canSpend && preservesNFT
+}

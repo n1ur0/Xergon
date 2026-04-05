@@ -1,0 +1,74 @@
+# Xergon Network -- Prometheus + Grafana Monitoring Stack
+#
+# Quick start:
+#   docker compose -f docker/monitoring/docker-compose.yml up -d
+#
+# This starts:
+#   - Prometheus (port 9090) -- scrapes agent + relay metrics
+#   - Grafana (port 3001) -- pre-configured dashboards
+#
+# Access:
+#   Prometheus: http://localhost:9090
+#   Grafana:    http://localhost:3001 (admin/admin)
+#
+# To monitor a remote deployment, update the targets in prometheus.yml
+# to point to your agent/relay public IPs.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: xergon-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      - xergon-monitor
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: xergon-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    depends_on:
+      - prometheus
+    networks:
+      - xergon-monitor
+
+  # Optional: Alertmanager for alert routing
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: xergon-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+    networks:
+      - xergon-monitor
+
+volumes:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  xergon-monitor:
+    driver: bridge

@@ -1,0 +1,909 @@
+openapi: "3.0.2"
+info:
+  title: Xergon Relay API
+  version: "1.0.0"
+  description: |
+    Decentralized AI inference relay for the Xergon Network. OpenAI-compatible
+    API that routes inference requests to GPU providers on the Ergo blockchain.
+    No signup required — authenticate with an Ergo keypair.
+  contact:
+    name: Xergon Network
+    url: https://degens.world
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://relay.xergon.gg
+    description: Production relay
+
+tags:
+  - name: Inference
+    description: OpenAI-compatible inference endpoints
+  - name: Network
+    description: Provider discovery and user balance
+  - name: GPU Bazar
+    description: GPU rental marketplace
+  - name: Incentive
+    description: Rare model bonus incentives
+  - name: Bridge
+    description: Cross-chain payment bridge
+  - name: Health
+    description: Health and metrics
+
+security:
+  - hmacSignature: []
+
+paths:
+  /v1/chat/completions:
+    post:
+      tags: [Inference]
+      summary: Create chat completion
+      description: |
+        OpenAI-compatible chat completion endpoint. Supports streaming (SSE)
+        and non-streaming responses. Routes to the best available provider
+        based on PoNW score, latency, and model availability.
+      operationId: createChatCompletion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatCompletionRequest"
+      responses:
+        "200":
+          description: Successful completion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatCompletionResponse"
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-Sent Events stream (stream=true)
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/models:
+    get:
+      tags: [Inference]
+      summary: List available models
+      description: Returns all models currently available from active providers
+      operationId: listModels
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelsResponse"
+
+  /v1/leaderboard:
+    get:
+      tags: [Network]
+      summary: Provider leaderboard
+      description: Providers ranked by PoNW (Proof of Network Work) score
+      operationId: getLeaderboard
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderEntry"
+
+  /v1/providers:
+    get:
+      tags: [Network]
+      summary: List active providers
+      description: All providers currently serving inference, read from chain state
+      operationId: listProviders
+      responses:
+        "200":
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProviderEntry"
+
+  /v1/balance/{user_pk}:
+    get:
+      tags: [Network]
+      summary: Check user ERG balance
+      description: Returns the user's available ERG balance from their on-chain Staking Box
+      operationId: getBalance
+      parameters:
+        - name: user_pk
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User's Ergo public key (hex)
+      responses:
+        "200":
+          description: Balance info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+
+  /v1/auth/status:
+    get:
+      tags: [Network]
+      summary: Verify authentication
+      description: Check if the provided HMAC signature is valid
+      operationId: authStatus
+      responses:
+        "200":
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+                  public_key:
+                    type: string
+                  tier:
+                    type: string
+                    description: Rate limit tier (trial, basic, standard, premium, provider)
+
+  # --- GPU Bazar ---
+  /v1/gpu/listings:
+    get:
+      tags: [GPU Bazar]
+      summary: Browse GPU listings
+      operationId: listGpuListings
+      parameters:
+        - name: gpu_type
+          in: query
+          schema:
+            type: string
+        - name: min_vram
+          in: query
+          schema:
+            type: integer
+        - name: max_price
+          in: query
+          schema:
+            type: number
+        - name: region
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: GPU listings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GpuListing"
+
+  /v1/gpu/listings/{listing_id}:
+    get:
+      tags: [GPU Bazar]
+      summary: Get GPU listing details
+      operationId: getGpuListing
+      parameters:
+        - name: listing_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Listing details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GpuListing"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/gpu/rent:
+    post:
+      tags: [GPU Bazar]
+      summary: Rent a GPU
+      operationId: rentGpu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [listing_id, hours]
+              properties:
+                listing_id:
+                  type: string
+                hours:
+                  type: integer
+                  description: Rental duration in hours
+      responses:
+        "200":
+          description: Rental created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GpuRental"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/gpu/rentals/{renter_pk}:
+    get:
+      tags: [GPU Bazar]
+      summary: Get user's active rentals
+      operationId: getGpuRentals
+      parameters:
+        - name: renter_pk
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Active rentals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/GpuRental"
+
+  /v1/gpu/pricing:
+    get:
+      tags: [GPU Bazar]
+      summary: GPU pricing information
+      operationId: getGpuPricing
+      responses:
+        "200":
+          description: Pricing data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  avg_price_per_hour:
+                    type: string
+                    description: Average price in nanoERG
+                  models:
+                    type: object
+                    additionalProperties:
+                      type: string
+
+  /v1/gpu/rate:
+    post:
+      tags: [GPU Bazar]
+      summary: Rate a GPU provider or renter
+      operationId: rateGpu
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_pk, rental_id, score]
+              properties:
+                target_pk:
+                  type: string
+                rental_id:
+                  type: string
+                score:
+                  type: integer
+                  minimum: 1
+                  maximum: 5
+                comment:
+                  type: string
+      responses:
+        "200":
+          description: Rating submitted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/gpu/reputation/{public_key}:
+    get:
+      tags: [GPU Bazar]
+      summary: Get reputation score
+      operationId: getGpuReputation
+      parameters:
+        - name: public_key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reputation data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  public_key:
+                    type: string
+                  score:
+                    type: number
+                    format: float
+                  total_ratings:
+                    type: integer
+                  average:
+                    type: number
+                    format: float
+
+  # --- Incentive ---
+  /v1/incentive/status:
+    get:
+      tags: [Incentive]
+      summary: Incentive system status
+      operationId: incentiveStatus
+      responses:
+        "200":
+          description: System-wide incentive info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  total_bonus_erg:
+                    type: string
+                  rare_models_count:
+                    type: integer
+
+  /v1/incentive/models:
+    get:
+      tags: [Incentive]
+      summary: Rare model bonuses
+      operationId: incentiveModels
+      responses:
+        "200":
+          description: Models with rarity bonuses
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    model:
+                      type: string
+                    rarity_score:
+                      type: number
+                    bonus_multiplier:
+                      type: number
+                    providers_count:
+                      type: integer
+
+  /v1/incentive/models/{model}:
+    get:
+      tags: [Incentive]
+      summary: Model rarity detail
+      operationId: incentiveModelDetail
+      parameters:
+        - name: model
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Model detail
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --- Bridge ---
+  /v1/bridge/status:
+    get:
+      tags: [Bridge]
+      summary: Bridge status
+      operationId: bridgeStatus
+      responses:
+        "200":
+          description: Bridge operational status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  supported_chains:
+                    type: array
+                    items:
+                      type: string
+
+  /v1/bridge/invoices:
+    get:
+      tags: [Bridge]
+      summary: List invoices
+      operationId: listInvoices
+      responses:
+        "200":
+          description: Invoice list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BridgeInvoice"
+
+  /v1/bridge/invoice/{id}:
+    get:
+      tags: [Bridge]
+      summary: Get invoice status
+      operationId: getInvoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Invoice detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BridgeInvoice"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/bridge/create-invoice:
+    post:
+      tags: [Bridge]
+      summary: Create payment invoice
+      operationId: createInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount_nanoerg, chain]
+              properties:
+                amount_nanoerg:
+                  type: string
+                chain:
+                  type: string
+                  enum: [btc, eth, ada]
+      responses:
+        "200":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BridgeInvoice"
+
+  /v1/bridge/confirm:
+    post:
+      tags: [Bridge]
+      summary: Confirm payment
+      operationId: confirmPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_id, tx_hash]
+              properties:
+                invoice_id:
+                  type: string
+                tx_hash:
+                  type: string
+      responses:
+        "200":
+          description: Payment confirmed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/bridge/refund:
+    post:
+      tags: [Bridge]
+      summary: Refund invoice
+      operationId: refundInvoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoice_id]
+              properties:
+                invoice_id:
+                  type: string
+      responses:
+        "200":
+          description: Refund processed
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # --- Health ---
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Returns OK if the relay process is running
+      security: []
+      operationId: health
+      responses:
+        "200":
+          description: Healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /ready:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: Returns OK only when the relay can serve requests (chain scanner healthy, providers available)
+      security: []
+      operationId: ready
+      responses:
+        "200":
+          description: Ready
+        "503":
+          description: Not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics
+      description: Metrics in Prometheus text exposition format
+      security: []
+      operationId: metrics
+      responses:
+        "200":
+          description: Metrics output
+          content:
+            text/plain:
+              schema:
+                type: string
+
+components:
+  securitySchemes:
+    hmacSignature:
+      type: apiKey
+      in: header
+      name: X-Xergon-Signature
+      description: |
+        HMAC-SHA256 signature of (request_body + timestamp).
+        Requires three headers:
+        - X-Xergon-Timestamp: Unix timestamp (seconds)
+        - X-Xergon-Signature: HMAC-SHA256(body + timestamp, private_key)
+        - X-Xergon-Public-Key: User's Ergo public key (hex)
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, message, code]
+          properties:
+            type:
+              type: string
+              description: Machine-readable error type
+              enum:
+                - invalid_request
+                - unauthorized
+                - forbidden
+                - not_found
+                - rate_limit_error
+                - internal_error
+                - service_unavailable
+            message:
+              type: string
+              description: Human-readable error message
+            code:
+              type: integer
+              description: HTTP status code
+
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+          description: Model identifier (e.g., "qwen3.5-32b")
+        messages:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+        max_tokens:
+          type: integer
+          default: 1024
+        temperature:
+          type: number
+          default: 0.7
+          minimum: 0
+          maximum: 2
+        top_p:
+          type: number
+          default: 1
+        stream:
+          type: boolean
+          default: false
+          description: Enable Server-Sent Events streaming
+
+    ChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant]
+        content:
+          type: string
+
+    ChatCompletionResponse:
+      type: object
+      required: [id, object, created, model, choices]
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          example: chat.completion
+        created:
+          type: integer
+        model:
+          type: string
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              message:
+                $ref: "#/components/schemas/ChatMessage"
+              finish_reason:
+                type: string
+                enum: [stop, length, content_filter]
+        usage:
+          type: object
+          properties:
+            prompt_tokens:
+              type: integer
+            completion_tokens:
+              type: integer
+            total_tokens:
+              type: integer
+
+    ModelsResponse:
+      type: object
+      required: [object, data]
+      properties:
+        object:
+          type: string
+          example: list
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              object:
+                type: string
+                example: model
+              owned_by:
+                type: string
+              pricing:
+                type: string
+                description: Cost in nanoERG per 1K tokens
+
+    ProviderEntry:
+      type: object
+      properties:
+        public_key:
+          type: string
+        endpoint:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        region:
+          type: string
+        pown_score:
+          type: number
+        last_heartbeat:
+          type: integer
+        pricing:
+          type: object
+          additionalProperties:
+            type: string
+
+    BalanceResponse:
+      type: object
+      properties:
+        public_key:
+          type: string
+        balance_nanoerg:
+          type: string
+        balance_erg:
+          type: string
+        staking_box_id:
+          type: string
+
+    GpuListing:
+      type: object
+      properties:
+        listing_id:
+          type: string
+        provider_pk:
+          type: string
+        gpu_type:
+          type: string
+        vram_gb:
+          type: integer
+        price_per_hour_nanoerg:
+          type: string
+        region:
+          type: string
+        available:
+          type: boolean
+        bandwidth_mbps:
+          type: integer
+
+    GpuRental:
+      type: object
+      properties:
+        rental_id:
+          type: string
+        listing_id:
+          type: string
+        provider_pk:
+          type: string
+        renter_pk:
+          type: string
+        hours:
+          type: integer
+        cost_nanoerg:
+          type: string
+        started_at:
+          type: integer
+        expires_at:
+          type: integer
+        status:
+          type: string
+          enum: [active, expired, completed]
+
+    BridgeInvoice:
+      type: object
+      properties:
+        invoice_id:
+          type: string
+        amount_nanoerg:
+          type: string
+        chain:
+          type: string
+        status:
+          type: string
+          enum: [pending, confirmed, refunded, expired]
+        created_at:
+          type: integer
+        refund_timeout:
+          type: integer
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: invalid_request
+              message: "Missing required field: model"
+              code: 400
+
+    Unauthorized:
+      description: Invalid or missing authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: unauthorized
+              message: "Invalid HMAC signature"
+              code: 401
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: not_found
+              message: "Resource not found"
+              code: 404
+
+    RateLimited:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: rate_limit_error
+              message: "Rate limit exceeded (trial tier: 5 req/min)"
+              code: 429
+
+    ServiceUnavailable:
+      description: No providers available
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: service_unavailable
+              message: "No providers available for the requested model"
+              code: 503
+
+    Conflict:
+      description: Resource conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            error:
+              type: invalid_request
+              message: "GPU already rented"
+              code: 409

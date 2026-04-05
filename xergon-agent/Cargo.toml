@@ -23,24 +23,51 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Configuration
-config = "0.14"
+config = { version = "0.14", features = ["toml"] }
+toml_edit = "0.22"
 # Error handling
 anyhow = "1"
 thiserror = "2"
 # Time
 chrono = { version = "0.4", features = ["serde"] }
-# Hashing (node IDs)
+# Hashing (node IDs, wallet)
 sha2 = "0.10"
 hex = "0.4"
+blake2 = "0.10"
+digest = "0.10"
+# Wallet & signing
+bip39 = "2"
+aes-gcm = "0.10"
+hkdf = "0.12"
+hmac = "0.12"
+rand = "0.8"
+rpassword = "7"
+dirs = "5"
+libc = "0.2"
 # CLI args
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "env"] }
 # Concurrent collections
 dashmap = "6"
 # Rate limiting
 governor = "0.7"
+hostname = "0.4.2"
+# Ergo blockchain library (optional, heavy C-bindings via sigma-rust)
+ergo-lib = { version = "0.28", optional = true }
+# URL parsing for config validation
+url = "2"
+# Base58 encoding (for P2S address decoding in compile_contracts binary)
+bs58 = "0.5"
+# SSH tunnel management for GPU rental access
+ssh2 = "0.9"
+# Semver version comparison (for self-update)
+semver = "1"
 
 [dev-dependencies]
 tempfile = "3"
+
+[features]
+default = []
+ergo-lib = ["dep:ergo-lib"]
 
 [profile.release]
 opt-level = 3

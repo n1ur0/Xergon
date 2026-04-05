@@ -10,7 +10,7 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderMap, StatusCode, Request},
+    http::{HeaderMap, Request, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -41,6 +41,8 @@ pub struct InferenceState {
     pub provider_id: String,
     /// Provider ERG address for settlement recording
     pub provider_ergo_address: String,
+    /// Auto model pull system (optional, enabled via config)
+    pub auto_pull: Option<Arc<crate::auto_model_pull::AutoModelPull>>,
 }
 
 /// Build inference routes
@@ -67,11 +69,7 @@ pub fn build_router(state: InferenceState) -> Router {
 }
 
 /// Middleware that validates the Bearer token if inference.api_key is configured.
-async fn check_api_key(
-    req: Request<Body>,
-    next: Next,
-    api_key: String,
-) -> impl IntoResponse {
+async fn check_api_key(req: Request<Body>, next: Next, api_key: String) -> impl IntoResponse {
     let auth_header = req
         .headers()
         .get("authorization")
@@ -99,7 +97,11 @@ async fn chat_completions_handler(
     if body.len() > MAX_BODY_SIZE {
         return error_response(
             StatusCode::PAYLOAD_TOO_LARGE,
-            &format!("Request body too large: {} bytes (max {} MB)", body.len(), MAX_BODY_SIZE / 1024 / 1024),
+            &format!(
+                "Request body too large: {} bytes (max {} MB)",
+                body.len(),
+                MAX_BODY_SIZE / 1024 / 1024
+            ),
         );
     }
 
@@ -115,10 +117,50 @@ async fn chat_completions_handler(
 
     let model = serde_json::from_slice::<serde_json::Value>(&body)
         .ok()
-        .and_then(|v| v.get("model").and_then(|m| m.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("model")
+                .and_then(|m| m.as_str())
+                .map(|s| s.to_string())
+        })
         .unwrap_or_else(|| "unknown".to_string());
 
     info!(backend = %backend_url, model = %model, stream = is_stream, "Proxying inference request");
+
+    // --- Auto model pull check ---
+    // If auto_pull is configured and model is not available, trigger pull and return 503
+    if let Some(ref auto_pull) = state.auto_pull {
+        if !auto_pull.is_model_available(&model).await {
+            warn!(model = %model, "Model not available locally, triggering auto-pull");
+            let pull_result = auto_pull.pull_model(&model).await;
+            match pull_result {
+                crate::auto_model_pull::PullResult::AlreadyAvailable => {
+                    // Race condition: model became available between check and pull
+                }
+                crate::auto_model_pull::PullResult::PullFailed { error } => {
+                    let retry_after = auto_pull.retry_after_secs();
+                    let body = serde_json::json!({
+                        "error": {
+                            "message": format!("Model '{}' is not available. {}", model, error),
+                            "type": "xergon_model_unavailable",
+                            "code": 503,
+                            "pull_status": "in_progress",
+                        }
+                    });
+                    return Response::builder()
+                        .status(StatusCode::SERVICE_UNAVAILABLE)
+                        .header("Content-Type", "application/json")
+                        .header("Retry-After", retry_after.to_string())
+                        .body(Body::from(serde_json::to_string(&body).unwrap()))
+                        .unwrap();
+                }
+                crate::auto_model_pull::PullResult::PulledFromPeer { .. }
+                | crate::auto_model_pull::PullResult::PulledFromRegistry { .. } => {
+                    info!(model = %model, "Model pull completed, proceeding with request");
+                    // The model might need a moment to become available; proceed anyway
+                }
+            }
+        }
+    }
 
     // Build forwarded request
     let mut req_builder = state
@@ -140,7 +182,9 @@ async fn chat_completions_handler(
         }
     }
 
-    req_builder = req_builder.header("Content-Type", "application/json").body(body.to_vec());
+    req_builder = req_builder
+        .header("Content-Type", "application/json")
+        .body(body.to_vec());
 
     match req_builder.send().await {
         Ok(resp) if resp.status().is_success() => {
@@ -150,10 +194,12 @@ async fn chat_completions_handler(
                 // with async scan closures.
                 let stream = resp.bytes_stream();
                 let token_counter: Arc<std::sync::Mutex<u64>> = Arc::new(std::sync::Mutex::new(0));
-                let has_final_usage: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+                let has_final_usage: Arc<std::sync::Mutex<bool>> =
+                    Arc::new(std::sync::Mutex::new(false));
                 // Set to `true` when `[DONE]` is received so the drop guard
                 // knows the normal PoNW update was already spawned.
-                let completed_normally: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+                let completed_normally: Arc<std::sync::Mutex<bool>> =
+                    Arc::new(std::sync::Mutex::new(false));
                 let pown = state.pown.clone();
                 let settlement = state.settlement.clone();
                 let provider_id = state.provider_id.clone();
@@ -186,24 +232,34 @@ async fn chat_completions_handler(
                                                 "Streaming PoNW AI stats updated"
                                             );
                                             if let Some(ref s) = settlement {
-                                                let cost_per_1k = 0.002;
-                                                let cost_usd = tokens as f64 * cost_per_1k / 1000.0;
+                                                let (cost_per_1k, price_source) = s.resolve_cost_per_1k(&model).await;
+                                                let cost_nanoerg = tokens as u64 * cost_per_1k / 1000;
+                                                info!(
+                                                    model = %model,
+                                                    cost_nanoerg = cost_nanoerg,
+                                                    price_source = price_source,
+                                                    "Streaming usage cost calculated"
+                                                );
                                                 s.record_usage(
                                                     &provider_id,
                                                     &provider_ergo_address,
                                                     0,
                                                     tokens,
-                                                    cost_usd,
-                                                ).await;
+                                                    cost_nanoerg,
+                                                )
+                                                .await;
                                             }
                                         });
                                     }
-                                } else if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                                } else if let Ok(json) =
+                                    serde_json::from_str::<serde_json::Value>(data)
+                                {
                                     let chunk_tokens = extract_completion_tokens(&json);
                                     if json.get("usage").is_some() {
                                         // Final chunk with usage field — exact total count
                                         if chunk_tokens > 0 {
-                                            *token_counter_for_inspect.lock().unwrap() = chunk_tokens;
+                                            *token_counter_for_inspect.lock().unwrap() =
+                                                chunk_tokens;
                                             *has_final_usage_for_inspect.lock().unwrap() = true;
                                         }
                                     } else if !*has_final_usage_for_inspect.lock().unwrap() {
@@ -258,7 +314,10 @@ async fn chat_completions_handler(
                     }
                     Err(e) => {
                         warn!(error = %e, "Failed to read backend response");
-                        error_response(StatusCode::BAD_GATEWAY, &format!("Backend read error: {}", e))
+                        error_response(
+                            StatusCode::BAD_GATEWAY,
+                            &format!("Backend read error: {}", e),
+                        )
                     }
                 }
             }
@@ -289,7 +348,13 @@ async fn chat_completions_handler(
 async fn models_handler(State(state): State<InferenceState>) -> impl IntoResponse {
     let backend_url = format!("{}/v1/models", state.config.url.trim_end_matches('/'));
 
-    match state.http_client.get(&backend_url).timeout(std::time::Duration::from_secs(5)).send().await {
+    match state
+        .http_client
+        .get(&backend_url)
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+    {
         Ok(resp) if resp.status().is_success() => match resp.bytes().await {
             Ok(body) => {
                 // Cache the first model name
@@ -304,7 +369,10 @@ async fn models_handler(State(state): State<InferenceState>) -> impl IntoRespons
                     .body(Body::from(body))
                     .unwrap()
             }
-            Err(e) => error_response(StatusCode::BAD_GATEWAY, &format!("Backend read error: {}", e)),
+            Err(e) => error_response(
+                StatusCode::BAD_GATEWAY,
+                &format!("Backend read error: {}", e),
+            ),
         },
         Ok(resp) => {
             let status = resp.status();
@@ -340,18 +408,27 @@ async fn update_pown_from_response(state: &InferenceState, model: &str, json: &s
 
         // Record usage to settlement engine for ERG payment tracking
         if let Some(ref settlement) = state.settlement {
-            let cost_per_1k = 0.002; // $0.002 per 1K tokens (configurable later)
-            let cost_usd = total_tokens as f64 * cost_per_1k / 1000.0;
-            settlement.record_usage(
-                &state.provider_id,
-                &state.provider_ergo_address,
-                prompt_tokens,
-                completion_tokens,
-                cost_usd,
-            ).await;
+            let (cost_per_1k, price_source) = settlement.resolve_cost_per_1k(model).await;
+            let cost_nanoerg = total_tokens as u64 * cost_per_1k / 1000;
+            settlement
+                .record_usage(
+                    &state.provider_id,
+                    &state.provider_ergo_address,
+                    prompt_tokens,
+                    completion_tokens,
+                    cost_nanoerg,
+                )
+                .await;
+
+            // TODO: To use batch settlement instead of per-request record_usage,
+            // call batch_settlement.add_payment(&user_addr, &provider_addr, cost_nanoerg, &model).await
+            // here. The BatchSettlement accumulates payments and flushes consolidated
+            // transactions per provider, reducing on-chain tx volume.
+
             info!(
                 model = %model,
-                cost_usd = %cost_usd,
+                cost_nanoerg = cost_nanoerg,
+                price_source = price_source,
                 "Usage recorded to settlement engine"
             );
         }
@@ -491,16 +568,16 @@ impl Drop for StreamingDropGuard {
         handle.spawn(async move {
             pown.update_ai_stats(&model, tokens, 1).await;
             if let Some(ref s) = settlement {
-                let cost_per_1k = 0.002;
-                let cost_usd = tokens as f64 * cost_per_1k / 1000.0;
-                s.record_usage(
-                    &provider_id,
-                    &provider_ergo_address,
-                    0,
-                    tokens,
-                    cost_usd,
-                )
-                .await;
+                let (cost_per_1k, price_source) = s.resolve_cost_per_1k(&model).await;
+                let cost_nanoerg = tokens as u64 * cost_per_1k / 1000;
+                info!(
+                    model = %model,
+                    cost_nanoerg = cost_nanoerg,
+                    price_source = price_source,
+                    "Drop guard usage cost calculated"
+                );
+                s.record_usage(&provider_id, &provider_ergo_address, 0, tokens, cost_nanoerg)
+                    .await;
             }
         });
     }
@@ -644,7 +721,8 @@ mod tests {
     async fn test_drop_guard_records_on_unexpected_drop() {
         let pown = make_pown();
         let token_counter: Arc<std::sync::Mutex<u64>> = Arc::new(std::sync::Mutex::new(50));
-        let completed_normally: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+        let completed_normally: Arc<std::sync::Mutex<bool>> =
+            Arc::new(std::sync::Mutex::new(false));
 
         // Snapshot AI tokens before drop
         let status_before = pown.status().read().await.ai_total_tokens;
@@ -673,7 +751,8 @@ mod tests {
     async fn test_drop_guard_noop_when_completed_normally() {
         let pown = make_pown();
         let token_counter: Arc<std::sync::Mutex<u64>> = Arc::new(std::sync::Mutex::new(50));
-        let completed_normally: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+        let completed_normally: Arc<std::sync::Mutex<bool>> =
+            Arc::new(std::sync::Mutex::new(false));
 
         // Snapshot AI tokens before
         let status_before = pown.status().read().await.ai_total_tokens;
@@ -704,7 +783,8 @@ mod tests {
     async fn test_drop_guard_zero_tokens_is_noop() {
         let pown = make_pown();
         let token_counter: Arc<std::sync::Mutex<u64>> = Arc::new(std::sync::Mutex::new(0));
-        let completed_normally: Arc<std::sync::Mutex<bool>> = Arc::new(std::sync::Mutex::new(false));
+        let completed_normally: Arc<std::sync::Mutex<bool>> =
+            Arc::new(std::sync::Mutex::new(false));
 
         let status_before = pown.status().read().await.ai_total_tokens;
 

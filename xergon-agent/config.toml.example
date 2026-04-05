@@ -1,45 +1,469 @@
+# =============================================================================
 # Xergon Agent Configuration
+# =============================================================================
+#
+# Copy this file to config.toml and edit for your deployment:
+#   cp config.toml.example config.toml
+#
+# All fields have sensible defaults and can be omitted unless you need
+# to override them. Sections with [serde(default)] are fully optional.
+#
+# Environment variable overrides are supported with XERGON__ prefix:
+#   XERGON__ERGO_NODE__REST_URL=http://...
+#   XERGON__API__API_KEY=secret
+#   XERGON__INFERENCE__ENABLED=true
+# =============================================================================
+
+
+# ── Ergo Node ─────────────────────────────────────────────────────────────────
+# Connection to your local Ergo node.
 
 [ergo_node]
+# REST API URL of the local Ergo node.
+# Default: "http://127.0.0.1:9053"
 rest_url = "http://127.0.0.1:9053"
 
+
+# ── Provider Identity ─────────────────────────────────────────────────────────
+# Required: identifies this provider on the network.
+
 [xergon]
-provider_id = "Xergon_Test"
-provider_name = "Xergon Test Node"
+# Unique provider ID (e.g., "Xergon_LT" or "Provider_A1").
+# No default -- must be set.
+provider_id = "Xergon_Dev_01"
+
+# Human-readable display name (shown on leaderboard, relay UI).
+provider_name = "Xergon Dev Node"
+
+# Region code for geographic routing (us-east, eu-west, ap-east, etc.).
 region = "us-east"
+
+# Ergo address for Proof-of-Neural-Work identity and settlement payments.
 ergo_address = "9fDrtPahmtQDAPbq9AccibtZVmyPD8xmNJkrNXBbFDkejkez1kM"
 
+
+# ── Peer Discovery ────────────────────────────────────────────────────────────
+# Discovers other Xergon agents by scanning Ergo P2P network peers.
+
 [peer_discovery]
-discovery_interval_secs = 60
+# How often to run a full peer discovery cycle (seconds).
+# Default: 120
+discovery_interval_secs = 300
+
+# Timeout for probing a single peer (seconds).
+# Default: 5
 probe_timeout_secs = 5
+
+# Port where Xergon agents expose their status endpoint.
+# Default: 9099
 xergon_agent_port = 9099
+
+# Max concurrent peer probes.
+# Default: 10
 max_concurrent_probes = 5
+
+# Maximum number of Ergo peers to probe per cycle.
+# Default: 50
 max_peers_per_cycle = 20
+
+# Path to persist known Xergon peers between restarts.
+# Default: None (peers are re-discovered each cycle)
 peers_file = "/tmp/xergon-peers.json"
 
+
+# ── API ───────────────────────────────────────────────────────────────────────
+# HTTP REST API exposed by the agent.
+
 [api]
-listen_addr = "0.0.0.0:9099"
+# Address to bind the Xergon agent REST API.
+# Use "0.0.0.0:9099" to listen on all interfaces (default),
+# or "127.0.0.1:9099" for localhost-only.
+# Default: "0.0.0.0:9099"
+listen_addr = "127.0.0.1:9099"
+
+# Optional API key for management endpoints (/xergon/*).
+# If empty, management endpoints are open (dev mode).
+# If set, requests must include: Authorization: Bearer <api_key>
+# Default: "" (open)
+api_key = ""
+
+
+# ── Settlement ────────────────────────────────────────────────────────────────
+# Pure ERG-denominated settlement. All costs tracked in nanoERG (1 ERG = 10^9).
 
 [settlement]
+# Enable ERG settlement payments.
+# Default: false
 enabled = true
+
+# How often to settle outstanding balances (seconds).
+# Default: 86400 (24 hours)
 interval_secs = 86400
-dry_run = true
+
+# Path to the settlement ledger file (JSON).
+# Default: None (in-memory only)
 ledger_file = "data/settlement_ledger.json"
-min_settlement_usd = 0.10
+
+# Dry-run mode: log settlements without actually sending transactions.
+# Default: true (safe default for testing)
+dry_run = true
+
+# Cost per 1K tokens in nanoERG (1 ERG = 10^9 nanoERG).
+# Default: 1_000_000 (0.001 ERG per 1K tokens)
+cost_per_1k_tokens_nanoerg = 1_000_000
+
+# Minimum nanoERG before a provider payment is included in a settlement batch.
+# Default: 1_000_000_000 (1 ERG minimum)
+min_settlement_nanoerg = 1_000_000_000
+
+
+# ── llama.cpp Server ─────────────────────────────────────────────────────────
+# Configuration for llama.cpp HTTP server (inference backend).
 
 [llama_server]
+# Base URL of the llama-server instance.
+# Default: "http://127.0.0.1:8080"
 url = "http://127.0.0.1:8080"
+
+# How often to probe llama-server health (seconds).
+# Default: 60
 health_check_interval_secs = 60
 
+
+# ── Inference ─────────────────────────────────────────────────────────────────
+# OpenAI-compatible inference proxy exposed by the agent to the relay.
+
 [inference]
+# Enable the inference proxy endpoint.
+# Default: true
 enabled = true
-url = "http://127.0.0.1:11434"  # Ollama default port
+
+# Base URL of the LLM backend (Ollama, llama.cpp, vLLM, etc.).
+# Default: "http://127.0.0.1:11434" (Ollama default)
+url = "http://127.0.0.1:11434"
+
+# Request timeout in seconds.
+# Default: 120
 timeout_secs = 120
 
-# Relay registration — connect to xergon-relay for dynamic provider discovery
-# Set register_on_start = true and fill in relay_url + token to enable
+# Optional API key for inference endpoints.
+# If empty, inference endpoints are open (suitable for local/trusted networks).
+# Default: ""
+api_key = ""
+
+# List of model names this agent advertises as available.
+# Populated via `xergon-agent setup` when using Ollama or similar backends.
+# Default: []
+served_models = []
+
+
+# ── Relay Client ──────────────────────────────────────────────────────────────
+# Registration with the Xergon relay server.
+
 [relay]
-register_on_start = false
-relay_url = "http://127.0.0.1:9090"   # Relay base URL
-token = "xergon-dev-provider-token-change-me"  # Must match relay's providers.registration_token
+# Base URL of the relay (e.g., "http://relay-host:9090").
+# Default: ""
+relay_url = "http://127.0.0.1:9090"
+
+# Shared secret token for provider registration.
+# Must match relay's providers.registration_token.
+# Default: ""
+token = ""
+
+# How often to send heartbeat to relay (seconds).
+# Default: 60
 heartbeat_interval_secs = 60
+
+# Auto-register on startup.
+# Default: true
+register_on_start = true
+
+
+# ── Chain Transactions ────────────────────────────────────────────────────────
+# On-chain Ergo transaction configuration (Phase 2).
+
+[chain]
+# Submit heartbeat as an on-chain Ergo transaction.
+# Default: false
+heartbeat_tx_enabled = false
+
+# Submit usage proofs as on-chain Ergo transactions.
+# Default: false
+usage_proof_tx_enabled = false
+
+# Batch usage proof submissions every N seconds.
+# Default: 30
+usage_proof_batch_interval_secs = 30
+
+# Minimum ERG value for a usage proof box (nanoERG).
+# Default: 1_000_000 (0.001 ERG)
+usage_proof_min_value_nanoerg = 1000000
+
+# Provider NFT token ID (required for heartbeat and usage proof txs).
+# Default: ""
+provider_nft_token_id = ""
+
+# Usage proof box ErgoTree hex (compiled from contracts/usage_proof.es).
+# Default: "" (uses embedded compiled hex)
+usage_proof_tree_hex = ""
+
+
+# ── Airdrop ───────────────────────────────────────────────────────────────────
+# ERG airdrop service for new users.
+
+# [airdrop]
+# Enable the airdrop endpoint.
+# Default: false
+# enabled = false
+
+# Amount of ERG to airdrop per new user (nanoERG).
+# Default: 10_000_000 (0.01 ERG)
+# amount_nanoerg = 10000000
+
+# Maximum total ERG that can be airdropped.
+# Default: 100.0
+# max_total_erg = 100.0
+
+# Treasury box ID to fund from (optional, informational).
+# treasury_box_id = ""
+
+# Deployer's public key hex (for treasury spending authorization).
+# deployer_pk_hex = ""
+
+# Minimum seconds between airdrops for the same public key.
+# Default: 86400 (24 hours)
+# cooldown_secs = 86400
+
+# Ergo node URL for wallet API calls (defaults to ergo_node.rest_url if empty).
+# ergo_node_url = ""
+
+# Pre-compiled user_staking contract ErgoTree hex.
+# user_staking_ergotree_hex = ""
+
+# Transaction fee in nanoERG.
+# Default: 1_100_000 (0.0011 ERG)
+# fee_nanoerg = 1100000
+
+
+# ── GPU Rental ────────────────────────────────────────────────────────────────
+# GPU Bazar rental configuration (Phase 4).
+
+# [gpu_rental]
+# Enable GPU rental endpoints.
+# Default: false
+# enabled = false
+
+# Ergo node REST API URL for GPU rental operations.
+# Default: "http://127.0.0.1:9053"
+# ergo_node_url = "http://127.0.0.1:9053"
+
+# Compiled GPU rental listing contract ErgoTree hex.
+# listing_tree_hex = ""
+
+# Compiled GPU rental contract ErgoTree hex.
+# rental_tree_hex = ""
+
+# Port range for SSH tunnels (e.g. "22000-22100").
+# Default: "22000-22100"
+# ssh_tunnel_port_range = "22000-22100"
+
+# Maximum rental duration in hours.
+# Default: 720 (30 days)
+# max_rental_hours = 720
+
+# Enable SSH tunnel management.
+# Default: true
+# ssh_enabled = true
+
+# How often to check sessions for expiration (seconds).
+# Default: 60
+# metering_check_interval_secs = 60
+
+# SSH username for connecting to provider nodes.
+# Default: "xergon"
+# ssh_username = "xergon"
+
+# Compiled GPU rating contract ErgoTree hex.
+# rating_tree_hex = ""
+
+
+# ── P2P Communication ────────────────────────────────────────────────────────
+# Provider-to-provider communication for model exchange and load balancing.
+
+# [p2p]
+# Enable P2P peer communication.
+# Default: true
+# enabled = true
+
+# How often to re-check peers for updated info (seconds).
+# Default: 120
+# peer_refresh_interval_secs = 120
+
+# Timeout for P2P API calls (seconds).
+# Default: 5
+# timeout_secs = 5
+
+# Maximum number of peer agent info entries to cache.
+# Default: 50
+# max_cached_peers = 50
+
+
+# ── Relay Discovery ───────────────────────────────────────────────────────────
+# Multi-relay discovery via on-chain registry and health checking.
+
+# [relay_discovery]
+# Enable on-chain relay discovery.
+# Default: true
+# discovery_enabled = true
+
+# Hex-encoded ErgoTree for relay registry boxes.
+# registry_tree_hex = ""
+
+# Token ID to scan for relay registry boxes (alternative to tree scan).
+# registry_nft_token_id = ""
+
+# How often to rescan the chain for relays (seconds).
+# Default: 300
+# scan_interval_secs = 300
+
+# Timeout for relay health checks (seconds).
+# Default: 5
+# health_timeout_secs = 5
+
+
+# ── Auto Model Pull ──────────────────────────────────────────────────────────
+# Automatic model pulling from Ollama registry, HuggingFace, or P2P peers.
+
+# [auto_model_pull]
+# Enable automatic model pulling.
+# Default: false
+# enabled = false
+
+# Maximum time to wait for a model pull (seconds).
+# Default: 600
+# pull_timeout_secs = 600
+
+# Maximum concurrent pulls.
+# Default: 2
+# max_concurrent_pulls = 2
+
+# Models to pre-pull on startup (empty = none).
+# pre_pull_models = []
+
+# Optional HuggingFace API token for gated models.
+# huggingface_token = ""
+
+# Backend URL to pull models from (defaults to inference.url if empty).
+# backend_url = ""
+
+
+# ── Usage Proof Rollup ───────────────────────────────────────────────────────
+# Merkle tree epoch batching for usage proofs.
+
+# [rollup]
+# Enable usage proof rollups.
+# Default: false
+# enabled = false
+
+# Epoch duration in seconds.
+# Default: 300 (5 minutes)
+# epoch_duration_secs = 300
+
+# Minimum proofs before committing an epoch.
+# Default: 10
+# min_proofs_per_commitment = 10
+
+# Maximum proofs per commitment.
+# Default: 1000
+# max_proofs_per_commitment = 1000
+
+# Compiled usage_commitment.es ErgoTree hex.
+# commitment_tree_hex = ""
+
+# Commitment NFT token ID for the commitment box.
+# commitment_nft_token_id = ""
+
+# Minimum ERG value for a commitment box (nanoERG).
+# Default: 1_000_000 (0.001 ERG)
+# commitment_min_value_nanoerg = 1000000
+
+
+# ── Payment Bridge ────────────────────────────────────────────────────────────
+# Cross-chain payment bridge (BTC, ETH, ADA) via Lock-and-Mint invoices.
+
+# [payment_bridge]
+# Enable cross-chain payment bridge.
+# Default: false
+# enabled = false
+
+# Bridge operator public key (hex, for confirmations).
+# bridge_public_key = ""
+
+# Supported foreign chains.
+# Default: ["btc", "eth", "ada"]
+# supported_chains = ["btc", "eth", "ada"]
+
+# Invoice timeout in blocks before buyer can refund.
+# Default: 720 (~24 hours at 2-minute block time)
+# invoice_timeout_blocks = 720
+
+# Compiled payment_bridge.es ErgoTree hex.
+# invoice_tree_hex = ""
+
+
+# ── Self-Update ───────────────────────────────────────────────────────────────
+# Automatic update checking via GitHub Releases.
+
+[update]
+# GitHub Releases API URL for checking latest version.
+# Default: "https://api.github.com/repos/n1ur0/Xergon-Network/releases/latest"
+release_url = "https://api.github.com/repos/n1ur0/Xergon-Network/releases/latest"
+
+# Check for updates automatically on agent startup.
+# Default: false
+auto_check = false
+
+# How often to check for updates (hours).
+# Default: 24
+check_interval_hours = 24
+
+
+# ── Contract Hex Overrides ────────────────────────────────────────────────────
+# Override the pre-compiled ErgoTree hex for each contract.
+# Leave empty to use the embedded compiled hex (recommended for mainnet).
+# Useful for testing different contract versions or testnet deployments.
+# Each field maps to a contract source file in contracts/:
+
+[contracts]
+# contracts/provider_box.es
+provider_box_hex = ""
+
+# contracts/provider_registration.es
+provider_registration_hex = ""
+
+# contracts/treasury_box.es
+treasury_box_hex = ""
+
+# contracts/usage_proof.es
+usage_proof_hex = ""
+
+# contracts/user_staking.es
+user_staking_hex = ""
+
+# contracts/gpu_rental.es
+gpu_rental_hex = ""
+
+# contracts/usage_commitment.es
+usage_commitment_hex = ""
+
+# contracts/relay_registry.es
+relay_registry_hex = ""
+
+# contracts/gpu_rating.es
+gpu_rating_hex = ""
+
+# contracts/gpu_rental_listing.es
+gpu_rental_listing_hex = ""
+
+# contracts/payment_bridge.es
+payment_bridge_hex = ""
