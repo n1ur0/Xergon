@@ -35,3 +35,4 @@ export { fleetCommand } from './fleet';
 export { treasuryCommand } from './treasury';
 export { ensembleCommand } from './ensemble';
 export { monitorCommand } from './monitor';
+export { bridgeCommand } from './bridge';

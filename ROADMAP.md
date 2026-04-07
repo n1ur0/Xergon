@@ -365,7 +365,7 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 
 ### Must Build
 
-**Phase 73 done. Next: Phase 74.**
+**Phase 74 done. Next: Phase 75.**
 
 | Component | What's Next | Phase |
 |-----------|-------------|-------|
@@ -381,6 +381,22 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 | Agent | Proof verifier pipeline (ZK proof verification, proof batching, verification receipts, fraud detection) | 73 ✅ |
 | SDK | `xergon monitor` CLI (health check, provider status, network stats, alert rules, dashboard) | 73 ✅ |
 | Marketplace | Provider monitor (uptime tracking, SLA monitoring, reputation correlation, alert feeds) | 73 ✅ |
+| Relay | Cross-chain bridge (cross_chain_bridge.rs, multi-chain transfer routing, bridge status tracking) | 74 ✅ |
+| Agent | Oracle price feed (oracle_price_feed.rs, multi-source ERG/USD aggregation, staleness detection) | 74 ✅ |
+| SDK | `xergon bridge` CLI (bridge.ts, cross-chain transfer, bridge status, history) | 74 ✅ |
+| Marketplace | ErgoAuth login + NFT model cards (ergoauth_nft_cards.rs, wallet-based auth, NFT model card display) | 74 ✅ |
+| Relay | Cross-chain event router (multi-chain event subscription, state sync, bridge analytics) | 75 |
+| Agent | Staking pool manager (liquid staking, delegation, yield optimization, auto-compound) | 75 |
+| SDK | `xergon stake` CLI (stake/unstake/delegate, pool browser, rewards tracking, APY display) | 75 |
+| Marketplace | Staking dashboard (pool overview, yield comparison, delegation UI, rewards tracker) | 75 |
+
+### Phase 74 -- Cross-Chain Bridge, Oracle Price Feed, Bridge CLI, ErgoAuth NFT Cards [DONE]
+
+- [x] Relay: Cross-chain bridge (cross_chain_bridge.rs, multi-chain transfer routing, bridge status tracking, cross-chain message relay)
+- [x] Agent: Oracle price feed (oracle_price_feed.rs, multi-source ERG/USD price aggregation, staleness detection, feed health monitoring)
+- [x] SDK: `xergon bridge` CLI (bridge.ts, cross-chain transfer commands, bridge status checks, transfer history)
+- [x] Marketplace: ErgoAuth login + NFT model cards (ergoauth_nft_cards.rs, wallet-based authentication, NFT model card display, ErgoAuth integration)
+- [x] All 4 crates compile clean: relay 0 errors, agent 0 errors, marketplace 0 errors, SDK 0 errors.
 
 ### Phase 73 -- Network Health Monitor, Proof Verifier, Monitor CLI, Provider Monitor [DONE]
 

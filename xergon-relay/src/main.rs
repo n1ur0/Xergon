@@ -89,6 +89,7 @@ mod tracing_middleware;
 mod usage_analytics;
 mod websocket_v2;
 mod health_monitor_v2;
+mod cross_chain_bridge;
 mod api_gateway;
 mod babel_fee_integration;
 mod request_coalescing;

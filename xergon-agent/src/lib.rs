@@ -104,3 +104,4 @@ pub mod proxy_contract;
 pub mod governance_executor;
 pub mod shard_coordinator;
 pub mod proof_verifier;
+pub mod oracle_price_feed;
