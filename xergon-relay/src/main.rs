@@ -93,6 +93,7 @@ mod cross_chain_bridge;
 mod cross_chain_event_router;
 mod api_gateway;
 mod babel_fee_integration;
+mod babel_box_discovery;
 mod request_coalescing;
 mod protocol_adapter;
 mod util;

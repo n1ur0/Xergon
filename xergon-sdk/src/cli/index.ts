@@ -77,6 +77,7 @@ const commandModules: Record<string, () => Promise<{ [key: string]: Command }>> 
   monitor: () => import('./commands/monitor').then(m => ({ monitor: m.monitorCommand })),
   bridge: () => import('./commands/bridge').then(m => ({ bridge: m.bridgeCommand })),
   stake: () => import('./commands/stake').then(m => ({ stake: m.stakeCommand })),
+  pay: () => import('./commands/pay').then(m => ({ pay: m.payCommand })),
 };
 
 // Cache for loaded commands

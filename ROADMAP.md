@@ -365,7 +365,7 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 
 ### Must Build
 
-**Phase 75 done. Next: Phase 76.**
+**Phase 76 done. Next: Phase 77.**
 
 | Component | What's Next | Phase |
 |-----------|-------------|-------|
@@ -389,6 +389,18 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 || Agent | Staking pool manager (liquid staking, delegation, yield optimization, auto-compound) | 75 ✅ |
 || SDK | `xergon stake` CLI (stake/unstake/delegate, pool browser, rewards tracking, APY display) | 75 ✅ |
 || Marketplace | Staking dashboard (pool overview, yield comparison, delegation UI, rewards tracker) | 75 ✅ |
+|| Relay | Babel box discovery + token fee swap engine (EIP-0031 ErgoTree construction, Explorer API integration, SLong price decoding, box selection, sigma serialization, 18 unit tests) | 76 ✅ |
+|| Agent | Inference cost oracle (model cost profiles, ERG pricing per model, budget enforcement, bulk discounts, token price conversion, dynamic pricing, batch estimation) | 76 ✅ |
+|| SDK | `xergon pay` CLI (discover/select/estimate/price/verify/budget commands, Babel box selection, token fee payment) | 76 ✅ |
+|| Marketplace | Inference pricing engine (real-time cost display, provider comparison, budget dashboard, savings vs centralized, trending, price history) | 76 ✅ |
+
+### Phase 76 -- Babel Box Discovery, Inference Cost Oracle, Pay CLI, Inference Pricing Engine [DONE]
+
+- [x] Relay: Babel box discovery (babel_box_discovery.rs, EIP-0031 ErgoTree construction with dual headers, Explorer API integration for unspent box queries, SLong token price zigzag/VLQ decoding, box selection with liquidity ranking, sigma serialization helpers, swap calculation, 4 REST endpoints, 18 unit tests)
+- [x] Agent: Inference cost oracle (inference_cost_oracle.rs, model cost profiles with per-provider pricing, ERG cost estimation per token, budget enforcement with daily limits, bulk discounts 15/25/35%, token price conversion via oracle, dynamic pricing with demand tracking, batch estimation, 8 REST endpoints, 13 unit tests)
+- [x] SDK: `xergon pay` CLI (pay.ts, discover/select/estimate/price/verify/budget commands, Babel box discovery and selection, token fee calculation, budget management, --json output support)
+- [x] Marketplace: Inference pricing engine (inference_pricing_engine.rs, real-time provider pricing display, cheapest/fastest/best-value provider ranking, user budget dashboard with alert levels, cost comparison vs centralized OpenAI/Anthropic, savings tracking, price trending, history, 8 REST endpoints, 14 unit tests)
+- [x] All 4 crates compile clean: relay 0 errors, agent 0 errors, marketplace 0 errors, SDK 0 errors.
 
 ### Phase 75 -- Cross-Chain Event Router, Staking Pool Manager, Stake CLI, Staking Dashboard [DONE]
 

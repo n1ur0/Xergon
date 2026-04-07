@@ -106,3 +106,4 @@ pub mod shard_coordinator;
 pub mod proof_verifier;
 pub mod oracle_price_feed;
 pub mod staking_pool_manager;
+pub mod inference_cost_oracle;

@@ -27,3 +27,4 @@ pub mod treasury_governance;
 pub mod governance_dashboard;
 pub mod search_v2;
 pub mod usage_analytics_pipeline;
+pub mod inference_pricing_engine;
