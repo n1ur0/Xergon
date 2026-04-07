@@ -365,7 +365,7 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 
 ### Must Build
 
-**Phase 71 done. Next: Phase 72.**
+**Phase 72 done. Next: Phase 73.**
 
 | Component | What's Next | Phase |
 |-----------|-------------|-------|
@@ -373,10 +373,10 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 | Agent | On-chain governance executor (proposal submission, vote casting via EIP-12, quorum verification, execution engine) | 71 ✅ |
 | SDK | `xergon governance` CLI (propose, vote, tally, delegate, treasury operations) | 71 ✅ |
 | Marketplace | Governance dashboard (proposal browser, vote UI, treasury visualization, delegation manager) | 71 ✅ |
-| Relay | Multi-model ensemble router (request fan-out, response aggregation, confidence scoring, fallback merge) | 72 |
-| Agent | Distributed model serving v2 (shard coordinator, tensor pipeline, cross-provider inference merge) | 72 |
-| SDK | `xergon ensemble` CLI (ensemble config, model groups, routing rules, A/B weight controls) | 72 |
-| Marketplace | Ensemble marketplace (model group bundles, performance comparison, routing strategy marketplace) | 72 |
+| Relay | Multi-model ensemble router (request fan-out, response aggregation, confidence scoring, fallback merge) | 72 ✅ |
+| Agent | Distributed model serving v2 (shard coordinator, tensor pipeline, cross-provider inference merge) | 72 ✅ |
+| SDK | `xergon ensemble` CLI (ensemble config, model groups, routing rules, A/B weight controls) | 72 ✅ |
+| Marketplace | Ensemble marketplace (model group bundles, performance comparison, routing strategy marketplace) | 72 ✅ |
 
 ### Phase 69 -- UTXO Consolidation, ErgoPay Builder, Proxy Contract Manager, Consolidate/ErgoPay CLI, Protocol Health Dashboard, ErgoPay QR Page [DONE]
 

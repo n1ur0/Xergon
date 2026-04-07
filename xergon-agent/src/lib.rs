@@ -102,3 +102,4 @@ pub mod sigma_usd_pricing;
 pub mod storage_rent_guard;
 pub mod proxy_contract;
 pub mod governance_executor;
+pub mod shard_coordinator;

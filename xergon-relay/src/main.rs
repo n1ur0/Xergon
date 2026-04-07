@@ -36,6 +36,7 @@ mod dynamic_pricing;
 mod coalesce_buffer;
 mod config;
 mod dedup;
+pub mod ensemble_router;
 mod encrypted_inference;
 mod demand;
 mod degradation;
@@ -524,6 +525,7 @@ async fn main() -> Result<()> {
         babel_fee_manager: Arc::new(babel_fee_integration::BabelFeeManager::new()),
         request_coalescer: Arc::new(request_coalescing::RequestCoalescer::new()),
         protocol_adapter: Arc::new(protocol_adapter::ProtocolAdapter::new()),
+        ensemble_router: Arc::new(ensemble_router::EnsembleRouter::new()),
     };
 
     // Wire the shared webhook manager into the SLA tracker
@@ -1317,7 +1319,8 @@ async fn main() -> Result<()> {
         .merge(api_gateway::build_gateway_router())
         .merge(babel_fee_integration::build_router(state.clone()))
         .merge(request_coalescing::build_router(state.clone()))
-        .merge(protocol_adapter::build_router(state.clone()));
+        .merge(protocol_adapter::build_router(state.clone()))
+        .merge(ensemble_router::build_router(state.clone()));
 
     // GraphQL API endpoint
     let graphql_schema = Arc::new(graphql::build_schema(Arc::new(state.clone())));

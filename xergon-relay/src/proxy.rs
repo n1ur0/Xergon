@@ -52,6 +52,7 @@ use crate::cost_estimator;
 use crate::scheduling_optimizer;
 use crate::homomorphic_compute;
 use crate::cross_provider_orchestration;
+use crate::ensemble_router;
 use crate::speculative_decoding;
 use crate::request_fusion;
 use crate::continuous_batching;
@@ -218,6 +219,8 @@ pub struct AppState {
     pub request_coalescer: Arc<RequestCoalescer>,
     /// Protocol adapter for normalizing requests across providers
     pub protocol_adapter: Arc<ProtocolAdapter>,
+    /// Multi-model ensemble router for fan-out and response aggregation
+    pub ensemble_router: Arc<ensemble_router::EnsembleRouter>,
 }
 
 /// A single usage record
