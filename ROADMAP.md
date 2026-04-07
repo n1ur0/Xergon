@@ -365,7 +365,7 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 
 ### Must Build
 
-**Phase 74 done. Next: Phase 75.**
+**Phase 75 done. Next: Phase 76.**
 
 | Component | What's Next | Phase |
 |-----------|-------------|-------|
@@ -385,10 +385,18 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 | Agent | Oracle price feed (oracle_price_feed.rs, multi-source ERG/USD aggregation, staleness detection) | 74 ✅ |
 | SDK | `xergon bridge` CLI (bridge.ts, cross-chain transfer, bridge status, history) | 74 ✅ |
 | Marketplace | ErgoAuth login + NFT model cards (ergoauth_nft_cards.rs, wallet-based auth, NFT model card display) | 74 ✅ |
-| Relay | Cross-chain event router (multi-chain event subscription, state sync, bridge analytics) | 75 |
-| Agent | Staking pool manager (liquid staking, delegation, yield optimization, auto-compound) | 75 |
-| SDK | `xergon stake` CLI (stake/unstake/delegate, pool browser, rewards tracking, APY display) | 75 |
-| Marketplace | Staking dashboard (pool overview, yield comparison, delegation UI, rewards tracker) | 75 |
+|| Relay | Cross-chain event router (multi-chain event subscription, state sync, bridge analytics) | 75 ✅ |
+|| Agent | Staking pool manager (liquid staking, delegation, yield optimization, auto-compound) | 75 ✅ |
+|| SDK | `xergon stake` CLI (stake/unstake/delegate, pool browser, rewards tracking, APY display) | 75 ✅ |
+|| Marketplace | Staking dashboard (pool overview, yield comparison, delegation UI, rewards tracker) | 75 ✅ |
+
+### Phase 75 -- Cross-Chain Event Router, Staking Pool Manager, Stake CLI, Staking Dashboard [DONE]
+
+- [x] Relay: Cross-chain event router (cross_chain_event_router.rs, multi-chain event subscription and matching, state sync manager with reorg detection, bridge analytics with latency bucketing and throughput tracking, subscription manager with callback delivery, 15+ unit tests)
+- [x] Agent: Staking pool manager (staking_pool_manager.rs, liquid staking with pool creation, stake/unstake/claim/compound operations, epoch-based reward distribution, delegation with auto-compound, pool suggestion engine, staker position tracking, yield computation)
+- [x] SDK: `xergon stake` CLI (stake.ts, stake/unstake/delegate commands, pool browser with sorting, rewards tracking, APY display, yield estimation)
+- [x] Marketplace: Staking dashboard (staking_dashboard.rs, pool overview with TVL/APY, yield comparison across pools, delegation UI with auto-compound, rewards tracker with claim history, yield estimation with daily compounding, top pools leaderboard, undelegate flow)
+- [x] All 4 crates compile clean: relay 0 errors, agent 0 errors, marketplace 0 errors, SDK 0 errors.
 
 ### Phase 74 -- Cross-Chain Bridge, Oracle Price Feed, Bridge CLI, ErgoAuth NFT Cards [DONE]
 

@@ -14,6 +14,7 @@ pub mod model_marketplace;
 pub mod model_reviews;
 pub mod notifications_v2;
 pub mod ergoauth_nft_cards;
+pub mod staking_dashboard;
 pub mod og_image_generator;
 pub mod provider_dashboard;
 pub mod provider_portfolio;

@@ -76,6 +76,7 @@ const commandModules: Record<string, () => Promise<{ [key: string]: Command }>> 
   ensemble: () => import('./commands/ensemble').then(m => ({ ensemble: m.ensembleCommand })),
   monitor: () => import('./commands/monitor').then(m => ({ monitor: m.monitorCommand })),
   bridge: () => import('./commands/bridge').then(m => ({ bridge: m.bridgeCommand })),
+  stake: () => import('./commands/stake').then(m => ({ stake: m.stakeCommand })),
 };
 
 // Cache for loaded commands
