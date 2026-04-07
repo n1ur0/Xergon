@@ -25,7 +25,6 @@ const RECONCILE_HTTP_TIMEOUT_SECS: u64 = 15;
 
 /// Result of verifying a single transaction against the Ergo node.
 #[derive(Debug)]
-#[allow(dead_code)] // Fields reserved for future use in detailed reporting
 pub enum TxVerification {
     /// Transaction is confirmed on-chain.
     Confirmed {

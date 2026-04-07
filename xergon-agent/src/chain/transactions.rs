@@ -32,8 +32,16 @@ pub struct PendingUsageProof {
 /// Submit a heartbeat transaction that updates the provider box registers.
 ///
 /// Spends the existing provider box (found via NFT token ID) and creates
-/// a new provider box with updated R4 (last_heartbeat timestamp), R5 (total_tokens_served),
-/// R6 (models + pricing JSON), R7 (region).
+/// a new provider box with registers matching the provider_box.ergo contract:
+/// - R4: Provider public key (GroupElement) — spending authorization
+/// - R5: Endpoint URL (Coll[Byte]) — UTF-8 encoded string
+/// - R6: Models served + pricing (Coll[Byte]) — JSON string
+/// - R7: PoNW score (Int) — 0-1000
+/// - R8: Last heartbeat height (Int) — block height of last heartbeat
+/// - R9: Region (Coll[Byte]) — UTF-8 encoded string
+///
+/// The provider PK (R4) is preserved from the existing box to satisfy the
+/// contract check `outBox.R4[GroupElement].get == providerPk`.
 ///
 /// Uses the Ergo node wallet API to build + sign + broadcast.
 ///
@@ -41,10 +49,10 @@ pub struct PendingUsageProof {
 pub async fn submit_heartbeat_tx(
     client: &ErgoNodeClient,
     provider_nft_token_id: &str,
-    total_tokens_served: i64,
-    total_requests: i64,
-    region: &str,
+    endpoint_url: &str,
     models_r6_json: &str,
+    ponw_score: i32,
+    region: &str,
 ) -> Result<String> {
     if provider_nft_token_id.is_empty() {
         anyhow::bail!("Provider NFT token ID not configured — cannot submit heartbeat tx");
@@ -67,19 +75,40 @@ pub async fn submit_heartbeat_tx(
         })
         .context("Provider box not found on-chain — NFT token ID may be wrong or box not created")?;
 
-    let timestamp_ms = chrono::Utc::now().timestamp_millis();
+    // Read existing R4 (provider PK GroupElement) from the box to preserve it
+    let existing_r4 = crate::chain::scanner::get_register(&provider_box.additional_registers, "R4")
+        .and_then(|v| crate::chain::scanner::parse_group_element(v))
+        .context("Missing R4 (provider PK GroupElement) in existing provider box")?;
+    let pk_bytes = hex::decode(&existing_r4)
+        .context("Invalid provider PK hex from existing box R4")?;
+    let r4_hex = encode_group_element(&pk_bytes)
+        .context("Failed to encode provider PK GroupElement for R4")?;
 
-    // Long (tag 0x05, 8 bytes big-endian)
-    let heartbeat_hex = encode_long(timestamp_ms);
-    let tokens_hex = encode_long(total_tokens_served);
-    // String (Coll[Byte]): 0e <vlb_len> <utf8_bytes>
-    let region_hex = encode_string(region);
-    // R6: Models + pricing JSON (Coll[Byte])
-    let models_r6_hex = encode_string(models_r6_json);
+    // Fetch current block height for R8
+    let current_height = client
+        .get_height()
+        .await
+        .context("Failed to fetch current block height for heartbeat R8")?;
+
+    // Clamp PoNW score to 0-1000 (Int range for contract)
+    let ponw_clamped = ponw_score.clamp(0, 1000);
+
+    // Encode registers per contract spec:
+    // R4: GroupElement (preserved from existing box)
+    // R5: String — endpoint URL
+    let r5_hex = encode_string(endpoint_url);
+    // R6: String — models + pricing JSON
+    let r6_hex = encode_string(models_r6_json);
+    // R7: Int — PoNW score 0-1000
+    let r7_hex = encode_int(ponw_clamped);
+    // R8: Int — last heartbeat height (monotonic)
+    let r8_hex = encode_int(current_height);
+    // R9: String — region
+    let r9_hex = encode_string(region);
 
     // Build the payment request:
     // - Input: the provider box
-    // - Output: new provider box with same NFT, updated registers
+    // - Output: new provider box with same NFT, updated registers R4-R9
     let payment_request = serde_json::json!({
         "requests": [{
             "address": provider_box.ergo_tree.clone(),
@@ -89,10 +118,12 @@ pub async fn submit_heartbeat_tx(
                 "amount": 1
             }],
             "registers": {
-                "R4": heartbeat_hex,
-                "R5": tokens_hex,
-                "R6": models_r6_hex,
-                "R7": region_hex
+                "R4": r4_hex,
+                "R5": r5_hex,
+                "R6": r6_hex,
+                "R7": r7_hex,
+                "R8": r8_hex,
+                "R9": r9_hex
             }
         }],
         "fee": 1000000,  // 0.001 ERG fee
@@ -102,9 +133,10 @@ pub async fn submit_heartbeat_tx(
 
     debug!(
         box_id = %provider_box.box_id,
-        timestamp_ms,
-        total_tokens_served,
-        total_requests,
+        current_height,
+        ponw_score = ponw_clamped,
+        endpoint = %endpoint_url,
+        region = %region,
         "Submitting heartbeat transaction"
     );
 
@@ -119,6 +151,8 @@ pub async fn submit_heartbeat_tx(
     info!(
         tx_id = %tx_id,
         box_id = %provider_box.box_id,
+        height = current_height,
+        ponw_score = ponw_clamped,
         "Heartbeat transaction submitted"
     );
 

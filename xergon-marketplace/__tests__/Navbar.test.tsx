@@ -138,10 +138,10 @@ describe("Navbar", () => {
     expect(screen.getByLabelText("Open menu")).toBeInTheDocument();
   });
 
-  it("has the correct number of main nav links (8)", () => {
+  it("has the correct number of main nav links (11)", () => {
     render(<Navbar />);
     const nav = screen.getByLabelText("Main navigation");
     const links = nav.querySelectorAll("a");
-    expect(links.length).toBe(8);
+    expect(links.length).toBe(11);
   });
 });

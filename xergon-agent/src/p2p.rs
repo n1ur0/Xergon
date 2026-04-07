@@ -92,7 +92,7 @@ pub struct ProxyResponse {
 }
 
 /// Configuration for P2P communication
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct P2PConfig {
     /// Enable P2P peer communication (default: true)
     #[serde(default = "default_p2p_enabled")]

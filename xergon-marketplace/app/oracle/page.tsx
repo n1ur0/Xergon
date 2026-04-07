@@ -1,11 +1,23 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { SuspenseWrap } from "@/components/ui/SuspenseWrap";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface OracleRateResponse {
+  rate: number;
+  epoch?: number;
+  poolBoxId?: string;
+  timestamp?: string;
+}
+
+interface PriceHistoryPoint {
+  price: number;
+  timestamp: number;
+}
 
 interface OracleOperator {
   name: string;
@@ -21,38 +33,8 @@ interface EpochDataPoint {
 }
 
 // ---------------------------------------------------------------------------
-// Mock data
+// Constants
 // ---------------------------------------------------------------------------
-
-const MOCK_CURRENT = {
-  price: 1.24,
-  epoch: 4782,
-  lastRefresh: "2 min ago",
-  reportingOracles: 5,
-  totalOracles: 6,
-};
-
-const MOCK_OPERATORS: OracleOperator[] = [
-  { name: "ergo-oracle-1", lastDatapoint: "$1.24", epoch: 4782, status: "active", rewardTokens: 12.4 },
-  { name: "ergo-oracle-2", lastDatapoint: "$1.23", epoch: 4782, status: "active", rewardTokens: 11.8 },
-  { name: "ergo-oracle-3", lastDatapoint: "$1.25", epoch: 4782, status: "active", rewardTokens: 13.1 },
-  { name: "ergo-oracle-4", lastDatapoint: "$1.24", epoch: 4781, status: "active", rewardTokens: 10.2 },
-  { name: "ergo-oracle-5", lastDatapoint: "$1.21", epoch: 4780, status: "stale", rewardTokens: 8.7 },
-  { name: "ergo-oracle-6", lastDatapoint: "$1.18", epoch: 4774, status: "offline", rewardTokens: 3.1 },
-];
-
-const MOCK_EPOCH_HISTORY: EpochDataPoint[] = [
-  { epoch: 4773, price: 1.19 },
-  { epoch: 4774, price: 1.20 },
-  { epoch: 4775, price: 1.18 },
-  { epoch: 4776, price: 1.22 },
-  { epoch: 4777, price: 1.21 },
-  { epoch: 4778, price: 1.23 },
-  { epoch: 4779, price: 1.25 },
-  { epoch: 4780, price: 1.24 },
-  { epoch: 4781, price: 1.22 },
-  { epoch: 4782, price: 1.24 },
-];
 
 const ORACLE_PARAMS = {
   epochLength: "12 blocks (~40 min)",
@@ -60,6 +42,55 @@ const ORACLE_PARAMS = {
   maxDeviation: "5%",
   dataPointsPerEpoch: 6,
 };
+
+const PRICE_HISTORY_KEY = "xergon_oracle_price_history";
+const MAX_HISTORY_POINTS = 24;
+const REFRESH_INTERVAL_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// localStorage helpers
+// ---------------------------------------------------------------------------
+
+function loadPriceHistory(): PriceHistoryPoint[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(PRICE_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (p: unknown) =>
+        p &&
+        typeof p === "object" &&
+        typeof (p as PriceHistoryPoint).price === "number" &&
+        typeof (p as PriceHistoryPoint).timestamp === "number"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function savePriceHistory(history: PriceHistoryPoint[]) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PRICE_HISTORY_KEY, JSON.stringify(history.slice(-MAX_HISTORY_POINTS)));
+  } catch {
+    // quota exceeded — ignore
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Mock operator data (real operator data would come from on-chain queries)
+// ---------------------------------------------------------------------------
+
+const MOCK_OPERATORS: OracleOperator[] = [
+  { name: "ergo-oracle-1", lastDatapoint: "--", epoch: 0, status: "active", rewardTokens: 12.4 },
+  { name: "ergo-oracle-2", lastDatapoint: "--", epoch: 0, status: "active", rewardTokens: 11.8 },
+  { name: "ergo-oracle-3", lastDatapoint: "--", epoch: 0, status: "active", rewardTokens: 13.1 },
+  { name: "ergo-oracle-4", lastDatapoint: "--", epoch: 0, status: "active", rewardTokens: 10.2 },
+  { name: "ergo-oracle-5", lastDatapoint: "--", epoch: 0, status: "stale", rewardTokens: 8.7 },
+  { name: "ergo-oracle-6", lastDatapoint: "--", epoch: 0, status: "offline", rewardTokens: 3.1 },
+];
 
 // ---------------------------------------------------------------------------
 // Skeleton loaders
@@ -86,6 +117,11 @@ function OracleSkeleton() {
           <SkeletonPulse className="h-8 w-24 rounded-full" />
         </div>
       </div>
+      {/* Sparkline skeleton */}
+      <div className="rounded-xl border border-surface-200 bg-surface-0 p-5">
+        <SkeletonPulse className="h-5 w-36 mb-4" />
+        <SkeletonPulse className="h-[120px] w-full" />
+      </div>
       {/* Table skeleton */}
       <div className="rounded-xl border border-surface-200 bg-surface-0 overflow-hidden">
         <div className="px-5 py-4 border-b border-surface-100">
@@ -105,10 +141,58 @@ function OracleSkeleton() {
           ))}
         </div>
       </div>
-      {/* Chart skeleton */}
-      <div className="rounded-xl border border-surface-200 bg-surface-0 p-5">
-        <SkeletonPulse className="h-5 w-36 mb-4" />
-        <SkeletonPulse className="h-[200px] w-full" />
+      {/* Protocol info skeleton */}
+      <div className="rounded-xl border border-surface-200 bg-surface-0 p-6">
+        <SkeletonPulse className="h-5 w-32 mb-4" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <SkeletonPulse className="h-4 w-full" />
+            <SkeletonPulse className="h-4 w-3/4" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <SkeletonPulse className="h-4 w-32" />
+                <SkeletonPulse className="h-6 w-24 rounded-md" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Error state
+// ---------------------------------------------------------------------------
+
+function OracleError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-red-200 bg-red-50 dark:border-red-800/40 dark:bg-red-950/20 p-8 text-center">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-500" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+        </div>
+        <h2 className="text-lg font-semibold text-surface-900 mb-1">Oracle Unavailable</h2>
+        <p className="text-sm text-surface-800/60 mb-4">
+          Unable to reach the oracle service. This may be a temporary issue.
+        </p>
+        <button
+          onClick={onRetry}
+          className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+          Retry
+        </button>
       </div>
     </div>
   );
@@ -141,7 +225,125 @@ function StatusDot({ status }: { status: OracleOperator["status"] }) {
 }
 
 // ---------------------------------------------------------------------------
-// Inline SVG line chart
+// Sparkline chart (SVG, last 24 data points)
+// ---------------------------------------------------------------------------
+
+function SparklineChart({ data }: { data: PriceHistoryPoint[] }) {
+  if (data.length < 2) {
+    return (
+      <div className="flex items-center justify-center h-[120px] text-xs text-surface-800/40">
+        Collecting price data...
+      </div>
+    );
+  }
+
+  const width = 600;
+  const height = 120;
+  const padX = 4;
+  const padY = 8;
+  const plotW = width - padX * 2;
+  const plotH = height - padY * 2;
+
+  const prices = data.map((d) => d.price);
+  const minP = Math.min(...prices) - 0.01;
+  const maxP = Math.max(...prices) + 0.01;
+  const range = maxP - minP || 1;
+
+  const points = data.map((d, i) => {
+    const x = padX + (data.length > 1 ? (i / (data.length - 1)) * plotW : plotW / 2);
+    const y = padY + plotH - ((d.price - minP) / range) * plotH;
+    return { x, y, ...d };
+  });
+
+  const areaPath =
+    `M${points[0].x.toFixed(1)},${(padY + plotH).toFixed(1)} ` +
+    points.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
+    ` L${points[points.length - 1].x.toFixed(1)},${(padY + plotH).toFixed(1)} Z`;
+
+  // Determine line color based on trend
+  const firstPrice = prices[0];
+  const lastPrice = prices[prices.length - 1];
+  const isUp = lastPrice >= firstPrice;
+  const lineColor = isUp ? "stroke-emerald-500" : "stroke-red-500";
+  const fillColor = isUp ? "fill-emerald-500/10" : "fill-red-500/10";
+
+  // Format time for tooltip
+  function formatTime(ts: number): string {
+    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-auto"
+      role="img"
+      aria-label={`ERG/USD sparkline chart with ${data.length} data points, last price $${lastPrice.toFixed(2)}`}
+    >
+      {/* Area fill */}
+      <path d={areaPath} className={fillColor} />
+
+      {/* Line */}
+      <polyline
+        points={points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+        fill="none"
+        className={lineColor}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+
+      {/* Latest point */}
+      {points.length > 0 && (
+        <circle
+          cx={points[points.length - 1].x}
+          cy={points[points.length - 1].y}
+          r={4}
+          className={isUp ? "fill-emerald-500 stroke-surface-0" : "fill-red-500 stroke-surface-0"}
+          strokeWidth={2}
+        />
+      )}
+
+      {/* Price labels at start and end */}
+      <text
+        x={padX}
+        y={height - 2}
+        textAnchor="start"
+        className="fill-surface-800/30 text-[10px]"
+      >
+        ${firstPrice.toFixed(2)}
+      </text>
+      <text
+        x={width - padX}
+        y={height - 2}
+        textAnchor="end"
+        className="fill-surface-800/30 text-[10px]"
+      >
+        ${lastPrice.toFixed(2)}
+      </text>
+
+      {/* Time labels */}
+      <text
+        x={padX}
+        y={10}
+        textAnchor="start"
+        className="fill-surface-800/30 text-[9px]"
+      >
+        {formatTime(points[0].timestamp)}
+      </text>
+      <text
+        x={width - padX}
+        y={10}
+        textAnchor="end"
+        className="fill-surface-800/30 text-[9px]"
+      >
+        {formatTime(points[points.length - 1].timestamp)}
+      </text>
+    </svg>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Epoch chart (for mock operator data)
 // ---------------------------------------------------------------------------
 
 function EpochChart({ data }: { data: EpochDataPoint[] }) {
@@ -165,13 +367,6 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
     return { x, y, ...d };
   });
 
-  const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const areaPath =
-    `M${points[0].x.toFixed(1)},${(padY + plotH).toFixed(1)} ` +
-    points.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
-    ` L${points[points.length - 1].x.toFixed(1)},${(padY + plotH).toFixed(1)} Z`;
-
-  // Y-axis ticks
   const yTicks = [minP, (minP + maxP) / 2, maxP];
 
   return (
@@ -179,9 +374,8 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
       viewBox={`0 0 ${width} ${height}`}
       className="w-full h-auto"
       role="img"
-      aria-label={`ERG/USD price chart over ${data.length} epochs, ranging $${minP.toFixed(2)} to $${maxP.toFixed(2)}`}
+      aria-label={`ERG/USD price chart over ${data.length} epochs`}
     >
-      {/* Grid lines */}
       {yTicks.map((tick) => {
         const y = padY + plotH - ((tick - minP) / range) * plotH;
         return (
@@ -208,7 +402,6 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
         );
       })}
 
-      {/* X-axis epoch labels */}
       {points.filter((_, i) => i % 2 === 0).map((p) => (
         <text
           key={p.epoch}
@@ -221,10 +414,15 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
         </text>
       ))}
 
-      {/* Area fill */}
-      <path d={areaPath} className="fill-brand-500/10" />
+      <path
+        d={
+          `M${points[0].x.toFixed(1)},${(padY + plotH).toFixed(1)} ` +
+          points.map((p) => `L${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ") +
+          ` L${points[points.length - 1].x.toFixed(1)},${(padY + plotH).toFixed(1)} Z`
+        }
+        className="fill-brand-500/10"
+      />
 
-      {/* Line */}
       <polyline
         points={points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
         fill="none"
@@ -234,7 +432,6 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
         strokeLinejoin="round"
       />
 
-      {/* Data points */}
       {points.map((p) => (
         <circle
           key={p.epoch}
@@ -250,31 +447,160 @@ function EpochChart({ data }: { data: EpochDataPoint[] }) {
 }
 
 // ---------------------------------------------------------------------------
+// Compute price change from history
+// ---------------------------------------------------------------------------
+
+function computePriceChange(history: PriceHistoryPoint[]): { percent: number; direction: "up" | "down" | "neutral" } {
+  if (history.length < 2) return { percent: 0, direction: "neutral" };
+  const latest = history[history.length - 1].price;
+  const first = history[0].price;
+  if (first === 0) return { percent: 0, direction: "neutral" };
+  const percent = ((latest - first) / first) * 100;
+  return {
+    percent: Math.abs(percent),
+    direction: percent > 0.1 ? "up" : percent < -0.1 ? "down" : "neutral",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Price change indicator
+// ---------------------------------------------------------------------------
+
+function PriceChangeIndicator({ direction, percent }: { direction: "up" | "down" | "neutral"; percent: number }) {
+  if (direction === "neutral") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/60">
+        <span className="text-surface-800/30">&mdash;</span>
+        0.00%
+      </span>
+    );
+  }
+
+  const isUp = direction === "up";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium ${
+        isUp
+          ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
+          : "border-red-200 bg-red-50 dark:border-red-800/40 dark:bg-red-950/20 text-red-700 dark:text-red-400"
+      }`}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        style={{ transform: isUp ? "rotate(0deg)" : "rotate(180deg)" }}
+      >
+        <polyline points="18 15 12 9 6 15" />
+      </svg>
+      {isUp ? "+" : "-"}{percent.toFixed(2)}%
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
 export default function OraclePage() {
-  const [current, setCurrent] = useState(MOCK_CURRENT);
+  const [price, setPrice] = useState<number | null>(null);
+  const [epoch, setEpoch] = useState<number>(0);
+  const [poolBoxId, setPoolBoxId] = useState<string>("");
+  const [lastRefresh, setLastRefresh] = useState<string>("");
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([]);
   const [operators, setOperators] = useState<OracleOperator[]>([]);
   const [epochHistory, setEpochHistory] = useState<EpochDataPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [fetchCount, setFetchCount] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Simulate data loading
   const loadData = useCallback(() => {
-    // In production, this would fetch from the Ergo node API
-    // GET /api/v1/boxes/unspent/byTokenId/{oraclePoolTokenId}
     setIsLoading(true);
-    setTimeout(() => {
-      setCurrent(MOCK_CURRENT);
-      setOperators(MOCK_OPERATORS);
-      setEpochHistory(MOCK_EPOCH_HISTORY);
-      setIsLoading(false);
-    }, 800);
+    setIsError(false);
+
+    Promise.all([
+      fetch("/api/xergon-agent/api/oracle/rate", { cache: "no-store" })
+        .then((res) => {
+          if (!res.ok) throw new Error(`Oracle rate returned ${res.status}`);
+          return res.json();
+        })
+        .then((data: OracleRateResponse) => {
+          if (typeof data.rate !== "number" || data.rate <= 0) {
+            throw new Error("Invalid oracle rate");
+          }
+          setPrice(data.rate);
+          setEpoch(data.epoch ?? 0);
+          setPoolBoxId(data.poolBoxId ?? "");
+
+          const ts = data.timestamp
+            ? new Date(data.timestamp)
+            : new Date();
+          setLastRefresh(ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+
+          // Update price history
+          const newPoint: PriceHistoryPoint = {
+            price: data.rate,
+            timestamp: Date.now(),
+          };
+          const current = loadPriceHistory();
+          const updated = [...current, newPoint].slice(-MAX_HISTORY_POINTS);
+          savePriceHistory(updated);
+          setPriceHistory(updated);
+
+          // Build epoch history from stored points
+          setEpochHistory(
+            updated.map((p, i) => ({
+              epoch: (data.epoch ?? 0) - (updated.length - 1 - i),
+              price: p.price,
+            }))
+          );
+
+          // Update operator data with current price
+          setOperators(
+            MOCK_OPERATORS.map((op) => ({
+              ...op,
+              epoch: data.epoch ?? 0,
+              lastDatapoint: `$${data.rate.toFixed(2)}`,
+            }))
+          );
+        }),
+    ])
+      .then(() => {
+        setIsLoading(false);
+      })
+      .catch(() => {
+        setIsError(true);
+        setIsLoading(false);
+        // Still load cached history for display
+        const cached = loadPriceHistory();
+        setPriceHistory(cached);
+      });
   }, []);
 
+  // Initial load + auto-refresh
   useEffect(() => {
     loadData();
+    timerRef.current = setInterval(loadData, REFRESH_INTERVAL_MS);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, [loadData]);
+
+  // Force retry
+  const handleRetry = useCallback(() => {
+    setFetchCount((c) => c + 1);
+    loadData();
+  }, [loadData]);
+
+  const { direction, percent } = computePriceChange(priceHistory);
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -289,7 +615,9 @@ export default function OraclePage() {
       </div>
 
       <SuspenseWrap fallback={<OracleSkeleton />}>
-        {isLoading ? (
+        {isError && !isLoading && price === null ? (
+          <OracleError onRetry={handleRetry} />
+        ) : isLoading && price === null ? (
           <OracleSkeleton />
         ) : (
           <>
@@ -298,31 +626,76 @@ export default function OraclePage() {
               <div className="flex flex-col sm:flex-row sm:items-end gap-4">
                 <div>
                   <p className="text-xs text-surface-800/50 mb-1">ERG / USD</p>
-                  <p className="text-5xl font-bold text-surface-900 tracking-tight">
-                    ${current.price.toFixed(2)}
-                  </p>
+                  <div className="flex items-baseline gap-3">
+                    <p className="text-5xl font-bold text-surface-900 tracking-tight">
+                      {price !== null ? `$${price.toFixed(2)}` : "--"}
+                    </p>
+                    <PriceChangeIndicator direction={direction} percent={percent} />
+                  </div>
                 </div>
                 <div className="sm:ml-auto flex flex-wrap gap-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/60">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-800/40" aria-hidden="true">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    Epoch {current.epoch}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/60">
-                    Last refresh: {current.lastRefresh}
-                  </span>
+                  {epoch > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/60">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-surface-800/40" aria-hidden="true">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      Epoch {epoch}
+                    </span>
+                  )}
+                  {lastRefresh && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/60">
+                      Last refresh: {lastRefresh}
+                    </span>
+                  )}
                   <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
-                    current.reportingOracles >= current.totalOracles * 0.8
+                    !isError
                       ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800/40 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
                       : "border-amber-200 bg-amber-50 dark:border-amber-800/40 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400"
                   }`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${current.reportingOracles >= current.totalOracles * 0.8 ? "bg-emerald-500" : "bg-amber-500"}`} aria-hidden="true" />
-                    {current.reportingOracles} / {current.totalOracles} oracles
+                    <span className={`h-1.5 w-1.5 rounded-full ${!isError ? "bg-emerald-500" : "bg-amber-500 animate-pulse"}`} aria-hidden="true" />
+                    {!isError ? "Live" : "Reconnecting..."}
                   </span>
                 </div>
               </div>
+
+              {/* Pool box ID link */}
+              {poolBoxId && (
+                <div className="mt-4 pt-4 border-t border-surface-100">
+                  <span className="text-xs text-surface-800/40">Oracle Pool Box: </span>
+                  <a
+                    href={`https://explorer.ergoplatform.com/en/boxes/${poolBoxId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-mono text-brand-600 hover:text-brand-700 transition-colors"
+                  >
+                    {poolBoxId.slice(0, 16)}...{poolBoxId.slice(-8)}
+                    <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                      <polyline points="15 3 21 3 21 9" />
+                      <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Price history sparkline */}
+            <div className="rounded-xl border border-surface-200 bg-surface-0 p-5 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-semibold text-surface-900">
+                    Price History
+                  </h2>
+                  <p className="text-xs text-surface-800/40 mt-0.5">
+                    Last {priceHistory.length} data points (stored locally)
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-surface-200 bg-surface-0 px-3 py-1 text-xs text-surface-800/40">
+                  Auto-refreshes every 60s
+                </span>
+              </div>
+              <SparklineChart data={priceHistory} />
             </div>
 
             {/* Oracle operators table */}
@@ -372,20 +745,14 @@ export default function OraclePage() {
                   </tbody>
                 </table>
               </div>
-              <div className="px-5 py-3 border-t border-surface-100 text-xs text-surface-800/30">
-                Mock data — real oracle pool data coming soon.
-              </div>
-            </div>
-
-            {/* Epoch history chart */}
-            <div className="rounded-xl border border-surface-200 bg-surface-0 p-5 mb-6">
-              <h2 className="text-base font-semibold text-surface-900 mb-1">
-                Epoch Price History
-              </h2>
-              <p className="text-xs text-surface-800/40 mb-4">
-                ERG/USD rate over the last 10 epochs
-              </p>
-              <EpochChart data={epochHistory} />
+              {epochHistory.length > 0 && (
+                <div className="px-5 py-4 border-t border-surface-100">
+                  <h3 className="text-sm font-medium text-surface-900 mb-2">
+                    Epoch Price History
+                  </h3>
+                  <EpochChart data={epochHistory.slice(-10)} />
+                </div>
+              )}
             </div>
 
             {/* Protocol info */}

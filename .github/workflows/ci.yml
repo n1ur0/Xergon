@@ -273,5 +273,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Typecheck
+        run: npx tsc --noEmit --skipLibCheck 2>&1 | tail -30
+
       - name: Test
         run: npx vitest run

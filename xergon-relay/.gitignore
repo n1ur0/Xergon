@@ -8,3 +8,6 @@
 *.swo
 .DS_Store
 config.toml
+
+# Codegen temp artifacts
+/tmp-codegen/

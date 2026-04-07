@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "xergon": "./dist/cli/index.js"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -13,6 +16,10 @@
     "./wallet": {
       "import": "./dist/wallet/index.js",
       "types": "./dist/wallet/index.d.ts"
+    },
+    "./cli": {
+      "import": "./dist/cli/index.js",
+      "types": "./dist/cli/index.d.ts"
     }
   },
   "files": [
@@ -21,7 +28,10 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "types:generate": "cd ../xergon-relay && bash scripts/codegen.sh typescript"
   },
   "keywords": [
     "xergon",
@@ -33,10 +43,24 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^25.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^29.0.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "typescript": "^5.7.0",
     "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "@fleet-sdk/common": "^0.10.0",
+    "@fleet-sdk/core": "^0.12.0",
+    "@noble/curves": "^2.0.1"
   }
 }

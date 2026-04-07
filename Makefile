@@ -1,4 +1,4 @@
-.PHONY: all agent relay marketplace check test clean release compile-contracts validate-contracts
+.PHONY: all agent relay marketplace check test clean release compile-contracts validate-contracts types
 
 all: agent relay
 
@@ -69,3 +69,7 @@ release-darwin-amd64:
 # Install script (curl | sh)
 install:
 	@echo "Use: curl -sSL https://xergon.network/install | sh"
+
+# Regenerate TypeScript types from OpenAPI spec
+types:
+	cd xergon-relay && bash scripts/codegen.sh typescript

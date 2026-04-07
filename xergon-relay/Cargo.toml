@@ -8,17 +8,22 @@ description = "Xergon Relay — Thin stateless router that proxies inference req
 # Async runtime
 tokio = { version = "1", features = ["full", "signal"] }
 # HTTP server
-axum = { version = "0.8", features = ["macros", "ws"] }
+axum = { version = "0.8", features = ["macros", "ws", "multipart"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 # HTTP client for proxying to providers
-reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "stream", "multipart", "rustls-tls"], default-features = false }
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# OpenTelemetry distributed tracing
+opentelemetry = "0.31"
+opentelemetry-otlp = { version = "0.31", features = ["grpc-tonic"], optional = true }
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
+tracing-opentelemetry = { version = "0.32", optional = true }
 # Configuration
 config = { version = "0.14", features = ["toml"] }
 # Error handling
@@ -39,10 +44,37 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # URL parsing for chain endpoint validation
 url = "2"
 hex = "0.4.3"
+base64 = "0.22"
 rand = "0.10.0"
 # Rate limiting
 governor = "0.6"
+# SHA-256 for ETag generation
+sha2 = "0.10"
+# X25519 key exchange for encrypted inference
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+# AES-256-GCM for payload encryption
+aes-gcm = "0.10"
+# HMAC for webhook signatures
+hmac = "0.12"
+# SHA-3 (SHAKE256) for post-quantum KEM
+sha3 = "0.10"
+# BLAKE3 for ZK commitments
+blake3 = "1"
+# gRPC-like protobuf encoding (lightweight, no tonic runtime)
+prost = "0.13"
+# WebSocket client for connection pooling to providers
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots", "connect"], default-features = false }
+# Compression for cache sync payloads
+flate2 = "1"
+async-graphql = "7"
+async-graphql-axum = "7"
+# Embedding cache for semantic layer
+moka = { version = "0.12", features = ["sync"] }
 
 [profile.release]
 opt-level = 3
 lto = true
+
+[features]
+default = []
+telemetry = ["opentelemetry-otlp", "opentelemetry_sdk", "tracing-opentelemetry"]

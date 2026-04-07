@@ -7,7 +7,10 @@
 use anyhow::{bail, Context, Result};
 
 use crate::chain::scanner;
-use crate::chain::types::{ProviderBox, RawBox, UsageProofBox, UserStakingBox};
+use crate::chain::types::{
+    GovernanceProposalBox, PaymentBridgeBox, ProviderBox, ProviderSlashingBox, RawBox,
+    TreasuryBox, UsageProofBox, UserStakingBox,
+};
 
 /// Minimum ERG value for a Provider Box (must cover box size * 360 nanoerg/byte).
 pub const MIN_PROVIDER_BOX_VALUE: u64 = 1_000_000; // 0.001 ERG
@@ -23,6 +26,18 @@ pub const MAX_HEARTBEAT_AGE_BLOCKS: i32 = 100;
 
 /// Storage rent period in blocks (4 years).
 pub const STORAGE_RENT_PERIOD_BLOCKS: i32 = 1_051_200;
+
+/// Minimum ERG value for a Governance Proposal Box.
+pub const MIN_GOVERNANCE_BOX_VALUE: u64 = 1_000_000; // 0.001 ERG
+
+/// Minimum ERG value for a Provider Slashing Box.
+pub const MIN_SLASHING_BOX_VALUE: u64 = 1_000_000; // 0.001 ERG
+
+/// Minimum ERG value for a Treasury Box.
+pub const MIN_TREASURY_BOX_VALUE: u64 = 1_000_000; // 0.001 ERG
+
+/// Minimum ERG value for a Payment Bridge Box.
+pub const MIN_BRIDGE_BOX_VALUE: u64 = 1_000_000; // 0.001 ERG
 
 /// Validate that a RawBox matches the Provider Box specification.
 ///
@@ -208,6 +223,354 @@ pub fn validate_usage_proof(raw: &RawBox) -> Result<UsageProofBox> {
         model,
         token_count,
         timestamp,
+        creation_height: raw.creation_height,
+    })
+}
+
+/// Validate that a RawBox matches the Governance Proposal Box specification.
+///
+/// Checks:
+/// - At least one token present (the Governance NFT, supply=1)
+/// - Minimum ERG value
+/// - Required registers R4-R9 (proposalCount, activeProposalId, votingThreshold,
+///   totalVoters, proposalEndHeight, proposalDataHash)
+///
+/// Returns a validated `GovernanceProposalBox` on success.
+pub fn validate_governance_box(raw: &RawBox, _current_height: i32) -> Result<GovernanceProposalBox> {
+    // Check minimum ERG value
+    if raw.value < MIN_GOVERNANCE_BOX_VALUE {
+        bail!(
+            "Governance box {} has insufficient value: {} < {}",
+            raw.box_id,
+            raw.value,
+            MIN_GOVERNANCE_BOX_VALUE
+        );
+    }
+
+    // Check that at least one token exists (Governance NFT)
+    if raw.assets.is_empty() {
+        bail!(
+            "Governance box {} has no tokens (expected Governance NFT)",
+            raw.box_id
+        );
+    }
+
+    let gov_nft_id = &raw.assets[0].token_id;
+    if raw.assets[0].amount != 1 {
+        bail!(
+            "Governance box {} NFT has amount {} (expected exactly 1)",
+            raw.box_id,
+            raw.assets[0].amount
+        );
+    }
+
+    // Parse registers R4-R9
+    let regs = &raw.additional_registers;
+
+    let proposal_count = scanner::get_register(regs, "R4")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R4 (proposalCount) in box {}",
+            raw.box_id
+        ))?;
+
+    let active_proposal_id = scanner::get_register(regs, "R5")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R5 (activeProposalId) in box {}",
+            raw.box_id
+        ))?;
+
+    let voting_threshold = scanner::get_register(regs, "R6")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R6 (votingThreshold) in box {}",
+            raw.box_id
+        ))?;
+
+    let total_voters = scanner::get_register(regs, "R7")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R7 (totalVoters) in box {}",
+            raw.box_id
+        ))?;
+
+    let proposal_end_height = scanner::get_register(regs, "R8")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R8 (proposalEndHeight) in box {}",
+            raw.box_id
+        ))?;
+
+    let proposal_data_hash = scanner::get_register(regs, "R9")
+        .and_then(|v| scanner::parse_coll_byte(v))
+        .context(format!(
+            "Missing or invalid R9 (proposalDataHash) in box {}",
+            raw.box_id
+        ))?;
+
+    Ok(GovernanceProposalBox {
+        box_id: raw.box_id.clone(),
+        tx_id: raw.tx_id.clone(),
+        gov_nft_id: gov_nft_id.clone(),
+        proposal_count,
+        active_proposal_id,
+        voting_threshold,
+        total_voters,
+        proposal_end_height,
+        proposal_data_hash,
+        value: raw.value.to_string(),
+        creation_height: raw.creation_height,
+    })
+}
+
+/// Validate that a RawBox matches the Provider Slashing Box specification.
+///
+/// Checks:
+/// - At least one token present (the Slash Token, supply=1)
+/// - Minimum ERG value
+/// - Required registers R4-R8 (providerPK, minUptimePercent, stakeAmount,
+///   challengeWindowEnd, slashedFlag)
+///
+/// Returns a validated `ProviderSlashingBox` on success.
+pub fn validate_slashing_box(raw: &RawBox, _current_height: i32) -> Result<ProviderSlashingBox> {
+    // Check minimum ERG value
+    if raw.value < MIN_SLASHING_BOX_VALUE {
+        bail!(
+            "Slashing box {} has insufficient value: {} < {}",
+            raw.box_id,
+            raw.value,
+            MIN_SLASHING_BOX_VALUE
+        );
+    }
+
+    // Check that at least one token exists (Slash Token)
+    if raw.assets.is_empty() {
+        bail!(
+            "Slashing box {} has no tokens (expected Slash Token)",
+            raw.box_id
+        );
+    }
+
+    let slash_token_id = &raw.assets[0].token_id;
+    if raw.assets[0].amount != 1 {
+        bail!(
+            "Slashing box {} token has amount {} (expected exactly 1)",
+            raw.box_id,
+            raw.assets[0].amount
+        );
+    }
+
+    // Parse registers R4-R8
+    let regs = &raw.additional_registers;
+
+    let provider_pk = scanner::get_register(regs, "R4")
+        .and_then(|v| scanner::parse_group_element(v))
+        .context(format!(
+            "Missing or invalid R4 (providerPK) in box {}",
+            raw.box_id
+        ))?;
+
+    let min_uptime_percent = scanner::get_register(regs, "R5")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R5 (minUptimePercent) in box {}",
+            raw.box_id
+        ))?;
+
+    let stake_amount = scanner::get_register(regs, "R6")
+        .and_then(|v| scanner::parse_long(v))
+        .context(format!(
+            "Missing or invalid R6 (stakeAmount) in box {}",
+            raw.box_id
+        ))?;
+
+    let challenge_window_end = scanner::get_register(regs, "R7")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R7 (challengeWindowEnd) in box {}",
+            raw.box_id
+        ))?;
+
+    let slashed_flag = scanner::get_register(regs, "R8")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R8 (slashedFlag) in box {}",
+            raw.box_id
+        ))?;
+
+    Ok(ProviderSlashingBox {
+        box_id: raw.box_id.clone(),
+        tx_id: raw.tx_id.clone(),
+        slash_token_id: slash_token_id.clone(),
+        provider_pk,
+        min_uptime_percent,
+        stake_amount,
+        challenge_window_end,
+        slashed_flag,
+        value: raw.value.to_string(),
+        creation_height: raw.creation_height,
+    })
+}
+
+/// Validate that a RawBox matches the Treasury Box specification.
+///
+/// Checks:
+/// - At least one token present (the Xergon Network NFT, supply=1)
+/// - Minimum ERG value
+/// - Required register R4 (totalAirdropped)
+///
+/// Returns a validated `TreasuryBox` on success.
+pub fn validate_treasury_box(raw: &RawBox) -> Result<TreasuryBox> {
+    // Check minimum ERG value
+    if raw.value < MIN_TREASURY_BOX_VALUE {
+        bail!(
+            "Treasury box {} has insufficient value: {} < {}",
+            raw.box_id,
+            raw.value,
+            MIN_TREASURY_BOX_VALUE
+        );
+    }
+
+    // Check that at least one token exists (Network NFT)
+    if raw.assets.is_empty() {
+        bail!(
+            "Treasury box {} has no tokens (expected Network NFT)",
+            raw.box_id
+        );
+    }
+
+    let network_nft_id = &raw.assets[0].token_id;
+    if raw.assets[0].amount != 1 {
+        bail!(
+            "Treasury box {} NFT has amount {} (expected exactly 1)",
+            raw.box_id,
+            raw.assets[0].amount
+        );
+    }
+
+    // Parse register R4
+    let regs = &raw.additional_registers;
+
+    let total_airdropped = scanner::get_register(regs, "R4")
+        .and_then(|v| scanner::parse_long(v))
+        .context(format!(
+            "Missing or invalid R4 (totalAirdropped) in box {}",
+            raw.box_id
+        ))?;
+
+    Ok(TreasuryBox {
+        box_id: raw.box_id.clone(),
+        tx_id: raw.tx_id.clone(),
+        network_nft_id: network_nft_id.clone(),
+        total_airdropped,
+        value: raw.value.to_string(),
+        creation_height: raw.creation_height,
+    })
+}
+
+/// Validate that a RawBox matches the Payment Bridge Box specification.
+///
+/// Checks:
+/// - At least one token present (the Invoice NFT, supply=1)
+/// - Minimum ERG value
+/// - Required registers R4-R9 (buyerPK, providerPK, amountNanoerg,
+///   foreignTxId, foreignChain, bridgePK)
+///
+/// SigmaProp fields (R4, R5, R9) are parsed as Coll[Byte] (propositionBytes hex)
+/// since the scanner doesn't have a dedicated SigmaProp parser.
+///
+/// Returns a validated `PaymentBridgeBox` on success.
+pub fn validate_payment_bridge_box(raw: &RawBox, _current_height: i32) -> Result<PaymentBridgeBox> {
+    // Check minimum ERG value
+    if raw.value < MIN_BRIDGE_BOX_VALUE {
+        bail!(
+            "Payment bridge box {} has insufficient value: {} < {}",
+            raw.box_id,
+            raw.value,
+            MIN_BRIDGE_BOX_VALUE
+        );
+    }
+
+    // Check that at least one token exists (Invoice NFT)
+    if raw.assets.is_empty() {
+        bail!(
+            "Payment bridge box {} has no tokens (expected Invoice NFT)",
+            raw.box_id
+        );
+    }
+
+    let invoice_nft_id = &raw.assets[0].token_id;
+    if raw.assets[0].amount != 1 {
+        bail!(
+            "Payment bridge box {} NFT has amount {} (expected exactly 1)",
+            raw.box_id,
+            raw.assets[0].amount
+        );
+    }
+
+    // Parse registers R4-R9
+    let regs = &raw.additional_registers;
+
+    // R4: buyerPK (SigmaProp) -- parse as Coll[Byte] for propositionBytes hex
+    let buyer_pk_hex = scanner::get_register(regs, "R4")
+        .and_then(|v| scanner::parse_coll_byte(v))
+        .context(format!(
+            "Missing or invalid R4 (buyerPK) in box {}",
+            raw.box_id
+        ))?;
+
+    // R5: providerPK (SigmaProp) -- parse as Coll[Byte] for propositionBytes hex
+    let provider_pk_hex = scanner::get_register(regs, "R5")
+        .and_then(|v| scanner::parse_coll_byte(v))
+        .context(format!(
+            "Missing or invalid R5 (providerPK) in box {}",
+            raw.box_id
+        ))?;
+
+    // R6: amountNanoerg (Long)
+    let amount_nanoerg = scanner::get_register(regs, "R6")
+        .and_then(|v| scanner::parse_long(v))
+        .context(format!(
+            "Missing or invalid R6 (amountNanoerg) in box {}",
+            raw.box_id
+        ))?;
+
+    // R7: foreignTxId (Coll[Byte]) -- empty if not confirmed yet
+    let foreign_tx_id = scanner::get_register(regs, "R7")
+        .and_then(|v| scanner::parse_coll_byte(v))
+        .context(format!(
+            "Missing or invalid R7 (foreignTxId) in box {}",
+            raw.box_id
+        ))?;
+
+    // R8: foreignChain (Int) -- 0=BTC, 1=ETH, 2=ADA
+    let foreign_chain = scanner::get_register(regs, "R8")
+        .and_then(|v| scanner::parse_int(v))
+        .context(format!(
+            "Missing or invalid R8 (foreignChain) in box {}",
+            raw.box_id
+        ))?;
+
+    // R9: bridgePK (SigmaProp) -- parse as Coll[Byte] for propositionBytes hex
+    let bridge_pk_hex = scanner::get_register(regs, "R9")
+        .and_then(|v| scanner::parse_coll_byte(v))
+        .context(format!(
+            "Missing or invalid R9 (bridgePK) in box {}",
+            raw.box_id
+        ))?;
+
+    Ok(PaymentBridgeBox {
+        box_id: raw.box_id.clone(),
+        tx_id: raw.tx_id.clone(),
+        invoice_nft_id: invoice_nft_id.clone(),
+        buyer_pk_hex,
+        provider_pk_hex,
+        amount_nanoerg,
+        foreign_tx_id,
+        foreign_chain,
+        bridge_pk_hex,
+        value: raw.value.to_string(),
         creation_height: raw.creation_height,
     })
 }

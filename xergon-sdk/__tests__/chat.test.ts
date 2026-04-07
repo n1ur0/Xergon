@@ -162,7 +162,8 @@ describe('Chat Completions', () => {
         }),
       }));
 
-      const client = new XergonClient();
+      // Disable retries so the error is thrown immediately
+      const client = new XergonClient({ retries: false });
 
       try {
         await client.chat.completions.create({
@@ -194,7 +195,8 @@ describe('Chat Completions', () => {
         }),
       }));
 
-      const client = new XergonClient();
+      // Disable retries so the error is thrown immediately
+      const client = new XergonClient({ retries: false });
 
       try {
         await client.chat.completions.create({
@@ -230,18 +232,29 @@ describe('Chat Completions', () => {
         },
       });
 
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        body: readableStream,
-        headers: new Headers({ 'content-type': 'text/event-stream' }),
+      // Create a fresh stream for each call to avoid "locked" errors
+      let streamCallCount = 0;
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+        streamCallCount++;
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode(sseData));
+              controller.close();
+            },
+          }),
+          headers: new Headers({ 'content-type': 'text/event-stream' }),
+        });
       }));
 
-      const client = new XergonClient();
+      // Disable SSE retry to use simple streaming path
+      const client = new XergonClient({ retries: false });
       const stream = await client.chat.completions.stream({
         model: 'llama-3.3-70b',
         messages: [{ role: 'user', content: 'Hello!' }],
-      });
+      }, { sseRetry: false });
 
       const collected: any[] = [];
       for await (const chunk of stream) {
@@ -256,25 +269,30 @@ describe('Chat Completions', () => {
     });
 
     it('sends stream: true in the request body for streaming', async () => {
-      const readableStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        body: readableStream,
-        headers: new Headers({ 'content-type': 'text/event-stream' }),
+      const encoder = new TextEncoder();
+      vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          body: new ReadableStream({
+            start(controller) {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+            },
+          }),
+          headers: new Headers({ 'content-type': 'text/event-stream' }),
+        });
       }));
 
-      const client = new XergonClient();
-      await client.chat.completions.stream({
+      // Disable retries and SSE retry
+      const client = new XergonClient({ retries: false });
+      const iterable = await client.chat.completions.stream({
         model: 'llama-3.3-70b',
         messages: [{ role: 'user', content: 'Hello!' }],
-      });
+      }, { sseRetry: false });
+
+      // Consume the iterable to trigger the fetch
+      for await (const _ of iterable) { /* consume */ }
 
       expect(fetch).toHaveBeenCalledTimes(1);
       const options = (fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;

@@ -299,7 +299,7 @@ mod tests {
         let tree = MerkleTree::from_data(&[b"proof1", b"proof2", b"proof3", b"proof4"]);
         for i in 0..4 {
             let proof = tree.proof(i).expect("proof should exist");
-            let leaf_hash = MerkleHash::hash(&[b"proof", i.to_string().as_bytes()].concat());
+            let _leaf_hash = MerkleHash::hash(&[b"proof", i.to_string().as_bytes()].concat());
             // We need to use the actual leaf hash, not a recomputed one
             let actual_leaf = &tree.leaves[i];
             assert!(proof.verify(actual_leaf), "proof for leaf {} should verify", i);

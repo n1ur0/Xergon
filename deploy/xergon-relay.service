@@ -1,0 +1,61 @@
+# =============================================================================
+# Xergon Relay -- systemd service unit
+# =============================================================================
+#
+# Install:
+#   sudo cp deploy/xergon-relay.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable xergon-relay
+#   sudo systemctl start xergon-relay
+#
+# Logs:
+#   journalctl -u xergon-relay -f
+#
+# The relay is the stateless router that proxies inference requests to
+# Xergon providers. Requires a config.toml at /etc/xergon/relay.toml
+# (or pass --config /path/to/config.toml below).
+# =============================================================================
+
+[Unit]
+Description=Xergon Relay -- stateless inference request router
+Documentation=https://github.com/n1ur0/Xergon-Network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xergon
+Group=xergon
+ExecStart=/usr/local/bin/xergon-relay --config /etc/xergon/relay.toml
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Watchdog: relay must respond to health probes
+WatchdogSec=60
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/xergon /var/log/xergon
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=2G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xergon-relay
+Environment=RUST_LOG=xergon_relay=info
+
+[Install]
+WantedBy=multi-user.target

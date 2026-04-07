@@ -584,7 +584,6 @@ fn read_contract_hex(name: &str) -> String {
 // Fake but syntactically valid test keys (33-byte compressed secp256k1)
 const TEST_PROVIDER_PK: &str = "02a9e4e965a0b3b4c2d1e0f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c3d2e1f0a1b";
 const TEST_RENTER_PK: &str  = "02bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const TEST_RATER_PK: &str   = "02cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const TEST_BRIDGE_PK: &str  = "02dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
 
 // =========================================================================

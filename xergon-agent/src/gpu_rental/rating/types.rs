@@ -75,6 +75,8 @@ pub struct SubmitRatingRequest {
     pub rental_box_id: String,
     /// Public key of the person being rated (hex)
     pub rated_pk: String,
+    /// Public key of the person submitting the rating (hex)
+    pub rater_pk: String,
     /// Role of the rated person: "provider" or "renter"
     pub role: String,
     /// Rating value: 1-5 stars

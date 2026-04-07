@@ -53,6 +53,98 @@ pub struct UserStakingBox {
     pub creation_height: i32,
 }
 
+/// Represents a parsed Governance Proposal Box.
+/// Maps to contracts/governance_proposal.ergo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GovernanceProposalBox {
+    pub box_id: String,
+    pub tx_id: String,
+    /// Governance NFT token ID (hex)
+    pub gov_nft_id: String,
+    /// Total number of proposals submitted
+    pub proposal_count: i32,
+    /// Currently active proposal ID (0 = none)
+    pub active_proposal_id: i32,
+    /// Voting threshold (e.g., 51)
+    pub voting_threshold: i32,
+    /// Total eligible voters
+    pub total_voters: i32,
+    /// Block height when the active proposal ends
+    pub proposal_end_height: i32,
+    /// Blake2b256 hash of proposal data
+    pub proposal_data_hash: String,
+    /// ERG value in the box (nanoERGs)
+    pub value: String,
+    /// Creation block height
+    pub creation_height: i32,
+}
+
+/// Represents a parsed Provider Slashing Box.
+/// Maps to contracts/provider_slashing.ergo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderSlashingBox {
+    pub box_id: String,
+    pub tx_id: String,
+    /// Slash Token ID (hex)
+    pub slash_token_id: String,
+    /// Provider public key (hex encoded GroupElement bytes)
+    pub provider_pk: String,
+    /// Minimum uptime percentage required (e.g., 95)
+    pub min_uptime_percent: i32,
+    /// Staked amount in nanoERG
+    pub stake_amount: i64,
+    /// Block height when the challenge window ends
+    pub challenge_window_end: i32,
+    /// Slashed flag: 0 = active, 1 = slashed
+    pub slashed_flag: i32,
+    /// ERG value in the box (nanoERGs)
+    pub value: String,
+    /// Creation block height
+    pub creation_height: i32,
+}
+
+/// Represents a parsed Treasury Box.
+/// Maps to contracts/treasury.ergo
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TreasuryBox {
+    pub box_id: String,
+    pub tx_id: String,
+    /// Xergon Network NFT token ID (hex)
+    pub network_nft_id: String,
+    /// Cumulative nanoERG distributed via airdrops
+    pub total_airdropped: i64,
+    /// ERG value in the box (nanoERGs)
+    pub value: String,
+    /// Creation block height
+    pub creation_height: i32,
+}
+
+/// Represents a parsed Payment Bridge Box.
+/// Maps to contracts/payment_bridge.es
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaymentBridgeBox {
+    pub box_id: String,
+    pub tx_id: String,
+    /// Invoice NFT token ID (hex)
+    pub invoice_nft_id: String,
+    /// Buyer public key (hex of SigmaProp propositionBytes)
+    pub buyer_pk_hex: String,
+    /// Provider public key (hex of SigmaProp propositionBytes)
+    pub provider_pk_hex: String,
+    /// Payment amount in nanoERG
+    pub amount_nanoerg: i64,
+    /// Foreign chain transaction ID (empty if not confirmed)
+    pub foreign_tx_id: String,
+    /// Foreign chain: 0=BTC, 1=ETH, 2=ADA
+    pub foreign_chain: i32,
+    /// Bridge public key (hex of SigmaProp propositionBytes)
+    pub bridge_pk_hex: String,
+    /// ERG value in the box (nanoERGs)
+    pub value: String,
+    /// Creation block height
+    pub creation_height: i32,
+}
+
 /// Represents a parsed Usage Proof Box.
 /// Maps to contracts/usage_proof.ergo
 #[derive(Debug, Clone, Serialize, Deserialize)]

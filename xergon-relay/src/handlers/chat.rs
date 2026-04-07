@@ -267,7 +267,7 @@ pub async fn chat_completions_handler(
     }
 
     // Proxy to provider with fallback chain
-    let proxy_result = match proxy_chat_completion(&state, body, &headers, &request_id).await {
+    let proxy_result = match proxy_chat_completion(&state, body, &headers, &request_id, &client_ip).await {
         Ok(result) => result,
         Err(e) => {
             // Record error metrics
@@ -289,6 +289,9 @@ pub async fn chat_completions_handler(
                 }
                 ProxyError::Http(_) => {
                     state.relay_metrics.inc_errors("502");
+                }
+                ProxyError::CapacityFull(_) => {
+                    state.relay_metrics.inc_errors("429");
                 }
             }
             return Err(e);

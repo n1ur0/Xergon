@@ -1,0 +1,14 @@
+# Grafana dashboard provisioning for Xergon production stack
+apiVersion: 1
+
+providers:
+  - name: "Xergon Dashboards"
+    orgId: 1
+    folder: "Xergon Network"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

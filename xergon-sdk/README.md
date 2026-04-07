@@ -342,6 +342,124 @@ Readiness probe -- can the relay serve requests?
 const ready: boolean = await client.ready.check();
 ```
 
+### Contracts (On-Chain Operations)
+
+Agent-mediated contract methods for interacting with Xergon on-chain contracts (provider registration, staking, settlement, governance, oracle).
+
+#### `client.contracts.registerProvider(params)`
+
+Register a new provider on-chain. Creates a Provider Box with NFT + metadata.
+
+```typescript
+const result = await client.contracts.registerProvider({
+  providerName: 'MyGPU',
+  region: 'US',
+  endpoint: 'https://gpu.example.com',
+  models: ['llama-3.3-70b', 'mistral-small-24b'],
+  ergoAddress: '9eZ24...',
+  providerPkHex: 'abc123...',  // 32-byte public key hex (64 chars)
+});
+console.log(`Registered! NFT: ${result.providerNftId}, Box: ${result.providerBoxId}`);
+```
+
+#### `client.contracts.queryProviderStatus(providerNftId)`
+
+Query a registered provider's current on-chain status by NFT token ID.
+
+```typescript
+const status = await client.contracts.queryProviderStatus(nftId);
+console.log(`Provider: ${status.providerName}`);
+console.log(`Price: ${status.pricePerToken} nanoERG/token`);
+console.log(`Confirmations: ${status.confirmations}`);
+```
+
+#### `client.contracts.listOnChainProviders()`
+
+List all on-chain providers by scanning the UTXO set.
+
+```typescript
+const providers = await client.contracts.listOnChainProviders();
+for (const p of providers) {
+  console.log(`${p.providerName} (${p.region}): ${p.models.join(', ')}`);
+}
+```
+
+#### `client.contracts.createStakingBox(params)`
+
+Create a User Staking Box to lock ERG for inference payments.
+
+```typescript
+const result = await client.contracts.createStakingBox({
+  userPkHex: 'abc123...',     // 32-byte public key hex
+  amountNanoerg: 5_000_000_000n,  // 5 ERG
+});
+console.log(`Staked in box: ${result.stakingBoxId}`);
+```
+
+#### `client.contracts.queryUserBalance(userPkHex)`
+
+Query a user's total ERG balance across all staking boxes.
+
+```typescript
+const balance = await client.contracts.queryUserBalance(userPk);
+console.log(`Balance: ${Number(balance.totalBalanceNanoerg) / 1e9} ERG`);
+console.log(`Boxes: ${balance.stakingBoxCount}`);
+```
+
+#### `client.contracts.getUserStakingBoxes(userPkHex)`
+
+Get all staking box details for a user.
+
+```typescript
+const boxes = await client.contracts.getUserStakingBoxes(userPk);
+for (const box of boxes) {
+  console.log(`Box ${box.boxId}: ${Number(box.valueNanoerg) / 1e9} ERG`);
+}
+```
+
+#### `client.contracts.getSettleableBoxes(maxBoxes?)`
+
+Get staking boxes ready for settlement (accumulated fees exceed threshold).
+
+```typescript
+const boxes = await client.contracts.getSettleableBoxes(20);
+const totalFees = boxes.reduce((sum, b) => sum + b.feeAmountNanoerg, 0n);
+console.log(`${boxes.length} boxes with ${Number(totalFees) / 1e9} ERG in fees`);
+```
+
+#### `client.contracts.buildSettlementTx(params)`
+
+Build a settlement transaction for providers to claim accumulated fees.
+
+```typescript
+const result = await client.contracts.buildSettlementTx({
+  stakingBoxIds: ['box1', 'box2'],
+  feeAmounts: [500_000n, 300_000n],
+  providerAddress: '9eZ24...',
+  maxFeeNanoerg: 1_100_000n,
+});
+// Sign result.unsignedTx with Nautilus, then broadcast
+```
+
+#### `client.contracts.getOracleRate()`
+
+Get the current ERG/USD rate from the oracle pool.
+
+```typescript
+const rate = await client.contracts.getOracleRate();
+console.log(`ERG/USD: $${rate.ergUsd.toFixed(4)} (epoch ${rate.epoch})`);
+```
+
+#### `client.contracts.getOraclePoolStatus()`
+
+Get detailed oracle pool status including epoch, box ID, and update height.
+
+```typescript
+const status = await client.contracts.getOraclePoolStatus();
+console.log(`Epoch ${status.epoch}, Rate: $${status.ergUsd.toFixed(4)}`);
+console.log(`Last update at block ${status.lastUpdateHeight}`);
+```
+
 ### Auth Status
 
 #### `client.authStatus()`

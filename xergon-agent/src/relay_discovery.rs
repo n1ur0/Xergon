@@ -48,35 +48,8 @@ pub struct DiscoveredRelay {
     pub from_chain: bool,
 }
 
-/// Response from relay GET /health
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct RelayHealthResponse {
-    #[serde(default)]
-    status: Option<String>,
-}
-
-/// Response from relay GET /v1/relays
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct RelayListResponse {
-    #[serde(default)]
-    relays: Vec<RelayListEntry>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct RelayListEntry {
-    #[serde(default)]
-    endpoint: String,
-    #[serde(default)]
-    region: String,
-    #[serde(default)]
-    is_healthy: bool,
-}
-
 /// Configuration for relay discovery
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RelayDiscoveryConfig {
     /// Enable on-chain relay discovery (default: true)
     #[serde(default = "default_discovery_enabled")]

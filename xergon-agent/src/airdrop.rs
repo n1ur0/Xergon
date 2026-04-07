@@ -24,7 +24,7 @@ use tracing::{info, warn};
 // ---------------------------------------------------------------------------
 
 /// Airdrop configuration, deserialized from `[airdrop]` in config.toml.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AirdropConfig {
     /// Enable the airdrop endpoint (default: false)
     #[serde(default)]

@@ -15,14 +15,14 @@
 
 use anyhow::{Context, Result};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{error, info, warn};
 
 /// Relay client configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RelayClientConfig {
     /// Base URL of the relay (e.g., "http://relay-host:9090")
     pub relay_url: String,
@@ -74,23 +74,14 @@ struct HeartbeatPayload {
 
 /// Response from registration
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)] // TODO: will be used for provider registration info
 struct RegistrationResponse {
     status: String,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from relay; will be consumed for provider tracking
     provider_id: String,
     heartbeat_interval_secs: u64,
     ttl_secs: u64,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from relay; will be consumed for error display
     message: String,
-}
-
-/// Response from heartbeat
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)] // TODO: will be used for heartbeat status monitoring
-struct HeartbeatResponse {
-    status: String,
-    next_heartbeat_before: String,
 }
 
 /// The relay client
@@ -139,14 +130,6 @@ impl RelayClient {
             registered: AtomicBool::new(false),
             ttl_secs: std::sync::Mutex::new(180),
         })
-    }
-
-    /// Whether relay registration is configured and enabled
-    #[allow(dead_code)] // TODO: will be used for relay status endpoint
-    pub fn is_enabled(&self) -> bool {
-        self.config.register_on_start
-            && !self.config.relay_url.is_empty()
-            && !self.config.token.is_empty()
     }
 
     /// Register this provider with the relay.

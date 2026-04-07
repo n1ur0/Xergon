@@ -42,7 +42,7 @@ pub struct MarketRateProvider {
     persist_path: PathBuf,
 }
 
-#[allow(dead_code)] // TODO: will be used for dynamic pricing
+#[allow(dead_code)] // TODO: will be used for dynamic pricing (new() is tested, with_persist_path() is production entry)
 impl MarketRateProvider {
     pub fn new() -> Result<Self> {
         Self::with_persist_path(PathBuf::from("data/last_erg_rate.json"))

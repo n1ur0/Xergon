@@ -44,6 +44,11 @@ fn test_config(provider_endpoint: &str) -> Arc<RelayConfig> {
             health_poll_interval_secs: 300,
             provider_timeout_secs: 5,
             max_fallback_attempts: 1,
+            circuit_failure_threshold: 5,
+            circuit_recovery_timeout_secs: 30,
+            circuit_half_open_max_probes: 2,
+            sticky_session_ttl_secs: 1800,
+            onboarding_auth_token: None,
         },
         providers: ProviderSettings {
             known_endpoints: vec![provider_endpoint.to_string()],
@@ -73,6 +78,22 @@ fn test_config(provider_endpoint: &str) -> Arc<RelayConfig> {
         free_tier: crate::config::FreeTierConfig::default(),
         events: crate::config::EventsConfig::default(),
         gossip: crate::config::GossipConfig::default(),
+        health_v2: crate::config::HealthV2Config::default(),
+        ws_chat: crate::config::WsChatConfig::default(),
+        dedup: crate::config::DedupConfig::default(),
+        cache: crate::config::CacheConfig::default(),
+        circuit_breaker: crate::circuit_breaker::CircuitBreakerConfig::default(),
+        load_shed: crate::load_shed::LoadShedConfig::default(),
+        degradation: crate::degradation::DegradationConfig::default(),
+        coalesce: crate::coalesce::CoalesceConfig::default(),
+        stream_buffer: crate::stream_buffer::StreamBufferConfig::default(),
+        adaptive_routing: crate::config::AdaptiveRoutingConfig::default(),
+        telemetry: crate::config::TelemetryConfig::default(),
+        admin: crate::config::AdminConfig::default(),
+        auto_register: crate::auto_register::AutoRegistrationConfig::default(),
+        cache_sync: crate::cache_sync::CacheSyncConfig::default(),
+        multi_region: crate::multi_region::RegionConfig::default(),
+        ws_pool: crate::config::WsPoolConfig::default(),
     })
 }
 
@@ -85,6 +106,16 @@ fn build_test_state(mock_url: &str) -> AppState {
     if let Some(mut provider) = registry.providers.get_mut(mock_url) {
         provider.is_healthy = true;
     }
+
+    let health_scorer = std::sync::Arc::new(crate::health_score::HealthScorer::new(
+        crate::health_score::HealthScoringConfig::default(),
+    ));
+    let geo_router = std::sync::Arc::new(crate::geo_router::GeoRouter::new());
+    let adaptive_router = std::sync::Arc::new(crate::adaptive_router::AdaptiveRouter::new(
+        std::sync::Arc::clone(&health_scorer),
+        std::sync::Arc::clone(&geo_router),
+        crate::adaptive_router::RoutingConfig::default(),
+    ));
 
     AppState {
         config,
@@ -103,6 +134,101 @@ fn build_test_state(mock_url: &str) -> AppState {
         event_broadcaster: Arc::new(crate::events::EventBroadcaster::new(10)),
         ws_broadcaster: Arc::new(crate::ws::WsBroadcaster::new(10)),
         gossip_service: None,
+        request_dedup: crate::dedup::RequestDedup::new(true, 30),
+        ws_chat_connections: crate::ws::WsChatConnectionCounter::new(),
+        model_registry: std::sync::Arc::new(crate::model_registry::ModelRegistry::new()),
+        response_cache: std::sync::Arc::new(crate::cache::ResponseCache::new(
+            crate::cache::CacheConfig::default(),
+        )),
+        circuit_breaker: std::sync::Arc::new(crate::circuit_breaker::CircuitBreaker::new(
+            crate::circuit_breaker::CircuitBreakerConfig::default(),
+        )),
+        load_shedder: std::sync::Arc::new(crate::load_shed::LoadShedder::new(
+            crate::load_shed::LoadShedConfig::default(),
+        )),
+        degradation_manager: std::sync::Arc::new(crate::degradation::DegradationManager::new(
+            crate::degradation::DegradationConfig::default(),
+        )),
+        request_multiplexer: std::sync::Arc::new(crate::coalesce_buffer::RequestMultiplexer::default()),
+        health_scorer,
+        geo_router,
+        adaptive_router,
+        ws_pool: std::sync::Arc::new(crate::ws_pool::WsConnectionPool::new(
+            crate::config::WsPoolConfig::default(),
+        )),
+        priority_queue: std::sync::Arc::new(crate::priority_queue::PriorityQueue::new(
+            crate::priority_queue::PriorityQueueConfig::default(),
+        )),
+        file_store: std::sync::Arc::new(crate::handlers::upload::FileStore::new(
+            std::path::PathBuf::from("/tmp/xergon-test-uploads"), 100_000_000,
+        )),
+        tier_manager: std::sync::Arc::new(crate::rate_limit_tiers::TierManager::new()),
+        webhook_manager: crate::webhook::WebhookManager::new(),
+        audit_logger: crate::audit::AuditLogger::new(),
+        api_key_manager: crate::api_key_manager::ApiKeyManager::new(),
+        usage_analytics: crate::usage_analytics::UsageAnalytics::new(),
+        auto_register: None,
+        sla_tracker: crate::sla::SlaTracker::new(),
+        adaptive_retry: std::sync::Arc::new(crate::adaptive_retry::AdaptiveRetry::new(
+            crate::adaptive_retry::AdaptiveRetryConfig::default(),
+        )),
+        cache_synchronizer: None,
+        multi_region_router: None,
+        semantic_cache: std::sync::Arc::new(crate::semantic_cache::SemanticCache::new()),
+        request_audit_buffer: crate::audit::RequestAuditBuffer::new(1000),
+        auth_audit_buffer: crate::audit::AuthAuditBuffer::new(1000),
+        compliance_audit_buffer: crate::audit::ComplianceAuditBuffer::new(1000),
+        bonding_manager: std::sync::Arc::new(crate::reputation_bonding::BondingManager::new(
+            crate::reputation_bonding::BondingConfig::default(),
+        )),
+        staking_pool: std::sync::Arc::new(crate::staking_rewards::StakingRewardPool::new(
+            crate::staking_rewards::StakingRewardConfig::default(),
+        )),
+        oracle_aggregator: std::sync::Arc::new(crate::oracle_aggregator::OracleAggregator::new(
+            crate::oracle_aggregator::OracleAggregatorConfig::default(),
+        )),
+        chainAdapterManager: std::sync::Arc::new(crate::chain_adapters::ChainAdapterManager::new(
+            crate::chain_adapters::ChainAdapterConfig::default(),
+        )),
+        encrypted_inference: std::sync::Arc::new(crate::encrypted_inference::EncryptedInferenceState::new(
+            crate::encrypted_inference::EncryptionConfig::default(),
+        )),
+        quantum_crypto: std::sync::Arc::new(crate::quantum_crypto::QuantumCryptoState::new(
+            crate::quantum_crypto::QuantumCryptoConfig::default(),
+        )),
+        zkp_verification: std::sync::Arc::new(crate::zkp_verification::ZKPVerificationState::new()),
+        homomorphic_compute: std::sync::Arc::new(crate::homomorphic_compute::HomomorphicComputeState::new()),
+        cross_provider_orchestrator: std::sync::Arc::new(crate::cross_provider_orchestration::CrossProviderOrchestrator::new()),
+        speculative_coordinator: std::sync::Arc::new(crate::speculative_decoding::SpeculativeDecodingCoordinator::new()),
+        request_fusion: std::sync::Arc::new(crate::request_fusion::RequestFusionEngine::new(
+            crate::request_fusion::FusionConfig::default(),
+        )),
+        continuous_batching: std::sync::Arc::new(crate::continuous_batching::ContinuousBatchingEngine::new(
+            crate::continuous_batching::BatchConfig::default(),
+        )),
+        token_streaming: std::sync::Arc::new(crate::token_streaming::TokenStreamingMultiplexer::new(
+            crate::token_streaming::StreamConfig::default(),
+        )),
+        cost_estimator: std::sync::Arc::new(crate::cost_estimator::InferenceCostEstimator::new()),
+        scheduling_optimizer: std::sync::Arc::new(crate::scheduling_optimizer::SchedulingOptimizer::default()),
+        dynamic_pricing_engine: std::sync::Arc::new(crate::dynamic_pricing::DynamicPricingEngine::new()),
+        capability_negotiation: std::sync::Arc::new(crate::capability_negotiation::CapabilityNegotiator::new()),
+        protocol_registry: std::sync::Arc::new(crate::protocol_versioning::ProtocolRegistry::new("1.0.0")),
+        connection_pool_v2: std::sync::Arc::new(crate::connection_pool_v2::ConnectionPoolV2::new(
+            crate::connection_pool_v2::PoolConfig::default(),
+        )),
+        request_dedup_v2: std::sync::Arc::new(crate::request_dedup_v2::RequestDedupV2::new()),
+        response_cache_headers: std::sync::Arc::new(crate::response_cache_headers::ResponseCache::new()),
+        content_negotiator: std::sync::Arc::new(crate::content_negotiation::ContentNegotiator::new()),
+        rate_limiter_v2: std::sync::Arc::new(crate::rate_limiter_v2::RateLimiterV2::new()),
+        middleware_chain: std::sync::Arc::new(crate::middleware_chain::MiddlewareChain::new()),
+        cors_manager_v2: std::sync::Arc::new(crate::cors_v2::CorsManagerV2::new()),
+        websocket_v2: std::sync::Arc::new(crate::websocket_v2::WebSocketV2::new()),
+        health_monitor_v2: std::sync::Arc::new(crate::health_monitor_v2::HealthMonitorV2::default()),
+        api_gateway: std::sync::Arc::new(crate::api_gateway::ApiGateway::new()),
+        babel_fee_manager: std::sync::Arc::new(crate::babel_fee_integration::BabelFeeManager::new()),
+        request_coalescer: std::sync::Arc::new(crate::request_coalescing::RequestCoalescer::new()),
+        protocol_adapter: std::sync::Arc::new(crate::protocol_adapter::ProtocolAdapter::new()),
     }
 }
 
@@ -118,6 +244,16 @@ fn build_empty_state() -> AppState {
 
     let registry = Arc::new(ProviderRegistry::new(config.clone()));
 
+    let health_scorer = std::sync::Arc::new(crate::health_score::HealthScorer::new(
+        crate::health_score::HealthScoringConfig::default(),
+    ));
+    let geo_router = std::sync::Arc::new(crate::geo_router::GeoRouter::new());
+    let adaptive_router = std::sync::Arc::new(crate::adaptive_router::AdaptiveRouter::new(
+        std::sync::Arc::clone(&health_scorer),
+        std::sync::Arc::clone(&geo_router),
+        crate::adaptive_router::RoutingConfig::default(),
+    ));
+
     AppState {
         config,
         provider_registry: registry,
@@ -135,6 +271,101 @@ fn build_empty_state() -> AppState {
         event_broadcaster: Arc::new(crate::events::EventBroadcaster::new(10)),
         ws_broadcaster: Arc::new(crate::ws::WsBroadcaster::new(10)),
         gossip_service: None,
+        request_dedup: crate::dedup::RequestDedup::new(true, 30),
+        ws_chat_connections: crate::ws::WsChatConnectionCounter::new(),
+        model_registry: std::sync::Arc::new(crate::model_registry::ModelRegistry::new()),
+        response_cache: std::sync::Arc::new(crate::cache::ResponseCache::new(
+            crate::cache::CacheConfig::default(),
+        )),
+        circuit_breaker: std::sync::Arc::new(crate::circuit_breaker::CircuitBreaker::new(
+            crate::circuit_breaker::CircuitBreakerConfig::default(),
+        )),
+        load_shedder: std::sync::Arc::new(crate::load_shed::LoadShedder::new(
+            crate::load_shed::LoadShedConfig::default(),
+        )),
+        degradation_manager: std::sync::Arc::new(crate::degradation::DegradationManager::new(
+            crate::degradation::DegradationConfig::default(),
+        )),
+        request_multiplexer: std::sync::Arc::new(crate::coalesce_buffer::RequestMultiplexer::default()),
+        health_scorer,
+        geo_router,
+        adaptive_router,
+        ws_pool: std::sync::Arc::new(crate::ws_pool::WsConnectionPool::new(
+            crate::config::WsPoolConfig::default(),
+        )),
+        priority_queue: std::sync::Arc::new(crate::priority_queue::PriorityQueue::new(
+            crate::priority_queue::PriorityQueueConfig::default(),
+        )),
+        file_store: std::sync::Arc::new(crate::handlers::upload::FileStore::new(
+            std::path::PathBuf::from("/tmp/xergon-test-uploads"), 100_000_000,
+        )),
+        tier_manager: std::sync::Arc::new(crate::rate_limit_tiers::TierManager::new()),
+        webhook_manager: crate::webhook::WebhookManager::new(),
+        audit_logger: crate::audit::AuditLogger::new(),
+        api_key_manager: crate::api_key_manager::ApiKeyManager::new(),
+        usage_analytics: crate::usage_analytics::UsageAnalytics::new(),
+        auto_register: None,
+        sla_tracker: crate::sla::SlaTracker::new(),
+        adaptive_retry: std::sync::Arc::new(crate::adaptive_retry::AdaptiveRetry::new(
+            crate::adaptive_retry::AdaptiveRetryConfig::default(),
+        )),
+        cache_synchronizer: None,
+        multi_region_router: None,
+        semantic_cache: std::sync::Arc::new(crate::semantic_cache::SemanticCache::new()),
+        request_audit_buffer: crate::audit::RequestAuditBuffer::new(1000),
+        auth_audit_buffer: crate::audit::AuthAuditBuffer::new(1000),
+        compliance_audit_buffer: crate::audit::ComplianceAuditBuffer::new(1000),
+        bonding_manager: std::sync::Arc::new(crate::reputation_bonding::BondingManager::new(
+            crate::reputation_bonding::BondingConfig::default(),
+        )),
+        staking_pool: std::sync::Arc::new(crate::staking_rewards::StakingRewardPool::new(
+            crate::staking_rewards::StakingRewardConfig::default(),
+        )),
+        oracle_aggregator: std::sync::Arc::new(crate::oracle_aggregator::OracleAggregator::new(
+            crate::oracle_aggregator::OracleAggregatorConfig::default(),
+        )),
+        chainAdapterManager: std::sync::Arc::new(crate::chain_adapters::ChainAdapterManager::new(
+            crate::chain_adapters::ChainAdapterConfig::default(),
+        )),
+        encrypted_inference: std::sync::Arc::new(crate::encrypted_inference::EncryptedInferenceState::new(
+            crate::encrypted_inference::EncryptionConfig::default(),
+        )),
+        quantum_crypto: std::sync::Arc::new(crate::quantum_crypto::QuantumCryptoState::new(
+            crate::quantum_crypto::QuantumCryptoConfig::default(),
+        )),
+        zkp_verification: std::sync::Arc::new(crate::zkp_verification::ZKPVerificationState::new()),
+        homomorphic_compute: std::sync::Arc::new(crate::homomorphic_compute::HomomorphicComputeState::new()),
+        cross_provider_orchestrator: std::sync::Arc::new(crate::cross_provider_orchestration::CrossProviderOrchestrator::new()),
+        speculative_coordinator: std::sync::Arc::new(crate::speculative_decoding::SpeculativeDecodingCoordinator::new()),
+        request_fusion: std::sync::Arc::new(crate::request_fusion::RequestFusionEngine::new(
+            crate::request_fusion::FusionConfig::default(),
+        )),
+        continuous_batching: std::sync::Arc::new(crate::continuous_batching::ContinuousBatchingEngine::new(
+            crate::continuous_batching::BatchConfig::default(),
+        )),
+        token_streaming: std::sync::Arc::new(crate::token_streaming::TokenStreamingMultiplexer::new(
+            crate::token_streaming::StreamConfig::default(),
+        )),
+        cost_estimator: std::sync::Arc::new(crate::cost_estimator::InferenceCostEstimator::new()),
+        scheduling_optimizer: std::sync::Arc::new(crate::scheduling_optimizer::SchedulingOptimizer::default()),
+        dynamic_pricing_engine: std::sync::Arc::new(crate::dynamic_pricing::DynamicPricingEngine::new()),
+        capability_negotiation: std::sync::Arc::new(crate::capability_negotiation::CapabilityNegotiator::new()),
+        protocol_registry: std::sync::Arc::new(crate::protocol_versioning::ProtocolRegistry::new("1.0.0")),
+        connection_pool_v2: std::sync::Arc::new(crate::connection_pool_v2::ConnectionPoolV2::new(
+            crate::connection_pool_v2::PoolConfig::default(),
+        )),
+        request_dedup_v2: std::sync::Arc::new(crate::request_dedup_v2::RequestDedupV2::new()),
+        response_cache_headers: std::sync::Arc::new(crate::response_cache_headers::ResponseCache::new()),
+        content_negotiator: std::sync::Arc::new(crate::content_negotiation::ContentNegotiator::new()),
+        rate_limiter_v2: std::sync::Arc::new(crate::rate_limiter_v2::RateLimiterV2::new()),
+        middleware_chain: std::sync::Arc::new(crate::middleware_chain::MiddlewareChain::new()),
+        cors_manager_v2: std::sync::Arc::new(crate::cors_v2::CorsManagerV2::new()),
+        websocket_v2: std::sync::Arc::new(crate::websocket_v2::WebSocketV2::new()),
+        health_monitor_v2: std::sync::Arc::new(crate::health_monitor_v2::HealthMonitorV2::default()),
+        api_gateway: std::sync::Arc::new(crate::api_gateway::ApiGateway::new()),
+        babel_fee_manager: std::sync::Arc::new(crate::babel_fee_integration::BabelFeeManager::new()),
+        request_coalescer: std::sync::Arc::new(crate::request_coalescing::RequestCoalescer::new()),
+        protocol_adapter: std::sync::Arc::new(crate::protocol_adapter::ProtocolAdapter::new()),
     }
 }
 

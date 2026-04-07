@@ -231,6 +231,8 @@ export interface XergonClientConfig {
   baseUrl?: string;
   publicKey?: string;
   privateKey?: string;
+  /** Retry options for HTTP requests. Set `false` to disable retries entirely. */
+  retries?: import('./retry').RetryOptions | false;
 }
 
 /** Callback for request/response logging. */

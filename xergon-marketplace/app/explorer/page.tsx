@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   fetchProviders,
@@ -13,7 +13,6 @@ import { ProviderCard } from "@/components/explorer/ProviderCard";
 import { ProviderFiltersBar } from "@/components/explorer/ProviderFilters";
 import { ProviderDetail } from "@/components/explorer/ProviderDetail";
 import { ExplorerSkeleton } from "@/components/explorer/ExplorerSkeleton";
-import { SuspenseWrap } from "@/components/ui/SuspenseWrap";
 import { useProviderStatus } from "@/lib/hooks/useProviderStatus";
 import { ProviderStatusIndicator } from "@/components/provider/ProviderStatusIndicator";
 
@@ -86,10 +85,10 @@ function LiveIndicator({ isConnected }: { isConnected: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Page component
+// Inner component (uses useSearchParams — must be inside Suspense)
 // ---------------------------------------------------------------------------
 
-export default function ExplorerPage() {
+function ExplorerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [allProviders, setAllProviders] = useState<ProviderInfo[]>([]);
@@ -219,7 +218,6 @@ export default function ExplorerPage() {
         </p>
       </div>
 
-      <SuspenseWrap fallback={<ExplorerSkeleton />}>
       {/* Filters */}
       <ProviderFiltersBar
         filters={filters}
@@ -337,7 +335,18 @@ export default function ExplorerPage() {
           })}
         </div>
       )}
-      </SuspenseWrap>
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page component (wraps ExplorerContent in Suspense for useSearchParams)
+// ---------------------------------------------------------------------------
+
+export default function ExplorerPage() {
+  return (
+    <Suspense fallback={<ExplorerSkeleton />}>
+      <ExplorerContent />
+    </Suspense>
   );
 }

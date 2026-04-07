@@ -35,21 +35,36 @@ interface DisplayModel {
 }
 
 function toDisplayModel(m: ChainModelInfo | ModelInfo): DisplayModel {
+  // ChainModelInfo uses snake_case, ModelInfo uses camelCase.
+  // Use "in" checks to narrow the union type safely.
+  const isChain = "price_per_input_token_nanoerg" in m;
   return {
     id: m.id,
     name: m.name,
     provider: m.provider,
     tier: m.tier,
-    pricePerInputTokenNanoerg: m.pricePerInputTokenNanoerg ?? ("price_per_input_token_nanoerg" in m ? m.price_per_input_token_nanoerg : 0),
-    pricePerOutputTokenNanoerg: m.pricePerOutputTokenNanoerg ?? ("price_per_output_token_nanoerg" in m ? m.price_per_output_token_nanoerg : 0),
-    effectivePriceNanoerg: m.effective_price_nanoerg,
-    providerCount: m.provider_count,
+    pricePerInputTokenNanoerg: isChain
+      ? m.price_per_input_token_nanoerg
+      : (m.pricePerInputTokenNanoerg ?? 0),
+    pricePerOutputTokenNanoerg: isChain
+      ? m.price_per_output_token_nanoerg
+      : (m.pricePerOutputTokenNanoerg ?? 0),
+    effectivePriceNanoerg: isChain
+      ? m.effective_price_nanoerg
+      : m.effectivePriceNanoerg,
+    providerCount: isChain
+      ? m.provider_count
+      : m.providerCount,
     available: m.available,
     description: m.description,
-    contextWindow: m.context_window,
+    contextWindow: isChain
+      ? m.context_window
+      : m.contextWindow,
     speed: m.speed as DisplayModel["speed"],
     tags: m.tags,
-    freeTier: m.free_tier,
+    freeTier: isChain
+      ? m.free_tier
+      : m.freeTier,
   };
 }
 

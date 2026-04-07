@@ -96,8 +96,8 @@ pub async fn register_provider(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ergo-lib")]
-#[allow(dead_code)]
-pub fn register_provider_lib(
+#[allow(dead_code)] // Public API — will be wired into main loop in next phase
+pub async fn register_provider_lib(
     endpoint: &str,
     models: &[String],
     region: &str,
@@ -160,19 +160,23 @@ pub fn register_provider_lib(
         node_url, encoded_pk
     );
 
-    // TODO: This is a blocking reqwest call. In production, use the tokio runtime
-    //       or pass the boxes in. For now, use a blocking request inside the sync fn.
-    let http_client = reqwest::blocking::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
-    let raw_boxes: Vec<serde_json::Value> = http_client
-        .get(&boxes_url)
-        .send()
-        .context("Failed to fetch UTXOs from node")?
-        .error_for_status()
-        .context("Node returned error fetching UTXOs")?
-        .json()
-        .context("Failed to parse UTXO response")?;
+    // Fetch UTXOs from the Ergo node via a blocking HTTP call on a dedicated thread
+    // to avoid blocking the tokio runtime.
+    let raw_boxes: Vec<serde_json::Value> = tokio::task::spawn_blocking(move || {
+        let http_client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?;
+        http_client
+            .get(&boxes_url)
+            .send()
+            .context("Failed to fetch UTXOs from node")?
+            .error_for_status()
+            .context("Node returned error fetching UTXOs")?
+            .json()
+            .context("Failed to parse UTXO response")
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("spawn_blocking task panicked: {}", e))??;
 
     anyhow::ensure!(!raw_boxes.is_empty(), "No UTXOs found for the signing key address");
 
@@ -390,7 +394,7 @@ pub fn register_provider_lib(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ergo-lib")]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn submit_heartbeat(
     provider_nft_id: &str,
     new_height: i32,
@@ -705,7 +709,7 @@ pub fn submit_heartbeat(
 }
 
 #[cfg(not(feature = "ergo-lib"))]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn submit_heartbeat(
     _provider_nft_id: &str,
     _new_height: i32,
@@ -718,7 +722,7 @@ pub fn submit_heartbeat(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ergo-lib")]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn submit_usage_proof(
     user_pk_hash: &str,
     provider_nft_id: &str,
@@ -961,7 +965,7 @@ pub fn submit_usage_proof(
 }
 
 #[cfg(not(feature = "ergo-lib"))]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn submit_usage_proof(
     _user_pk_hash: &str,
     _provider_nft_id: &str,
@@ -1033,7 +1037,7 @@ pub async fn create_user_staking_box(
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "ergo-lib")]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn pay_provider(
     user_staking_box_id: &str,
     provider_nft_id: &str,
@@ -1440,13 +1444,531 @@ pub fn pay_provider(
 }
 
 #[cfg(not(feature = "ergo-lib"))]
-#[allow(dead_code)]
+#[allow(dead_code)] // Public API — called from integration tests; production wiring pending
 pub fn pay_provider(
     _user_staking_box_id: &str,
     _provider_nft_id: &str,
     _amount_nanoerg: u64,
 ) -> anyhow::Result<String> {
     anyhow::bail!("Not yet implemented: requires ergo-lib dependency (Phase 2)")
+}
+
+// ---------------------------------------------------------------------------
+// Governance transaction planning
+// ---------------------------------------------------------------------------
+//
+// These functions create `GovernanceTxPlan` structs that describe the exact
+// state transitions needed for create, vote, execute, and close operations
+// on the governance proposal box (singleton NFT state machine).
+//
+// Since the Ergo node wallet API (`POST /wallet/payment/send`) cannot set
+// custom registers on outputs, these functions return descriptive plans
+// rather than broadcasting transactions directly. The plan can be consumed
+// by:
+//   - An ergo-lib based builder (feature-gated, future)
+//   - A manual transaction built by the operator
+//   - The API layer for inspection before signing
+
+use crate::chain::types::GovernanceProposalBox;
+use crate::protocol::specs::validate_governance_box;
+
+/// The type of governance operation being planned.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum GovernanceOp {
+    /// Create a new proposal (requires R5 == 0 on current box).
+    CreateProposal,
+    /// Vote on the active proposal (requires HEIGHT <= R8).
+    Vote,
+    /// Execute a passed proposal (requires HEIGHT > R8 + off-chain threshold check).
+    Execute,
+    /// Close/cancel a proposal (requires HEIGHT > R8).
+    Close,
+}
+
+impl std::fmt::Display for GovernanceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::CreateProposal => write!(f, "CreateProposal"),
+            Self::Vote => write!(f, "Vote"),
+            Self::Execute => write!(f, "Execute"),
+            Self::Close => write!(f, "Close"),
+        }
+    }
+}
+
+/// Describes the register values for the successor (OUTPUTS(0)) governance box.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GovernanceOutputRegisters {
+    /// R4: proposalCount (Int)
+    pub r4_proposal_count: i32,
+    /// R5: activeProposalId (Int) -- 0 = no active proposal
+    pub r5_active_proposal_id: i32,
+    /// R6: votingThreshold (Int)
+    pub r6_voting_threshold: i32,
+    /// R7: totalVoters (Int)
+    pub r7_total_voters: i32,
+    /// R8: proposalEndHeight (Int)
+    pub r8_proposal_end_height: i32,
+    /// R9: proposalDataHash (hex-encoded Coll[Byte])
+    pub r9_proposal_data_hash: String,
+}
+
+/// A complete plan describing a governance state transition.
+///
+/// This struct captures everything needed to build the actual transaction,
+/// whether via ergo-lib, a manual offline build, or a future integration.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct GovernanceTxPlan {
+    /// The type of governance operation.
+    pub op: GovernanceOp,
+    /// The box ID of the governance box being spent.
+    pub gov_box_id: String,
+    /// The Governance NFT token ID that must be preserved.
+    pub gov_nft_id: String,
+    /// The current chain height at the time of planning.
+    pub current_height: i32,
+    /// Snapshot of the governance box registers *before* the transition.
+    pub current_state: GovernanceProposalBox,
+    /// The register values that must appear on the successor box (OUTPUTS(0)).
+    pub output_registers: GovernanceOutputRegisters,
+    /// Human-readable description of the state transition.
+    pub description: String,
+    /// Whether this operation is currently valid given the chain state.
+    pub is_valid: bool,
+    /// Validation errors (empty if `is_valid` is true).
+    pub validation_errors: Vec<String>,
+}
+
+impl GovernanceTxPlan {
+    /// Return a JSON string representation of the plan.
+    pub fn to_json(&self) -> Result<String> {
+        serde_json::to_string_pretty(self)
+            .context("Failed to serialize GovernanceTxPlan to JSON")
+    }
+}
+
+/// Internal helper: fetch and validate the governance box from the chain.
+async fn fetch_and_validate_governance_box(
+    client: &ErgoNodeClient,
+    gov_box_id: &str,
+) -> Result<GovernanceProposalBox> {
+    let raw_box = client
+        .get_box(gov_box_id)
+        .await
+        .with_context(|| format!("Failed to fetch governance box {}", gov_box_id))?;
+
+    let current_height = client
+        .get_height()
+        .await
+        .context("Failed to get current chain height")?;
+
+    let gov_box = validate_governance_box(&raw_box, current_height)
+        .with_context(|| format!("Governance box {} failed validation", gov_box_id))?;
+
+    Ok(gov_box)
+}
+
+/// Internal helper: compute blake2b256 hash of proposal data bytes.
+fn hash_proposal_data(data: &[u8]) -> String {
+    use blake2::Digest;
+    let mut hasher = blake2::Blake2b::<blake2::digest::consts::U32>::new();
+    hasher.update(data);
+    let hash = hasher.finalize();
+    hex::encode(hash)
+}
+
+// ---------------------------------------------------------------------------
+// plan_create_proposal
+// ---------------------------------------------------------------------------
+
+/// Plan a "Create Proposal" transaction on the governance box.
+///
+/// This operation is valid when:
+/// - The governance box has no active proposal (R5 == 0)
+///
+/// The successor box will have:
+/// - R4 = proposalCount + 1
+/// - R5 = proposalCount + 1 (the new active proposal ID)
+/// - R6 = `threshold` (voting threshold)
+/// - R7 = `total_voters` (eligible voter count)
+/// - R8 = `end_height` (when voting ends)
+/// - R9 = blake2b256(proposal_data)
+///
+/// # Arguments
+///
+/// * `client` - Ergo node client (used to fetch current box state)
+/// * `gov_box_id` - Box ID of the governance proposal box
+/// * `threshold` - Minimum votes needed to pass the proposal
+/// * `total_voters` - Total number of eligible voters
+/// * `end_height` - Block height at which voting ends
+/// * `proposal_data` - Raw proposal content bytes (will be hashed into R9)
+pub async fn plan_create_proposal(
+    client: &ErgoNodeClient,
+    gov_box_id: &str,
+    threshold: i32,
+    total_voters: i32,
+    end_height: i32,
+    proposal_data: &[u8],
+) -> Result<GovernanceTxPlan> {
+    let gov_box = fetch_and_validate_governance_box(client, gov_box_id).await?;
+    let current_height = client.get_height().await?;
+
+    let mut validation_errors = Vec::new();
+    let mut is_valid = true;
+
+    // Validate: no active proposal
+    if gov_box.active_proposal_id != 0 {
+        validation_errors.push(format!(
+            "Cannot create proposal: active proposal {} already exists (R5 must be 0)",
+            gov_box.active_proposal_id
+        ));
+        is_valid = false;
+    }
+
+    // Validate: threshold must be positive
+    if threshold <= 0 {
+        validation_errors.push(format!(
+            "Invalid voting threshold: {} (must be > 0)",
+            threshold
+        ));
+        is_valid = false;
+    }
+
+    // Validate: total_voters must be positive
+    if total_voters <= 0 {
+        validation_errors.push(format!(
+            "Invalid total voters: {} (must be > 0)",
+            total_voters
+        ));
+        is_valid = false;
+    }
+
+    // Validate: end_height must be in the future
+    if end_height <= current_height {
+        validation_errors.push(format!(
+            "Invalid end height: {} (must be > current height {})",
+            end_height, current_height
+        ));
+        is_valid = false;
+    }
+
+    // Validate: threshold cannot exceed total_voters
+    if threshold > total_voters {
+        validation_errors.push(format!(
+            "Threshold {} exceeds total voters {}",
+            threshold, total_voters
+        ));
+        is_valid = false;
+    }
+
+    let new_proposal_id = gov_box.proposal_count + 1;
+    let proposal_data_hash = hash_proposal_data(proposal_data);
+
+    let output_registers = GovernanceOutputRegisters {
+        r4_proposal_count: new_proposal_id,
+        r5_active_proposal_id: new_proposal_id,
+        r6_voting_threshold: threshold,
+        r7_total_voters: total_voters,
+        r8_proposal_end_height: end_height,
+        r9_proposal_data_hash: proposal_data_hash.clone(),
+    };
+
+    let description = format!(
+        "Create proposal #{}: threshold={}/{}, end_height={}, data_hash={}",
+        new_proposal_id, threshold, total_voters, end_height, &proposal_data_hash[..16]
+    );
+
+    info!(
+        gov_box_id = %gov_box_id,
+        proposal_id = new_proposal_id,
+        threshold,
+        total_voters,
+        end_height,
+        "Planned governance: create proposal"
+    );
+
+    Ok(GovernanceTxPlan {
+        op: GovernanceOp::CreateProposal,
+        gov_box_id: gov_box_id.to_string(),
+        gov_nft_id: gov_box.gov_nft_id.clone(),
+        current_height,
+        current_state: gov_box,
+        output_registers,
+        description,
+        is_valid,
+        validation_errors,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// plan_vote
+// ---------------------------------------------------------------------------
+
+/// Plan a "Vote" transaction on the governance box.
+///
+/// This operation is valid when:
+/// - The governance box has an active proposal (R5 > 0)
+/// - The current block height is within the voting window (HEIGHT <= R8)
+///
+/// The successor box preserves all registers unchanged (R4-R9 identical).
+/// The voter's proveDlog signature authorizes the vote.
+///
+/// # Arguments
+///
+/// * `client` - Ergo node client
+/// * `gov_box_id` - Box ID of the governance proposal box
+/// * `voter_pk_hex` - Voter's compressed secp256k1 public key (hex, for logging)
+pub async fn plan_vote(
+    client: &ErgoNodeClient,
+    gov_box_id: &str,
+    voter_pk_hex: &str,
+) -> Result<GovernanceTxPlan> {
+    let gov_box = fetch_and_validate_governance_box(client, gov_box_id).await?;
+    let current_height = client.get_height().await?;
+
+    let mut validation_errors = Vec::new();
+    let mut is_valid = true;
+
+    // Validate: active proposal must exist
+    if gov_box.active_proposal_id <= 0 {
+        validation_errors.push(format!(
+            "Cannot vote: no active proposal (R5 = {})",
+            gov_box.active_proposal_id
+        ));
+        is_valid = false;
+    }
+
+    // Validate: must be within voting window
+    if current_height > gov_box.proposal_end_height {
+        validation_errors.push(format!(
+            "Cannot vote: voting period ended (height {} > end_height {})",
+            current_height, gov_box.proposal_end_height
+        ));
+        is_valid = false;
+    }
+
+    // All registers preserved
+    let output_registers = GovernanceOutputRegisters {
+        r4_proposal_count: gov_box.proposal_count,
+        r5_active_proposal_id: gov_box.active_proposal_id,
+        r6_voting_threshold: gov_box.voting_threshold,
+        r7_total_voters: gov_box.total_voters,
+        r8_proposal_end_height: gov_box.proposal_end_height,
+        r9_proposal_data_hash: gov_box.proposal_data_hash.clone(),
+    };
+
+    let description = format!(
+        "Vote on proposal #{} by voter {} (height {}/{})",
+        gov_box.active_proposal_id,
+        &voter_pk_hex[..voter_pk_hex.len().min(16)],
+        current_height,
+        gov_box.proposal_end_height
+    );
+
+    info!(
+        gov_box_id = %gov_box_id,
+        proposal_id = gov_box.active_proposal_id,
+        voter_pk = %voter_pk_hex,
+        current_height,
+        "Planned governance: vote"
+    );
+
+    Ok(GovernanceTxPlan {
+        op: GovernanceOp::Vote,
+        gov_box_id: gov_box_id.to_string(),
+        gov_nft_id: gov_box.gov_nft_id.clone(),
+        current_height,
+        current_state: gov_box,
+        output_registers,
+        description,
+        is_valid,
+        validation_errors,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// plan_execute_proposal
+// ---------------------------------------------------------------------------
+
+/// Plan an "Execute Proposal" transaction on the governance box.
+///
+/// This operation is valid when:
+/// - The governance box has an active proposal (R5 > 0)
+/// - The voting period has ended (HEIGHT > R8)
+/// - Off-chain vote counting confirms the threshold was met
+///
+/// The successor box resets R5 = 0, allowing new proposals.
+/// R4 (proposalCount) is preserved.
+///
+/// **Note:** The off-chain threshold check (comparing vote counter boxes
+/// against `voting_threshold`) is the caller's responsibility before
+/// submitting the transaction.
+///
+/// # Arguments
+///
+/// * `client` - Ergo node client
+/// * `gov_box_id` - Box ID of the governance proposal box
+/// * `executor_pk_hex` - Executor's public key (hex, for logging/authorization)
+pub async fn plan_execute_proposal(
+    client: &ErgoNodeClient,
+    gov_box_id: &str,
+    executor_pk_hex: &str,
+) -> Result<GovernanceTxPlan> {
+    let gov_box = fetch_and_validate_governance_box(client, gov_box_id).await?;
+    let current_height = client.get_height().await?;
+
+    let mut validation_errors = Vec::new();
+    let mut is_valid = true;
+
+    // Validate: active proposal must exist
+    if gov_box.active_proposal_id <= 0 {
+        validation_errors.push(format!(
+            "Cannot execute: no active proposal (R5 = {})",
+            gov_box.active_proposal_id
+        ));
+        is_valid = false;
+    }
+
+    // Validate: voting period must have ended
+    if current_height <= gov_box.proposal_end_height {
+        validation_errors.push(format!(
+            "Cannot execute: voting still in progress (height {} <= end_height {})",
+            current_height, gov_box.proposal_end_height
+        ));
+        is_valid = false;
+    }
+
+    // Note: off-chain threshold check is the caller's responsibility.
+    // We add a warning but don't fail validation, since the plan itself
+    // is still correct -- the operator must verify vote counts separately.
+    validation_errors.push(
+        "WARNING: Off-chain threshold check required. Verify vote counter boxes \
+         show votes >= threshold before submitting this transaction."
+            .to_string(),
+    );
+
+    let output_registers = GovernanceOutputRegisters {
+        r4_proposal_count: gov_box.proposal_count,
+        r5_active_proposal_id: 0, // Reset to no active proposal
+        r6_voting_threshold: gov_box.voting_threshold,
+        r7_total_voters: gov_box.total_voters,
+        r8_proposal_end_height: gov_box.proposal_end_height,
+        r9_proposal_data_hash: gov_box.proposal_data_hash.clone(),
+    };
+
+    let description = format!(
+        "Execute proposal #{} (threshold={}/{}, end_height={}, executor={})",
+        gov_box.active_proposal_id,
+        gov_box.voting_threshold,
+        gov_box.total_voters,
+        gov_box.proposal_end_height,
+        &executor_pk_hex[..executor_pk_hex.len().min(16)]
+    );
+
+    info!(
+        gov_box_id = %gov_box_id,
+        proposal_id = gov_box.active_proposal_id,
+        executor_pk = %executor_pk_hex,
+        "Planned governance: execute proposal"
+    );
+
+    Ok(GovernanceTxPlan {
+        op: GovernanceOp::Execute,
+        gov_box_id: gov_box_id.to_string(),
+        gov_nft_id: gov_box.gov_nft_id.clone(),
+        current_height,
+        current_state: gov_box,
+        output_registers,
+        description,
+        is_valid,
+        validation_errors,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// plan_close_proposal
+// ---------------------------------------------------------------------------
+
+/// Plan a "Close Proposal" transaction on the governance box.
+///
+/// This operation is valid when:
+/// - The governance box has an active proposal (R5 > 0)
+/// - The voting period has ended (HEIGHT > R8)
+///
+/// The successor box resets R5 = 0, allowing new proposals.
+/// R4 (proposalCount) is preserved.
+///
+/// This is used when a proposal did not reach its voting threshold
+/// and should be cancelled, or after execution to fully close the cycle.
+///
+/// # Arguments
+///
+/// * `client` - Ergo node client
+/// * `gov_box_id` - Box ID of the governance proposal box
+/// * `closer_pk_hex` - Closer's public key (hex, for logging/authorization)
+pub async fn plan_close_proposal(
+    client: &ErgoNodeClient,
+    gov_box_id: &str,
+    closer_pk_hex: &str,
+) -> Result<GovernanceTxPlan> {
+    let gov_box = fetch_and_validate_governance_box(client, gov_box_id).await?;
+    let current_height = client.get_height().await?;
+
+    let mut validation_errors = Vec::new();
+    let mut is_valid = true;
+
+    // Validate: active proposal must exist
+    if gov_box.active_proposal_id <= 0 {
+        validation_errors.push(format!(
+            "Cannot close: no active proposal (R5 = {})",
+            gov_box.active_proposal_id
+        ));
+        is_valid = false;
+    }
+
+    // Validate: voting period must have ended
+    if current_height <= gov_box.proposal_end_height {
+        validation_errors.push(format!(
+            "Cannot close: voting still in progress (height {} <= end_height {})",
+            current_height, gov_box.proposal_end_height
+        ));
+        is_valid = false;
+    }
+
+    let output_registers = GovernanceOutputRegisters {
+        r4_proposal_count: gov_box.proposal_count,
+        r5_active_proposal_id: 0, // Reset to no active proposal
+        r6_voting_threshold: gov_box.voting_threshold,
+        r7_total_voters: gov_box.total_voters,
+        r8_proposal_end_height: gov_box.proposal_end_height,
+        r9_proposal_data_hash: gov_box.proposal_data_hash.clone(),
+    };
+
+    let description = format!(
+        "Close proposal #{} (end_height={}, closer={})",
+        gov_box.active_proposal_id,
+        gov_box.proposal_end_height,
+        &closer_pk_hex[..closer_pk_hex.len().min(16)]
+    );
+
+    info!(
+        gov_box_id = %gov_box_id,
+        proposal_id = gov_box.active_proposal_id,
+        closer_pk = %closer_pk_hex,
+        "Planned governance: close proposal"
+    );
+
+    Ok(GovernanceTxPlan {
+        op: GovernanceOp::Close,
+        gov_box_id: gov_box_id.to_string(),
+        gov_nft_id: gov_box.gov_nft_id.clone(),
+        current_height,
+        current_state: gov_box,
+        output_registers,
+        description,
+        is_valid,
+        validation_errors,
+    })
 }
 
 #[cfg(test)]

@@ -11,8 +11,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getPendingChallenge, deletePendingChallenge } from "../route";
-import { verifySignedMessage, CHALLENGE_TTL_MS } from "@/lib/ergoauth/challenge";
+import { getPendingChallenge, deletePendingChallenge } from "@/lib/ergoauth/challenge-store";
+import { verifySignedMessage } from "@/lib/ergoauth/challenge";
 
 // ── Token generation (simple opaque token) ────────────────────────────────
 // In production, use a proper JWT library like jose or jsonwebtoken.

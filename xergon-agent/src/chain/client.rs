@@ -356,6 +356,26 @@ impl ErgoNodeClient {
             .context("Missing 'id' in wallet payment response")
     }
 
+    /// Send a simple ERG payment to an address using the node wallet.
+    ///
+    /// `POST /wallet/payment/send`
+    ///
+    /// Builds, signs, and broadcasts a transaction that sends `amount_nanoerg`
+    /// nanoERG to `address` with no additional tokens. The wallet must be
+    /// unlocked and funded.
+    ///
+    /// Returns the transaction ID on success.
+    pub async fn send_payment(&self, address: &str, amount_nanoerg: u64) -> Result<String> {
+        let request = serde_json::json!({
+            "requests": [{
+                "address": address,
+                "value": amount_nanoerg,
+                "assets": []
+            }]
+        });
+        self.wallet_payment_send(&request).await
+    }
+
     /// Check if the wallet is unlocked and has at least one box.
     pub async fn wallet_status(&self) -> Result<bool> {
         let url = format!("{}/wallet/status", self.base_url);

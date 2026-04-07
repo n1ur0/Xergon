@@ -55,16 +55,16 @@
 
   // If updating, output must also be a valid rating box
   val outputValid = OUTPUTS.forall { (out: Box) =>
+    val hasRater = out.R4[GroupElement].isDefined
     // If the output has R4 (rater), it must be a valid rating box
-    out.R4[GroupElement].forall { outRater =>
-      out.R5[GroupElement].isDefined &&
-      out.R5[GroupElement].get == ratedPK &&
-      out.R7[Coll[Byte]].isDefined &&
-      out.R7[Coll[Byte]].get == rentalBoxId &&
-      out.R8[Int].isDefined &&
-      out.R8[Int].get >= 1 &&
-      out.R8[Int].get <= 5
-    }
+    !hasRater ||
+      (out.R5[GroupElement].isDefined &&
+       out.R5[GroupElement].get == ratedPK &&
+       out.R7[Coll[Byte]].isDefined &&
+       out.R7[Coll[Byte]].get == rentalBoxId &&
+       out.R8[Int].isDefined &&
+       out.R8[Int].get >= 1 &&
+       out.R8[Int].get <= 5)
   }
 
   // Only the rater can spend (update) their rating

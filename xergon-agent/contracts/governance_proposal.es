@@ -15,7 +15,7 @@
   //   R4: Proposal count       (Int)          -- total proposals created
   //   R5: Active proposal ID   (Int)          -- current proposal being voted on (0 = none)
   //   R6: Voting threshold     (Int)          -- minimum votes needed to pass
-  //   R7: Total voters         (Int)          -- number of eligible voters
+  //   R7: Vote count           (Int)          -- current votes for active proposal
   //   R8: Proposal end height  (Int)          -- when current proposal voting ends
   //   R9: Proposal data hash   (Coll[Byte])   -- blake2b256 of proposal content
   //
@@ -51,7 +51,7 @@
   val proposalCount = SELF.R4[Int].get
   val activeProposalId = SELF.R5[Int].get
   val votingThreshold = SELF.R6[Int].get
-  val totalVoters = SELF.R7[Int].get
+  val voteCount = SELF.R7[Int].get
   val proposalEndHeight = SELF.R8[Int].get
   val proposalDataHash = SELF.R9[Coll[Byte]].get
 
@@ -93,7 +93,7 @@
     outBox.R6[Int].isDefined &&
     outBox.R6[Int].get > 0 &&
     outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get > 0 &&
+    outBox.R7[Int].get == 0 &&
     outBox.R8[Int].isDefined &&
     outBox.R8[Int].get > HEIGHT &&
     outBox.R9[Coll[Byte]].isDefined &&
@@ -127,7 +127,7 @@
     outBox.R6[Int].isDefined &&
     outBox.R6[Int].get == votingThreshold &&
     outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get == totalVoters &&
+    outBox.R7[Int].get == voteCount + 1 &&
     outBox.R8[Int].isDefined &&
     outBox.R8[Int].get == proposalEndHeight &&
     outBox.R9[Coll[Byte]].isDefined &&
@@ -141,9 +141,8 @@
   // ---------------------------------------------------------------------------
   // Path 3: Execute Proposal
   // If the voting period has ended (HEIGHT > proposalEndHeight) and the
-  // proposal reached the threshold, execute it by resetting R5 = 0.
-  // The proposal is considered passed (threshold check is off-chain;
-  // the agent verifies vote counts before submitting execution tx).
+  // proposal reached the threshold (voteCount >= votingThreshold), execute
+  // it by resetting R5 = 0 and R7 = 0.
   // ---------------------------------------------------------------------------
   val executeProposal = {
     // Active proposal must exist
@@ -152,14 +151,19 @@
     // Voting period must have ended
     HEIGHT > proposalEndHeight &&
 
+    // On-chain threshold check: votes must meet or exceed threshold
+    voteCount >= votingThreshold &&
+
     // Authorizer: at least one voter confirms execution
     atLeast(1, Coll(proveDlog(SELF.R4[GroupElement].get))) &&
 
-    // Successor resets to no active proposal
+    // Successor resets to no active proposal, resets vote count
     outBox.R4[Int].isDefined &&
     outBox.R4[Int].get == proposalCount &&
     outBox.R5[Int].isDefined &&
     outBox.R5[Int].get == 0 &&
+    outBox.R7[Int].isDefined &&
+    outBox.R7[Int].get == 0 &&
 
     // Preserve script and NFT
     scriptPreserved &&
@@ -168,8 +172,8 @@
 
   // ---------------------------------------------------------------------------
   // Path 4: Close / Cancel Proposal
-  // If voting period expired without reaching threshold, or after execution,
-  // the proposal creator can close the proposal by resetting R5 = 0.
+  // If voting period expired without reaching threshold (voteCount < votingThreshold),
+  // the proposal can be closed by resetting R5 = 0 and R7 = 0.
   // ---------------------------------------------------------------------------
   val closeProposal = {
     // Active proposal must exist
@@ -178,14 +182,19 @@
     // Voting period must have ended
     HEIGHT > proposalEndHeight &&
 
+    // On-chain threshold check: votes did NOT meet threshold
+    voteCount < votingThreshold &&
+
     // Authorizer: at least one voter confirms closure
     atLeast(1, Coll(proveDlog(SELF.R4[GroupElement].get))) &&
 
-    // Successor resets to no active proposal
+    // Successor resets to no active proposal, resets vote count
     outBox.R4[Int].isDefined &&
     outBox.R4[Int].get == proposalCount &&
     outBox.R5[Int].isDefined &&
     outBox.R5[Int].get == 0 &&
+    outBox.R7[Int].isDefined &&
+    outBox.R7[Int].get == 0 &&
 
     // Preserve script and NFT
     scriptPreserved &&

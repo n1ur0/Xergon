@@ -126,8 +126,8 @@ pub struct RentGpuRequest {
     pub listing_box_id: String,
     /// Number of hours to rent
     pub hours: i32,
-    /// Renter's Ergo address (for refund path)
-    pub renter_address: String,
+    /// Renter's compressed secp256k1 public key (33 bytes, hex-encoded)
+    pub renter_pk_hex: String,
 }
 
 /// Response after initiating a rental.

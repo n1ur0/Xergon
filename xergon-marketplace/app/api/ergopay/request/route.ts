@@ -159,16 +159,21 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET /api/ergopay/request/:requestId
+ * GET /api/ergopay/request?requestId=<id>
  *
  * Returns the ErgoPaySigningRequest for a given request ID.
  * This is the endpoint that mobile wallets fetch when scanning the QR code.
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ requestId: string }> }
-) {
-  const { requestId } = await params;
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const requestId = searchParams.get("requestId");
+  if (!requestId) {
+    return NextResponse.json(
+      { error: "Missing requestId query parameter" },
+      { status: 400 }
+    );
+  }
+
   const { getStoredRequest } = await import("@/lib/ergopay/store");
   const stored = getStoredRequest(requestId);
 

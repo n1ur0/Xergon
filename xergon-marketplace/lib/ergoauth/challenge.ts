@@ -6,10 +6,13 @@
  * - Building human-readable signing messages
  * - Converting Ergo P2PK addresses to SigmaBoolean hex
  * - Creating full ErgoAuthRequest objects
- * - (Stub) signature verification
+ * - Sigma protocol Schnorr signature verification
  */
 
 import type { ErgoAuthRequest, ErgoAuthDeepLink } from "./types";
+import { blake2b } from "@noble/hashes/blake2.js";
+import { bytesToHex, hexToBytes, concatBytes } from "@noble/hashes/utils.js";
+import { secp256k1 } from "@noble/curves/secp256k1.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -112,12 +115,8 @@ function extractPubKeyFromAddress(address: string): string {
     b.toString(16).padStart(2, "0")
   ).join("");
 
-  if (checksumHex !== expectedChecksum) {
-    // In development mode with the stub blake2b256, we skip checksum verification
-    // to allow testing with real Ergo addresses.
-    if (expectedChecksum !== "00000000") {
-      throw new Error("Invalid Ergo address: checksum mismatch");
-    }
+  if (checksumHex !== expectedChecksum.slice(0, 8)) {
+    throw new Error("Invalid Ergo address: checksum mismatch");
   }
 
   const typeByte = payload[0];
@@ -193,32 +192,12 @@ function base58Decode(input: string): Uint8Array {
 /**
  * Compute Blake2b-256 hash of the input bytes.
  *
- * Uses the Web Crypto API when available (SubtleCrypto),
- * falls back to a simple hash for non-crypto contexts.
- *
- * NOTE: SubtleCrypto does not natively support Blake2b. This implementation
- * falls back to SHA-256 for checksum verification, which is NOT correct for
- * Ergo addresses. In production, use the `@noble/hashes` or `blakejs` library.
- *
- * TODO: Replace with proper Blake2b-256 using @noble/hashes/blake2b
+ * Uses @noble/hashes for a correct, cross-platform Blake2b-256 implementation.
+ * Returns the 32-byte hash as a lowercase hex string (64 hex characters).
  */
-function blake2b256(_data: Uint8Array): string {
-  // WARNING: Using SHA-256 as placeholder. Ergo uses Blake2b256 for
-  // address checksums. This MUST be replaced with a proper Blake2b
-  // implementation for production use.
-  //
-  // For now, we return a 32-byte placeholder to allow the flow to work.
-  // In production, install `@noble/hashes` and use:
-  //   import { blake2b } from '@noble/hashes/blake2b';
-  //   return blake2b(data, { dkLen: 32 });
-  console.warn(
-    "[ErgoAuth] blake2b256 using SHA-256 fallback. " +
-    "Install @noble/hashes for proper Blake2b-256 support."
-  );
-
-  // Return zeros — the actual checksum verification will need proper blake2b
-  // For development/testing, we skip strict checksum verification
-  return "00000000";
+function blake2b256(data: Uint8Array): string {
+  const hash = blake2b(data, { dkLen: 32 });
+  return bytesToHex(hash);
 }
 
 // ── ErgoAuth Request Builder ──────────────────────────────────────────────
@@ -283,49 +262,96 @@ export function parseErgoAuthDeepLink(url: string): ErgoAuthDeepLink {
   };
 }
 
-// ── Verification (stub) ──────────────────────────────────────────────────
+// ── Sigma Protocol Schnorr Verification ────────────────────────────────────
 
 /**
- * Verify a signed message proof against an Ergo address.
+ * Reduce a 32-byte big-endian hash to a scalar modulo the secp256k1 curve order.
+ */
+function modCurveOrder(hash: Uint8Array): Uint8Array {
+  const hashInt = BigInt("0x" + bytesToHex(hash));
+  const n = secp256k1.Point.CURVE().n;
+  const reduced = hashInt % n;
+  return hexToBytes(reduced.toString(16).padStart(64, "0"));
+}
+
+/**
+ * Verify a signed message proof against an Ergo P2PK address.
  *
- * This is a STUB implementation. In production, this should use ergo-lib
- * or @noble/curves to verify the SigmaProp proof against the expected
- * SigmaBoolean derived from the address.
+ * Implements Sigma protocol Schnorr verification:
+ * 1. Extract public key from the address (32-byte x-coordinate)
+ * 2. Reconstruct the compressed public key point (even-y, per Ergo convention)
+ * 3. Build the SigmaBoolean bytes (0x08 + compressed pk)
+ * 4. Parse the Schnorr proof: type(1) + challenge e(32) + response z(32)
+ * 5. Recover the nonce point: R = z*G + e*pk
+ * 6. Recompute the Fiat-Shamir challenge: e' = blake2b256(sigmaBoolean || R || message)
+ * 7. Reduce to scalar mod curve order and compare with the proof's challenge
  *
  * @param address - The Ergo P2PK address
  * @param message - The original signing message
- * @param proof - Hex-encoded sigma proof bytes
- * @returns true if the proof is structurally valid, false otherwise
+ * @param proof - Hex-encoded Schnorr proof bytes (65 bytes: type + e + z)
+ * @returns true if the cryptographic proof verifies, false otherwise
  */
 export async function verifySignedMessage(
   address: string,
   message: string,
   proof: string
 ): Promise<boolean> {
-  // TODO: Implement proper SigmaProp verification using ergo-lib
-  // For now, perform basic structural validation:
-  // 1. Proof must be a non-empty hex string
-  // 2. Proof must have reasonable length (> 10 hex chars)
-  // 3. Address must be a valid P2PK address
-
-  console.warn(
-    "[ErgoAuth] verifySignedMessage is a STUB. " +
-    "Proof verification is not cryptographically validated. " +
-    "Install ergo-lib bindings for production use."
-  );
-
-  // Basic structural checks
-  if (!proof || typeof proof !== "string") return false;
-  if (!/^[0-9a-fA-F]+$/.test(proof)) return false;
-  if (proof.length < 10) return false;
-
-  // Try to extract pubkey from address (validates address format)
   try {
-    extractPubKeyFromAddress(address);
+    // 1. Extract 32-byte public key x-coordinate from address
+    const pubKeyHex = extractPubKeyFromAddress(address);
+    const pubKeyXBytes = hexToBytes(pubKeyHex);
+
+    // 2. Reconstruct compressed public key (Ergo convention: even y for 32-byte keys)
+    const compressedPkHex = "02" + pubKeyHex;
+    let pk: InstanceType<typeof secp256k1.Point>;
+    try {
+      pk = secp256k1.Point.fromHex(compressedPkHex);
+    } catch {
+      // If even-y fails, try odd-y (shouldn't happen for valid addresses)
+      pk = secp256k1.Point.fromHex("03" + pubKeyHex);
+    }
+
+    // 3. Build SigmaBoolean bytes: ProveDlog tag (0x08) + compressed pk (33 bytes)
+    const sigmaBooleanBytes = concatBytes(new Uint8Array([0x08]), hexToBytes(compressedPkHex));
+
+    // 4. Parse the Schnorr proof
+    const proofBytes = hexToBytes(proof);
+    let challenge: Uint8Array;
+    let response: Uint8Array;
+
+    if (proofBytes.length >= 65 && proofBytes[0] === 0x01) {
+      // Standard Sigma SchnorrProof: type(0x01) + e(32) + z(32) = 65 bytes
+      challenge = proofBytes.slice(1, 33);
+      response = proofBytes.slice(33, 65);
+    } else if (proofBytes.length >= 64) {
+      // Raw signature without type prefix
+      challenge = proofBytes.slice(0, 32);
+      response = proofBytes.slice(32, 64);
+    } else {
+      return false;
+    }
+
+    // 5. Recover the nonce point R = z*G + e*pk
+    const G = secp256k1.Point.BASE;
+    const e = BigInt("0x" + bytesToHex(challenge));
+    const z = BigInt("0x" + bytesToHex(response));
+
+    const R = G.multiply(z).add(pk.multiply(e));
+
+    // R must not be the point at infinity
+    if (R.equals(secp256k1.Point.ZERO)) return false;
+
+    // 6. Recompute the Fiat-Shamir challenge
+    //    e' = blake2b256(sigmaBoolean_bytes || R_compressed || message_bytes)
+    const RCompressed = R.toBytes(true);
+    const messageBytes = new TextEncoder().encode(message);
+    const preimage = concatBytes(sigmaBooleanBytes, RCompressed, messageBytes);
+    const hash = blake2b(preimage, { dkLen: 32 });
+    const ePrime = modCurveOrder(hash);
+
+    // 7. Compare: accept iff e' == e
+    return bytesToHex(challenge) === bytesToHex(ePrime);
   } catch {
     return false;
   }
-
-  // Stub: accept any structurally valid proof
-  return true;
 }

@@ -1,0 +1,2939 @@
+openapi: "3.0.3"
+info:
+  title: Xergon Agent REST API
+  description: |
+    REST API for the Xergon agent — a decentralized AI inference provider on the Ergo blockchain.
+
+    Provides endpoints for:
+    - Provider status, health, and peer discovery
+    - OpenAI-compatible inference proxying
+    - On-chain provider registration, staking, settlement, and governance
+    - GPU Bazar marketplace (list, rent, claim, refund, extend, rate)
+    - P2P provider-to-provider communication
+    - ERG airdrops for new users
+    - Oracle price feeds (ERG/USD)
+    - Prometheus-compatible metrics
+  version: "0.1.0"
+  contact:
+    name: Xergon Network
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:9099
+    description: Local development agent
+
+tags:
+  - name: Agent
+    description: Agent status, health, peers, dashboard
+  - name: Inference
+    description: OpenAI-compatible inference endpoints
+  - name: Pricing
+    description: Provider pricing configuration
+  - name: Settlement
+    description: Usage settlement engine
+  - name: Airdrop
+    description: ERG airdrops for new users
+  - name: GPU Bazar
+    description: GPU rental marketplace
+  - name: P2P
+    description: Provider-to-provider communication
+  - name: Monitoring
+    description: Health checks, metrics, oracle
+  - name: Providers
+    description: On-chain provider registration
+  - name: Contracts
+    description: SDK-facing contract interaction endpoints
+
+security:
+  - BearerAuth: []
+  - {}  # allow unauthenticated
+
+paths:
+  # ===========================================================================
+  # Agent endpoints (/xergon/*)
+  # ===========================================================================
+  /xergon/status:
+    get:
+      operationId: getAgentStatus
+      tags: [Agent]
+      summary: Get agent status
+      description: Called by other Xergon agents to discover this provider. Returns provider identity, PoNW status, and node health.
+      responses:
+        "200":
+          description: Agent status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StatusResponse"
+
+  /xergon/peers:
+    get:
+      operationId: getAgentPeers
+      tags: [Agent]
+      summary: Get peer discovery state
+      description: Returns the current peer discovery state including all known Xergon peers.
+      responses:
+        "200":
+          description: Peer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeersResponse"
+
+  /xergon/health:
+    get:
+      operationId: getAgentHealth
+      tags: [Agent]
+      summary: Basic liveness check
+      description: Returns a simple health check with provider ID and uptime.
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+
+  /xergon/settlement:
+    get:
+      operationId: getSettlementStatus
+      tags: [Settlement]
+      summary: Settlement engine status and history
+      description: Returns settlement engine status, pending provider count, summary, and recent settlement batches.
+      responses:
+        "200":
+          description: Settlement status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettlementApiResponse"
+
+  /xergon/dashboard:
+    get:
+      operationId: getDashboard
+      tags: [Agent]
+      summary: Aggregated provider dashboard
+      description: >
+        Single endpoint returning all data the frontend needs: node health,
+        peers, AI points, provider score, hardware info, and settlement history.
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardResponse"
+
+  /xergon/usage:
+    post:
+      operationId: reportUsage
+      tags: [Settlement]
+      summary: Receive usage report from relay
+      description: The relay periodically aggregates per-provider usage and POSTs it here so the settlement engine has authoritative cost data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UsageReportRequest"
+      responses:
+        "200":
+          description: Usage recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageReportResponse"
+
+  /xergon/pricing:
+    get:
+      operationId: getPricing
+      tags: [Pricing]
+      summary: Get current pricing configuration
+      description: Returns the provider's per-model pricing in nanoERG per 1M tokens.
+      responses:
+        "200":
+          description: Pricing config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingResponse"
+    post:
+      operationId: updatePricing
+      tags: [Pricing]
+      summary: Update a model price
+      description: Updates the price for a specific model. Persists to the config file on disk.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PricingUpdateRequest"
+      responses:
+        "200":
+          description: Pricing updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricingUpdateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Inference endpoints (/v1/*)
+  # ===========================================================================
+  /v1/chat/completions:
+    post:
+      operationId: chatCompletions
+      tags: [Inference]
+      summary: OpenAI-compatible chat completions
+      description: Proxies chat completion requests to the local LLM backend (Ollama, llama.cpp, etc.). Requires inference to be enabled.
+      security:
+        - InferenceBearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: OpenAI ChatCompletion request body
+              properties:
+                model:
+                  type: string
+                  description: Model identifier
+                messages:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                      content:
+                        type: string
+                temperature:
+                  type: number
+                max_tokens:
+                  type: integer
+                stream:
+                  type: boolean
+                  default: false
+              required: [model, messages]
+      responses:
+        "200":
+          description: Chat completion response (OpenAI-compatible)
+          content:
+            application/json:
+              schema:
+                type: object
+                description: OpenAI ChatCompletion response
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          description: Backend unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /v1/models:
+    get:
+      operationId: listModels
+      tags: [Inference]
+      summary: List available models
+      description: Returns the list of models currently loaded and available for inference.
+      security:
+        - InferenceBearerAuth: []
+      responses:
+        "200":
+          description: Model list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        object:
+                          type: string
+                          enum: [model]
+                        owned_by:
+                          type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ===========================================================================
+  # Settlement API (/api/settlement/*)
+  # ===========================================================================
+  /api/settlement/execute:
+    post:
+      operationId: executeSettlement
+      tags: [Settlement]
+      summary: Execute an on-chain settlement
+      description: Executes a real on-chain settlement transaction spending user staking boxes and paying provider fees.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettlementExecuteRequest"
+      responses:
+        "200":
+          description: Settlement executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tx_id:
+                    type: string
+                  boxes_settled:
+                    type: integer
+                  total_erg_settled:
+                    type: integer
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "409":
+          description: Box already spent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/settlement/boxes:
+    get:
+      operationId: getSettleableBoxes
+      tags: [Settlement]
+      summary: List settleable staking boxes
+      description: Queries the UTXO set for staking boxes that are ready for settlement (past minimum confirmations).
+      responses:
+        "200":
+          description: Settleable boxes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  boxes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SettleableBox"
+                  total_value:
+                    type: integer
+                    format: int64
+                    description: Total value in nanoERG
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Airdrop API (/api/airdrop/*)
+  # ===========================================================================
+  /api/airdrop/request:
+    post:
+      operationId: requestAirdrop
+      tags: [Airdrop]
+      summary: Request an ERG airdrop
+      description: Request an ERG airdrop for a new user wallet. The airdrop service must be enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AirdropRequest"
+      responses:
+        "200":
+          description: Airdrop executed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirdropResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          description: Cooldown active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/airdrop/eligibility:
+    post:
+      operationId: checkAirdropEligibility
+      tags: [Airdrop]
+      summary: Check airdrop eligibility
+      description: Check if a public key is eligible for an airdrop without actually executing it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AirdropRequest"
+      responses:
+        "200":
+          description: Eligibility result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EligibilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/airdrop/stats:
+    get:
+      operationId: getAirdropStats
+      tags: [Airdrop]
+      summary: Get airdrop statistics
+      description: Returns airdrop service statistics including total distributed, budget remaining, and recipient count.
+      responses:
+        "200":
+          description: Airdrop stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AirdropStats"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # ===========================================================================
+  # GPU Bazar API (/api/gpu/*)
+  # ===========================================================================
+  /api/gpu/list:
+    post:
+      operationId: browseGpuListings
+      tags: [GPU Bazar]
+      summary: Browse available GPU listings
+      description: Scan the UTXO set for GPU listing boxes with optional filters.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BrowseListingsRequest"
+      responses:
+        "200":
+          description: Available GPU listings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BrowseListingsResponse"
+        "502":
+          description: Failed to query Ergo node
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/rent:
+    post:
+      operationId: rentGpu
+      tags: [GPU Bazar]
+      summary: Initiate a GPU rental
+      description: Create an on-chain GPU rental transaction for a listed GPU.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RentGpuRequest"
+      responses:
+        "200":
+          description: Rental initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentGpuResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "502":
+          description: Rental transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/claim:
+    post:
+      operationId: claimGpuRental
+      tags: [GPU Bazar]
+      summary: Claim GPU rental payment
+      description: Provider claims payment after the rental period has ended.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClaimRentalRequest"
+      responses:
+        "200":
+          description: Rental claimed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalActionResponse"
+        "502":
+          description: Claim transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/refund:
+    post:
+      operationId: refundGpuRental
+      tags: [GPU Bazar]
+      summary: Refund a GPU rental
+      description: Renter refunds before the deadline height.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefundRentalRequest"
+      responses:
+        "200":
+          description: Rental refunded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalActionResponse"
+        "502":
+          description: Refund transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/my-rentals:
+    get:
+      operationId: getMyGpuRentals
+      tags: [GPU Bazar]
+      summary: List active GPU rentals
+      description: Scans the UTXO set for active GPU rental boxes.
+      responses:
+        "200":
+          description: Active rentals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyRentalsResponse"
+        "502":
+          description: Failed to scan rentals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/extend:
+    post:
+      operationId: extendGpuRental
+      tags: [GPU Bazar]
+      summary: Extend a GPU rental
+      description: Extend an active GPU rental by additional hours.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtendRentalRequest"
+      responses:
+        "200":
+          description: Rental extended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RentalActionResponse"
+        "502":
+          description: Extend transaction failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/my-listings:
+    get:
+      operationId: getMyGpuListings
+      tags: [GPU Bazar]
+      summary: List provider's GPU listings
+      description: Returns all GPU listing boxes owned by this provider.
+      responses:
+        "200":
+          description: Provider listings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyListingsResponse"
+        "502":
+          description: Failed to scan listings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/sessions:
+    get:
+      operationId: getGpuSessions
+      tags: [GPU Bazar]
+      summary: List active metering sessions
+      description: Lists all active GPU rental metering sessions with usage statistics.
+      responses:
+        "200":
+          description: Active sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionsListResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/sessions/{rental_id}:
+    get:
+      operationId: getGpuSession
+      tags: [GPU Bazar]
+      summary: Get usage for a specific session
+      description: Returns the usage snapshot for a specific rental session.
+      parameters:
+        - name: rental_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Rental box ID
+      responses:
+        "200":
+          description: Session usage
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageSnapshot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/tunnel:
+    post:
+      operationId: createGpuTunnel
+      tags: [GPU Bazar]
+      summary: Create an SSH/Jupyter tunnel
+      description: Create a secure tunnel for accessing a rented GPU node.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTunnelRequest"
+      responses:
+        "200":
+          description: Tunnel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveTunnel"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Session not active
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Tunnel creation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/tunnel/{tunnel_id}:
+    delete:
+      operationId: closeGpuTunnel
+      tags: [GPU Bazar]
+      summary: Close a tunnel
+      description: Close an active SSH/Jupyter tunnel.
+      parameters:
+        - name: tunnel_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Tunnel ID
+      responses:
+        "200":
+          description: Tunnel closed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tunnel_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [closed]
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/rate:
+    post:
+      operationId: rateGpuRental
+      tags: [GPU Bazar]
+      summary: Submit a GPU rental rating
+      description: Rate a provider or renter after a GPU rental. Creates a rating box on-chain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitRatingRequest"
+      responses:
+        "200":
+          description: Rating submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitRatingResponse"
+        "502":
+          description: Rating submission failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/gpu/reputation/{pk}:
+    get:
+      operationId: getGpuReputation
+      tags: [GPU Bazar]
+      summary: Get reputation for a public key
+      description: Scans all rating boxes on-chain and computes aggregated reputation including average rating, star breakdown, and provider/renter scores.
+      parameters:
+        - name: pk
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public key hex
+      responses:
+        "200":
+          description: Reputation data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReputationResponse"
+        "502":
+          description: Failed to compute reputation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # ===========================================================================
+  # P2P API (/api/peer/*)
+  # ===========================================================================
+  /api/peer/info:
+    get:
+      operationId: getPeerInfo
+      tags: [P2P]
+      summary: Get this agent's peer info
+      description: Returns this agent's peer info including models, capacity, load factor, and health status.
+      responses:
+        "200":
+          description: Peer agent info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeerAgentInfo"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/peer/models:
+    get:
+      operationId: getPeerModels
+      tags: [P2P]
+      summary: List models on this peer
+      description: Returns the models available on this peer agent.
+      responses:
+        "200":
+          description: Peer models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider_id:
+                    type: string
+                  models:
+                    type: array
+                    items:
+                      type: string
+                  load_factor:
+                    type: number
+                    format: double
+                  is_healthy:
+                    type: boolean
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/peer/model-notify:
+    post:
+      operationId: notifyPeerModel
+      tags: [P2P]
+      summary: Notify peer about a new model
+      description: Receive a model notification from a peer agent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelNotifyRequest"
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [acknowledged]
+                  model:
+                    type: string
+                  provider_id:
+                    type: string
+
+  /api/peer/proxy-request:
+    post:
+      operationId: proxyInferenceRequest
+      tags: [P2P]
+      summary: Proxy an inference request
+      description: Forward an inference request to another provider for load balancing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProxyRequest"
+      responses:
+        "200":
+          description: Proxied response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyResponse"
+        "502":
+          description: Proxy forwarding failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  # ===========================================================================
+  # Monitoring API (/api/*)
+  # ===========================================================================
+  /api/health:
+    get:
+      operationId: getApiHealth
+      tags: [Monitoring]
+      summary: Enhanced health check
+      description: Returns detailed health information including version, uptime, Ergo node connectivity, and loaded models.
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiHealthResponse"
+
+  /api/metrics:
+    get:
+      operationId: getPrometheusMetrics
+      tags: [Monitoring]
+      summary: Prometheus-compatible metrics
+      description: Returns metrics in Prometheus exposition format.
+      responses:
+        "200":
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/oracle/rate:
+    get:
+      operationId: getOracleRate
+      tags: [Monitoring]
+      summary: Get ERG/USD oracle rate
+      description: Returns the current ERG/USD rate from the oracle pool box.
+      responses:
+        "200":
+          description: Oracle rate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OracleRateResponse"
+
+  # ===========================================================================
+  # Provider Registry API (/api/providers/*)
+  # ===========================================================================
+  /api/providers/register:
+    post:
+      operationId: registerProvider
+      tags: [Providers]
+      summary: Register a new provider on-chain
+      description: Register a new provider by minting a provider NFT and creating a Provider Box on the Ergo blockchain.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderRegisterRequest"
+      responses:
+        "200":
+          description: Provider registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderRegisterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/providers/on-chain:
+    get:
+      operationId: listOnChainProviders
+      tags: [Providers]
+      summary: List all on-chain providers
+      description: Queries the UTXO set for all Provider Boxes and returns their parsed state.
+      responses:
+        "200":
+          description: On-chain providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderOnChainListResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /api/providers/{box_id}/update:
+    put:
+      operationId: updateProvider
+      tags: [Providers]
+      summary: Update provider pricing or endpoint
+      description: Update a provider box's pricing and/or endpoint on-chain.
+      parameters:
+        - name: box_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Provider box ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderUpdateRequest"
+      responses:
+        "200":
+          description: Provider updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderUpdateResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # ===========================================================================
+  # Contracts API (/v1/contracts/*) — SDK-facing
+  # ===========================================================================
+  /v1/contracts/provider/register:
+    post:
+      operationId: contractsRegisterProvider
+      tags: [Contracts]
+      summary: Register provider (SDK)
+      description: Register a new provider on-chain via the TypeScript SDK interface.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractsProviderRegisterRequest"
+      responses:
+        "200":
+          description: Provider registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsProviderRegisterResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/provider/status:
+    get:
+      operationId: contractsGetProviderStatus
+      tags: [Contracts]
+      summary: Get provider status (SDK)
+      description: Query provider box status by NFT token ID.
+      parameters:
+        - name: nft_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Provider NFT token ID
+      responses:
+        "200":
+          description: Provider status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsProviderStatusResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/providers:
+    get:
+      operationId: contractsListProviders
+      tags: [Contracts]
+      summary: List on-chain providers (SDK)
+      description: List all registered providers on-chain.
+      responses:
+        "200":
+          description: Provider list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContractsOnChainProviderRaw"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/staking/create:
+    post:
+      operationId: contractsCreateStaking
+      tags: [Contracts]
+      summary: Create staking box (SDK)
+      description: Plan a user staking box creation. Returns a plan with register values for the client to build and sign the transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractsStakingCreateRequest"
+      responses:
+        "200":
+          description: Staking plan ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [plan_ready]
+                  tx_id:
+                    type: string
+                    nullable: true
+                  staking_box_id:
+                    type: string
+                    nullable: true
+                  amount_nanoerg:
+                    type: string
+                  plan:
+                    type: object
+                    description: Transaction plan with ergo_tree, registers, and assets
+                  message:
+                    type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/staking/balance/{user_pk}:
+    get:
+      operationId: contractsGetStakingBalance
+      tags: [Contracts]
+      summary: Get user staking balance (SDK)
+      description: Query a user's total staking balance across all staking boxes.
+      parameters:
+        - name: user_pk
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User public key hex
+      responses:
+        "200":
+          description: Staking balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsStakingBalanceResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/staking/boxes/{user_pk}:
+    get:
+      operationId: contractsGetStakingBoxes
+      tags: [Contracts]
+      summary: Get user staking boxes (SDK)
+      description: Get all staking boxes for a given user with per-box details.
+      parameters:
+        - name: user_pk
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User public key hex
+      responses:
+        "200":
+          description: Staking boxes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsStakingBoxesResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/settlement/build:
+    post:
+      operationId: contractsBuildSettlement
+      tags: [Contracts]
+      summary: Build settlement transaction (SDK)
+      description: Build and execute a settlement transaction spending staking boxes and paying provider fees.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractsSettlementBuildRequest"
+      responses:
+        "200":
+          description: Settlement built
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsSettlementBuildResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "402":
+          $ref: "#/components/responses/PaymentRequired"
+        "409":
+          description: Box already spent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/settlement/settleable:
+    get:
+      operationId: contractsGetSettleableBoxes
+      tags: [Contracts]
+      summary: Get settleable boxes (SDK)
+      description: Get staking boxes that are ready for settlement.
+      responses:
+        "200":
+          description: Settleable boxes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ContractsSettleableBoxRaw"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/oracle/rate:
+    get:
+      operationId: contractsGetOracleRate
+      tags: [Contracts]
+      summary: Get oracle rate (SDK)
+      description: Get the current ERG/USD rate from the oracle pool.
+      responses:
+        "200":
+          description: Oracle rate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsOracleRateResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/oracle/status:
+    get:
+      operationId: contractsGetOracleStatus
+      tags: [Contracts]
+      summary: Get oracle pool status (SDK)
+      description: Get detailed oracle pool status including epoch, rate, box ID, and update height.
+      responses:
+        "200":
+          description: Oracle status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ContractsOracleStatusResponse"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+
+  /v1/contracts/governance/proposal:
+    post:
+      operationId: contractsCreateGovernanceProposal
+      tags: [Contracts]
+      summary: Create governance proposal (SDK)
+      description: Plan a governance proposal creation. Returns a GovernanceTxPlan describing the successor box registers.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractsGovernanceProposalRequest"
+      responses:
+        "200":
+          description: Proposal plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/GovernanceTxPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          description: Plan created but validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/GovernanceTxPlan"
+                  warning:
+                    type: string
+                  validation_errors:
+                    type: array
+                    items:
+                      type: string
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/governance/vote:
+    post:
+      operationId: contractsVoteOnProposal
+      tags: [Contracts]
+      summary: Vote on governance proposal (SDK)
+      description: Plan a vote on an active governance proposal. Returns a GovernanceTxPlan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractsGovernanceVoteRequest"
+      responses:
+        "200":
+          description: Vote plan created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/GovernanceTxPlan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "422":
+          description: Plan created but validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plan:
+                    $ref: "#/components/schemas/GovernanceTxPlan"
+                  warning:
+                    type: string
+                  validation_errors:
+                    type: array
+                    items:
+                      type: string
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /v1/contracts/governance/proposals:
+    get:
+      operationId: contractsGetGovernanceProposals
+      tags: [Contracts]
+      summary: Get governance proposals (SDK)
+      description: Query the current governance box state from the UTXO set. Requires XERGON__GOVERNANCE__BOX_ID env var.
+      responses:
+        "200":
+          description: Governance proposals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  proposals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GovernanceProposalBox"
+                  count:
+                    type: integer
+                  current_height:
+                    type: integer
+                    format: int64
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+# =============================================================================
+# Components
+# =============================================================================
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Management API key for /xergon/* endpoints (configured via api.api_key)
+    InferenceBearerAuth:
+      type: http
+      scheme: bearer
+      description: Inference API key for /v1/* endpoints (configured via inference.api_key)
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Unauthorized — invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ServiceUnavailable:
+      description: Service unavailable or not enabled
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    PaymentRequired:
+      description: Insufficient funds
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    # -------------------------------------------------------------------------
+    # Common error
+    # -------------------------------------------------------------------------
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [type, message, code]
+          properties:
+            type:
+              type: string
+              description: Machine-readable error type (e.g. invalid_request, unauthorized, not_found, rate_limit_error, service_unavailable, internal_error)
+              enum:
+                - invalid_request
+                - unauthorized
+                - forbidden
+                - not_found
+                - rate_limit_error
+                - service_unavailable
+                - internal_error
+                - wallet_locked
+                - box_already_spent
+                - insufficient_funds
+                - settlement_failed
+                - registration_failed
+                - update_failed
+                - plan_failed
+                - validation_failed
+                - node_error
+                - query_failed
+                - not_configured
+                - contract_not_compiled
+                - oracle_unavailable
+                - oracle_disabled
+                - missing_nft_id
+                - missing_gov_box_id
+                - not_provider_box
+                - box_not_found
+                - engine_error
+                - proxy_failed
+            message:
+              type: string
+              description: Human-readable error message
+            code:
+              type: integer
+              description: HTTP status code
+
+    # -------------------------------------------------------------------------
+    # Agent schemas
+    # -------------------------------------------------------------------------
+    StatusResponse:
+      type: object
+      required: [provider, pown_status, pown_health]
+      properties:
+        provider:
+          $ref: "#/components/schemas/ProviderStatus"
+        pown_status:
+          $ref: "#/components/schemas/PownStatus"
+        pown_health:
+          $ref: "#/components/schemas/NodeHealthState"
+
+    ProviderStatus:
+      type: object
+      required: [id, name, region]
+      properties:
+        id:
+          type: string
+          description: Provider identifier (e.g. "Xergon_LT")
+        name:
+          type: string
+          description: Provider display name
+        region:
+          type: string
+          description: Provider region code (e.g. "us-east")
+
+    PownStatus:
+      type: object
+      description: Proof-of-Network-Work status
+      properties:
+        work_points:
+          type: integer
+        ai_enabled:
+          type: boolean
+        ai_total_tokens:
+          type: integer
+          format: int64
+        ai_points:
+          type: integer
+          format: int64
+        ai_model:
+          type: string
+        unique_xergon_peers_seen:
+          type: integer
+
+    NodeHealthState:
+      type: object
+      description: Ergo node health state
+      properties:
+        is_synced:
+          type: boolean
+        node_height:
+          type: integer
+        best_height_local:
+          type: integer
+        peer_count:
+          type: integer
+
+    PeersResponse:
+      type: object
+      required: [peers_checked, unique_xergon_peers_seen, xergon_peers]
+      properties:
+        peers_checked:
+          type: integer
+        unique_xergon_peers_seen:
+          type: integer
+        xergon_peers:
+          type: array
+          items:
+            type: object
+
+    HealthResponse:
+      type: object
+      required: [status, provider_id, uptime_secs]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        provider_id:
+          type: string
+        uptime_secs:
+          type: integer
+          format: int64
+
+    DashboardResponse:
+      type: object
+      required: [node_status, peers, settlements, has_wallet]
+      properties:
+        node_status:
+          $ref: "#/components/schemas/NodeStatusView"
+        peers:
+          type: array
+          items:
+            $ref: "#/components/schemas/PeerView"
+        ai_points:
+          $ref: "#/components/schemas/AiPointsView"
+        provider_score:
+          $ref: "#/components/schemas/ProviderScoreView"
+        hardware:
+          $ref: "#/components/schemas/HardwareView"
+        settlements:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettlementView"
+        has_wallet:
+          type: boolean
+
+    NodeStatusView:
+      type: object
+      properties:
+        synced:
+          type: boolean
+        height:
+          type: integer
+          format: int64
+        best_height:
+          type: integer
+          format: int64
+        peers:
+          type: integer
+        uptime_seconds:
+          type: integer
+          format: int64
+        version:
+          type: string
+        ergo_address:
+          type: string
+
+    PeerView:
+      type: object
+      properties:
+        address:
+          type: string
+        connection_type:
+          type: string
+        height:
+          type: integer
+          format: int64
+        last_seen:
+          type: string
+
+    AiPointsView:
+      type: object
+      properties:
+        total_input_tokens:
+          type: integer
+          format: int64
+        total_output_tokens:
+          type: integer
+          format: int64
+        total_tokens:
+          type: integer
+          format: int64
+        ai_points:
+          type: integer
+          format: int64
+        by_model:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiPointsModelView"
+
+    AiPointsModelView:
+      type: object
+      properties:
+        model:
+          type: string
+        total_tokens:
+          type: integer
+          format: int64
+        points:
+          type: integer
+          format: int64
+        difficulty_multiplier:
+          type: number
+          format: double
+
+    ProviderScoreView:
+      type: object
+      properties:
+        weighted_composite_score:
+          type: number
+          format: double
+        best_composite_score:
+          type: number
+          format: double
+
+    SettlementView:
+      type: object
+      properties:
+        id:
+          type: string
+        tx_id:
+          type: string
+        amount_nanoerg:
+          type: integer
+          format: int64
+        amount_erg:
+          type: number
+          format: double
+        status:
+          type: string
+        created_at:
+          type: string
+        confirmed_at:
+          type: string
+          nullable: true
+
+    HardwareView:
+      type: object
+      properties:
+        devices:
+          type: array
+          items:
+            $ref: "#/components/schemas/HardwareDevice"
+        last_reported_at:
+          type: string
+          nullable: true
+        total_vram_mb:
+          type: integer
+          format: int64
+        cpu_cores:
+          type: integer
+        ram_gb:
+          type: number
+          format: double
+        os:
+          type: string
+
+    HardwareDevice:
+      type: object
+      properties:
+        name:
+          type: string
+        device_name:
+          type: string
+        vendor:
+          type: string
+        vram_bytes:
+          type: integer
+          format: int64
+        vram_mb:
+          type: integer
+          format: int64
+        vram_used_mb:
+          type: integer
+          format: int64
+          nullable: true
+        compute_version:
+          type: string
+        detection_method:
+          type: string
+        is_active:
+          type: boolean
+        driver:
+          type: string
+
+    # -------------------------------------------------------------------------
+    # Pricing schemas
+    # -------------------------------------------------------------------------
+    PricingResponse:
+      type: object
+      required: [default_price_per_1m_tokens, models]
+      properties:
+        default_price_per_1m_tokens:
+          type: integer
+          format: int64
+          description: Default price per 1M tokens in nanoERG
+        models:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+          description: Per-model price overrides (model_id -> nanoERG per 1M tokens)
+
+    PricingUpdateRequest:
+      type: object
+      required: [model, price]
+      properties:
+        model:
+          type: string
+          description: Model identifier
+        price:
+          type: integer
+          format: int64
+          description: Price in nanoERG per 1M tokens
+
+    PricingUpdateResponse:
+      type: object
+      required: [ok, default_price_per_1m_tokens, models]
+      properties:
+        ok:
+          type: boolean
+        default_price_per_1m_tokens:
+          type: integer
+          format: int64
+        models:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+
+    # -------------------------------------------------------------------------
+    # Settlement schemas
+    # -------------------------------------------------------------------------
+    SettlementApiResponse:
+      type: object
+      required: [enabled, pending_providers, recent_batches]
+      properties:
+        enabled:
+          type: boolean
+        summary:
+          type: object
+          nullable: true
+          description: Settlement summary data
+        pending_providers:
+          type: integer
+        recent_batches:
+          type: array
+          items:
+            type: object
+
+    UsageReportRequest:
+      type: object
+      required: [provider_id, ergo_address, tokens_in, tokens_out, cost_nanoerg]
+      properties:
+        provider_id:
+          type: string
+        ergo_address:
+          type: string
+        tokens_in:
+          type: integer
+          format: int64
+        tokens_out:
+          type: integer
+          format: int64
+        cost_nanoerg:
+          type: integer
+          format: int64
+        request_id:
+          type: string
+          nullable: true
+
+    UsageReportResponse:
+      type: object
+      required: [ok, recorded]
+      properties:
+        ok:
+          type: boolean
+        recorded:
+          type: boolean
+
+    SettlementExecuteRequest:
+      type: object
+      required: [provider_address, staking_box_ids, fee_amounts]
+      properties:
+        provider_address:
+          type: string
+          description: Provider's Ergo address
+        staking_box_ids:
+          type: array
+          items:
+            type: string
+          description: Staking box IDs to spend as inputs
+        fee_amounts:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Fee amounts in nanoERG (one per staking box)
+        max_fee_nanoerg:
+          type: integer
+          format: int64
+          default: 1000000
+          description: "Maximum transaction fee in nanoERG (default: 0.001 ERG)"
+
+    SettleableBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        value:
+          type: integer
+          format: int64
+
+    # -------------------------------------------------------------------------
+    # Airdrop schemas
+    # -------------------------------------------------------------------------
+    AirdropRequest:
+      type: object
+      required: [public_key]
+      properties:
+        public_key:
+          type: string
+          description: User's public key in hex (32 bytes)
+
+    AirdropResponse:
+      type: object
+      required: [tx_id, amount_nanoerg, status]
+      properties:
+        tx_id:
+          type: string
+        amount_nanoerg:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [airdropped]
+
+    EligibilityResponse:
+      type: object
+      required: [eligible]
+      properties:
+        eligible:
+          type: boolean
+        reason:
+          type: string
+          nullable: true
+
+    AirdropStats:
+      type: object
+      required: [enabled, total_airdropped_nanoerg, total_airdropped_erg, max_total_nanoerg, max_total_erg, unique_recipients, amount_per_recipient_nanoerg, cooldown_secs]
+      properties:
+        enabled:
+          type: boolean
+        total_airdropped_nanoerg:
+          type: integer
+          format: int64
+        total_airdropped_erg:
+          type: number
+          format: double
+        max_total_nanoerg:
+          type: integer
+          format: int64
+        max_total_erg:
+          type: number
+          format: double
+        unique_recipients:
+          type: integer
+        amount_per_recipient_nanoerg:
+          type: integer
+          format: int64
+        cooldown_secs:
+          type: integer
+          format: int64
+
+    # -------------------------------------------------------------------------
+    # GPU Bazar schemas
+    # -------------------------------------------------------------------------
+    GpuListingBox:
+      type: object
+      description: On-chain GPU listing box
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        listing_nft_id:
+          type: string
+        provider_pk:
+          type: string
+        gpu_type:
+          type: string
+          description: GPU model name (e.g. "RTX 4090", "A100 80GB")
+        vram_gb:
+          type: integer
+        price_per_hour_nanoerg:
+          type: integer
+          format: int64
+        region:
+          type: string
+        available:
+          type: boolean
+        value_nanoerg:
+          type: integer
+          format: int64
+        creation_height:
+          type: integer
+
+    GpuRentalBox:
+      type: object
+      description: On-chain GPU rental box
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        rental_nft_id:
+          type: string
+        provider_pk:
+          type: string
+        renter_pk:
+          type: string
+        deadline_height:
+          type: integer
+        listing_box_id:
+          type: string
+        rental_start_height:
+          type: integer
+        hours_rented:
+          type: integer
+        value_nanoerg:
+          type: integer
+          format: int64
+        creation_height:
+          type: integer
+
+    BrowseListingsRequest:
+      type: object
+      properties:
+        min_vram_gb:
+          type: integer
+          nullable: true
+        max_price_per_hour:
+          type: integer
+          format: int64
+          nullable: true
+        region:
+          type: string
+          nullable: true
+        gpu_type_contains:
+          type: string
+          nullable: true
+
+    BrowseListingsResponse:
+      type: object
+      required: [listings, current_height]
+      properties:
+        listings:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpuListingBox"
+        current_height:
+          type: integer
+
+    RentGpuRequest:
+      type: object
+      required: [listing_box_id, hours, renter_address]
+      properties:
+        listing_box_id:
+          type: string
+        hours:
+          type: integer
+          minimum: 1
+        renter_address:
+          type: string
+
+    RentGpuResponse:
+      type: object
+      required: [tx_id, box_id, rental_nft_id, deadline_height, cost_nanoerg, status]
+      properties:
+        tx_id:
+          type: string
+        box_id:
+          type: string
+        rental_nft_id:
+          type: string
+        deadline_height:
+          type: integer
+        cost_nanoerg:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [rental_initiated]
+
+    ClaimRentalRequest:
+      type: object
+      required: [rental_box_id, provider_address]
+      properties:
+        rental_box_id:
+          type: string
+        provider_address:
+          type: string
+
+    RefundRentalRequest:
+      type: object
+      required: [rental_box_id, renter_address]
+      properties:
+        rental_box_id:
+          type: string
+        renter_address:
+          type: string
+
+    ExtendRentalRequest:
+      type: object
+      required: [rental_box_id, additional_hours]
+      properties:
+        rental_box_id:
+          type: string
+        additional_hours:
+          type: integer
+
+    RentalActionResponse:
+      type: object
+      required: [tx_id, status]
+      properties:
+        tx_id:
+          type: string
+        status:
+          type: string
+          enum: [claimed, refunded, extended]
+
+    MyRentalsResponse:
+      type: object
+      required: [rentals, current_height]
+      properties:
+        rentals:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpuRentalBox"
+        current_height:
+          type: integer
+
+    MyListingsResponse:
+      type: object
+      required: [listings, current_height]
+      properties:
+        listings:
+          type: array
+          items:
+            $ref: "#/components/schemas/GpuListingBox"
+        current_height:
+          type: integer
+
+    UsageSnapshot:
+      type: object
+      properties:
+        rental_box_id:
+          type: string
+        listing_box_id:
+          type: string
+        hours_purchased:
+          type: integer
+          format: uint32
+        hours_used:
+          type: number
+          format: double
+        hours_remaining:
+          type: number
+          format: double
+        erg_spent:
+          type: number
+          format: double
+        erg_total_escrow:
+          type: number
+          format: double
+        is_expired:
+          type: boolean
+        is_active:
+          type: boolean
+        tunnel:
+          $ref: "#/components/schemas/TunnelInfo"
+
+    SessionsListResponse:
+      type: object
+      required: [sessions, active_count]
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageSnapshot"
+        active_count:
+          type: integer
+
+    TunnelType:
+      type: string
+      enum: [ssh, jupyter, custom]
+
+    TunnelInfo:
+      type: object
+      properties:
+        tunnel_id:
+          type: string
+        tunnel_type:
+          $ref: "#/components/schemas/TunnelType"
+        local_port:
+          type: integer
+        remote_host:
+          type: string
+        remote_port:
+          type: integer
+
+    ActiveTunnel:
+      type: object
+      properties:
+        tunnel_id:
+          type: string
+        rental_box_id:
+          type: string
+        local_port:
+          type: integer
+        remote_host:
+          type: string
+        remote_port:
+          type: integer
+        tunnel_type:
+          $ref: "#/components/schemas/TunnelType"
+        active:
+          type: boolean
+        created_at:
+          type: string
+
+    CreateTunnelRequest:
+      type: object
+      required: [rental_id]
+      properties:
+        rental_id:
+          type: string
+        tunnel_type:
+          $ref: "#/components/schemas/TunnelType"
+          default: ssh
+        remote_host:
+          type: string
+          nullable: true
+          default: "127.0.0.1"
+        remote_port:
+          type: integer
+          nullable: true
+
+    SubmitRatingRequest:
+      type: object
+      required: [rental_box_id, rated_pk, role, rating]
+      properties:
+        rental_box_id:
+          type: string
+        rated_pk:
+          type: string
+        role:
+          type: string
+          enum: [provider, renter]
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+          nullable: true
+
+    SubmitRatingResponse:
+      type: object
+      required: [tx_id, box_id, status]
+      properties:
+        tx_id:
+          type: string
+        box_id:
+          type: string
+        status:
+          type: string
+          enum: [submitted]
+
+    ReputationResponse:
+      type: object
+      required: [reputation]
+      properties:
+        reputation:
+          $ref: "#/components/schemas/Reputation"
+
+    Reputation:
+      type: object
+      properties:
+        public_key:
+          type: string
+        total_ratings:
+          type: integer
+        average_rating:
+          type: number
+          format: double
+        one_star:
+          type: integer
+        two_star:
+          type: integer
+        three_star:
+          type: integer
+        four_star:
+          type: integer
+        five_star:
+          type: integer
+        provider_reputation:
+          type: number
+          format: double
+          nullable: true
+        provider_rating_count:
+          type: integer
+        renter_reputation:
+          type: number
+          format: double
+          nullable: true
+        renter_rating_count:
+          type: integer
+
+    # -------------------------------------------------------------------------
+    # P2P schemas
+    # -------------------------------------------------------------------------
+    PeerAgentInfo:
+      type: object
+      properties:
+        provider_id:
+          type: string
+        provider_name:
+          type: string
+        region:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        endpoint:
+          type: string
+        load_factor:
+          type: number
+          format: double
+        pown_score:
+          type: number
+          format: double
+        is_healthy:
+          type: boolean
+        total_tokens:
+          type: integer
+          format: int64
+        total_requests:
+          type: integer
+          format: int64
+        timestamp:
+          type: string
+          format: date-time
+
+    ModelNotifyRequest:
+      type: object
+      required: [model_name, provider_endpoint, provider_id]
+      properties:
+        model_name:
+          type: string
+        provider_endpoint:
+          type: string
+        provider_id:
+          type: string
+
+    ProxyRequest:
+      type: object
+      required: [request_body, target_endpoint, timeout_secs]
+      properties:
+        request_body:
+          type: object
+          description: OpenAI-compatible inference request body
+        target_endpoint:
+          type: string
+        timeout_secs:
+          type: integer
+          format: uint32
+
+    ProxyResponse:
+      type: object
+      properties:
+        response_body:
+          type: object
+        target_endpoint:
+          type: string
+        latency_ms:
+          type: integer
+          format: int64
+
+    # -------------------------------------------------------------------------
+    # Monitoring schemas
+    # -------------------------------------------------------------------------
+    ApiHealthResponse:
+      type: object
+      required: [status, version, uptime_secs, ergo_node_connected, inference_backend, models_loaded]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        version:
+          type: string
+        uptime_secs:
+          type: integer
+          format: int64
+        ergo_node_connected:
+          type: boolean
+        inference_backend:
+          type: string
+          enum: [ollama, none]
+        models_loaded:
+          type: array
+          items:
+            type: string
+
+    OracleRateResponse:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+        erg_usd:
+          type: number
+          format: double
+          nullable: true
+        rate_raw:
+          type: integer
+          format: int64
+          nullable: true
+        epoch:
+          type: integer
+          nullable: true
+        box_id:
+          type: string
+          nullable: true
+        fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # -------------------------------------------------------------------------
+    # Provider registry schemas
+    # -------------------------------------------------------------------------
+    ProviderRegisterRequest:
+      type: object
+      required: [name, endpoint, price_per_token]
+      properties:
+        name:
+          type: string
+        endpoint:
+          type: string
+        price_per_token:
+          type: integer
+          format: int64
+        provider_pk_hex:
+          type: string
+          default: ""
+          description: Provider PK hex (33 bytes). If empty, uses config value.
+
+    ProviderRegisterResponse:
+      type: object
+      required: [ok, tx_id, provider_nft_id, provider_box_id]
+      properties:
+        ok:
+          type: boolean
+        tx_id:
+          type: string
+        provider_nft_id:
+          type: string
+        provider_box_id:
+          type: string
+
+    ProviderOnChainListResponse:
+      type: object
+      required: [providers, count]
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/OnChainProvider"
+        count:
+          type: integer
+
+    OnChainProvider:
+      type: object
+      properties:
+        box_id:
+          type: string
+        nft_token_id:
+          type: string
+        endpoint:
+          type: string
+        value_nanoerg:
+          type: integer
+          format: int64
+        provider_pk:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        region:
+          type: string
+
+    ProviderUpdateRequest:
+      type: object
+      properties:
+        price_per_token:
+          type: integer
+          format: int64
+          nullable: true
+        endpoint:
+          type: string
+          nullable: true
+
+    ProviderUpdateResponse:
+      type: object
+      required: [ok, tx_id, new_box_id]
+      properties:
+        ok:
+          type: boolean
+        tx_id:
+          type: string
+        new_box_id:
+          type: string
+
+    # -------------------------------------------------------------------------
+    # Contracts API schemas (SDK-facing)
+    # -------------------------------------------------------------------------
+    ContractsProviderRegisterRequest:
+      type: object
+      required: [provider_name, region, endpoint, models, ergo_address, provider_pk_hex]
+      properties:
+        provider_name:
+          type: string
+        region:
+          type: string
+        endpoint:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        ergo_address:
+          type: string
+        provider_pk_hex:
+          type: string
+
+    ContractsProviderRegisterResponse:
+      type: object
+      required: [tx_id, provider_nft_id, provider_box_id]
+      properties:
+        tx_id:
+          type: string
+        provider_nft_id:
+          type: string
+        provider_box_id:
+          type: string
+
+    ContractsProviderStatusResponse:
+      type: object
+      required: [box_id, provider_nft_id, provider_name, endpoint, price_per_token, min_stake, value, height, confirmations]
+      properties:
+        box_id:
+          type: string
+        provider_nft_id:
+          type: string
+        provider_name:
+          type: string
+        endpoint:
+          type: string
+        price_per_token:
+          type: string
+        min_stake:
+          type: string
+        value:
+          type: string
+        height:
+          type: integer
+        confirmations:
+          type: integer
+          format: uint32
+
+    ContractsOnChainProviderRaw:
+      type: object
+      properties:
+        box_id:
+          type: string
+        provider_nft_id:
+          type: string
+        provider_name:
+          type: string
+        endpoint:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        region:
+          type: string
+        value_nanoerg:
+          type: string
+        active:
+          type: boolean
+
+    ContractsStakingCreateRequest:
+      type: object
+      required: [user_pk_hex, amount_nanoerg]
+      properties:
+        user_pk_hex:
+          type: string
+        amount_nanoerg:
+          type: string
+          description: Amount in nanoERG as string
+
+    ContractsStakingBalanceResponse:
+      type: object
+      required: [user_pk_hex, total_balance_nanoerg, staking_box_count, boxes]
+      properties:
+        user_pk_hex:
+          type: string
+        total_balance_nanoerg:
+          type: string
+        staking_box_count:
+          type: integer
+          format: uint32
+        boxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContractsStakingBoxRaw"
+
+    ContractsStakingBoxesResponse:
+      type: object
+      required: [user_pk_hex, total_balance_nanoerg, staking_box_count, boxes]
+      properties:
+        user_pk_hex:
+          type: string
+        total_balance_nanoerg:
+          type: string
+        staking_box_count:
+          type: integer
+          format: uint32
+        boxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ContractsStakingBoxRaw"
+
+    ContractsStakingBoxRaw:
+      type: object
+      properties:
+        box_id:
+          type: string
+        value_nanoerg:
+          type: string
+        creation_height:
+          type: integer
+        confirmations:
+          type: integer
+          format: uint32
+
+    ContractsSettlementBuildRequest:
+      type: object
+      required: [staking_box_ids, fee_amounts, provider_address, max_fee_nanoerg]
+      properties:
+        staking_box_ids:
+          type: array
+          items:
+            type: string
+        fee_amounts:
+          type: array
+          items:
+            type: string
+        provider_address:
+          type: string
+        max_fee_nanoerg:
+          type: string
+
+    ContractsSettlementBuildResponse:
+      type: object
+      required: [unsigned_tx, total_fees_nanoerg, net_settlement_nanoerg, estimated_tx_fee]
+      properties:
+        unsigned_tx:
+          type: object
+        total_fees_nanoerg:
+          type: string
+        net_settlement_nanoerg:
+          type: string
+        estimated_tx_fee:
+          type: string
+
+    ContractsSettleableBoxRaw:
+      type: object
+      properties:
+        box_id:
+          type: string
+        value_nanoerg:
+          type: string
+        user_pk_hex:
+          type: string
+        provider_nft_id:
+          type: string
+        fee_amount_nanoerg:
+          type: string
+
+    ContractsOracleRateResponse:
+      type: object
+      required: [rate, epoch, box_id, erg_usd]
+      properties:
+        rate:
+          type: string
+        epoch:
+          type: integer
+        box_id:
+          type: string
+        erg_usd:
+          type: number
+          format: double
+
+    ContractsOracleStatusResponse:
+      type: object
+      required: [epoch, erg_usd, rate, pool_box_id, last_update_height]
+      properties:
+        epoch:
+          type: integer
+        erg_usd:
+          type: number
+          format: double
+        rate:
+          type: string
+        pool_box_id:
+          type: string
+        last_update_height:
+          type: integer
+
+    # -------------------------------------------------------------------------
+    # Governance schemas
+    # -------------------------------------------------------------------------
+    GovernanceProposalBox:
+      type: object
+      description: On-chain governance proposal box
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        gov_nft_id:
+          type: string
+        proposal_count:
+          type: integer
+        active_proposal_id:
+          type: integer
+        voting_threshold:
+          type: integer
+        total_voters:
+          type: integer
+        proposal_end_height:
+          type: integer
+        proposal_data_hash:
+          type: string
+        value:
+          type: string
+        creation_height:
+          type: integer
+
+    GovernanceOp:
+      type: string
+      enum: [CreateProposal, Vote, Execute, Close]
+
+    GovernanceOutputRegisters:
+      type: object
+      properties:
+        r4_proposal_count:
+          type: integer
+        r5_active_proposal_id:
+          type: integer
+        r6_voting_threshold:
+          type: integer
+        r7_total_voters:
+          type: integer
+        r8_proposal_end_height:
+          type: integer
+        r9_proposal_data_hash:
+          type: string
+
+    GovernanceTxPlan:
+      type: object
+      description: A complete plan describing a governance state transition
+      properties:
+        op:
+          $ref: "#/components/schemas/GovernanceOp"
+        gov_box_id:
+          type: string
+        gov_nft_id:
+          type: string
+        current_height:
+          type: integer
+        current_state:
+          $ref: "#/components/schemas/GovernanceProposalBox"
+        output_registers:
+          $ref: "#/components/schemas/GovernanceOutputRegisters"
+        description:
+          type: string
+        is_valid:
+          type: boolean
+        validation_errors:
+          type: array
+          items:
+            type: string
+
+    ContractsGovernanceProposalRequest:
+      type: object
+      required: [gov_box_id, threshold, total_voters, end_height]
+      properties:
+        gov_box_id:
+          type: string
+        threshold:
+          type: integer
+          minimum: 1
+        total_voters:
+          type: integer
+          minimum: 1
+        end_height:
+          type: integer
+          minimum: 1
+        proposal_data:
+          type: string
+          default: ""
+        proposal_type:
+          type: string
+          default: ""
+        title:
+          type: string
+          default: ""
+        description:
+          type: string
+          default: ""
+        proposer_pk_hex:
+          type: string
+          default: ""
+
+    ContractsGovernanceVoteRequest:
+      type: object
+      required: [gov_box_id, voter_pk_hex]
+      properties:
+        gov_box_id:
+          type: string
+        voter_pk_hex:
+          type: string
+          description: Voter's compressed secp256k1 public key (hex)
+
+    # -------------------------------------------------------------------------
+    # On-chain box types (chain/types.rs)
+    # -------------------------------------------------------------------------
+    ProviderBox:
+      type: object
+      description: On-chain Provider Box
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        provider_nft_id:
+          type: string
+        provider_pk:
+          type: string
+        endpoint:
+          type: string
+        models:
+          type: array
+          items:
+            type: string
+        model_pricing:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        pown_score:
+          type: integer
+        last_heartbeat:
+          type: integer
+        region:
+          type: string
+        value:
+          type: string
+        creation_height:
+          type: integer
+        is_active:
+          type: boolean
+
+    UserStakingBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        user_pk:
+          type: string
+        balance_nanoerg:
+          type: integer
+          format: int64
+        creation_height:
+          type: integer
+
+    UsageProofBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        user_pk_hash:
+          type: string
+        provider_nft_id:
+          type: string
+        model:
+          type: string
+        token_count:
+          type: integer
+        timestamp:
+          type: integer
+          format: int64
+        creation_height:
+          type: integer
+
+    ProviderSlashingBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        slash_token_id:
+          type: string
+        provider_pk:
+          type: string
+        min_uptime_percent:
+          type: integer
+        stake_amount:
+          type: integer
+          format: int64
+        challenge_window_end:
+          type: integer
+        slashed_flag:
+          type: integer
+        value:
+          type: string
+        creation_height:
+          type: integer
+
+    TreasuryBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        network_nft_id:
+          type: string
+        total_airdropped:
+          type: integer
+          format: int64
+        value:
+          type: string
+        creation_height:
+          type: integer
+
+    PaymentBridgeBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        invoice_nft_id:
+          type: string
+        buyer_pk_hex:
+          type: string
+        provider_pk_hex:
+          type: string
+        amount_nanoerg:
+          type: integer
+          format: int64
+        foreign_tx_id:
+          type: string
+        foreign_chain:
+          type: integer
+          description: "0=BTC, 1=ETH, 2=ADA"
+        bridge_pk_hex:
+          type: string
+        value:
+          type: string
+        creation_height:
+          type: integer
+
+    GpuRatingBox:
+      type: object
+      properties:
+        box_id:
+          type: string
+        tx_id:
+          type: string
+        rater_pk:
+          type: string
+        rated_pk:
+          type: string
+        role:
+          type: string
+        rental_box_id:
+          type: string
+        rating:
+          type: integer
+        comment_hash:
+          type: string
+        value_nanoerg:
+          type: integer
+          format: int64
+        creation_height:
+          type: integer

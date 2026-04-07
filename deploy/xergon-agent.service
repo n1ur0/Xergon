@@ -1,0 +1,61 @@
+# =============================================================================
+# Xergon Agent -- systemd service unit
+# =============================================================================
+#
+# Install:
+#   sudo cp deploy/xergon-agent.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable xergon-agent
+#   sudo systemctl start xergon-agent
+#
+# Logs:
+#   journalctl -u xergon-agent -f
+#
+# The agent connects to an Ergo node and registers as an inference provider
+# on the Xergon relay. Requires a config.toml at /etc/xergon/config.toml
+# (or pass --config /path/to/config.toml below).
+# =============================================================================
+
+[Unit]
+Description=Xergon Agent -- PoNW scoring and inference provider sidecar
+Documentation=https://github.com/n1ur0/Xergon-Network
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=xergon
+Group=xergon
+ExecStart=/usr/local/bin/xergon-agent --config /etc/xergon/config.toml
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+# Watchdog: agent must respond to health probes
+WatchdogSec=120
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/xergon /var/log/xergon
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=4G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xergon-agent
+Environment=RUST_LOG=xergon_agent=info
+
+[Install]
+WantedBy=multi-user.target

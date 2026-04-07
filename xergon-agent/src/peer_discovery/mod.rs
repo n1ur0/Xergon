@@ -70,16 +70,15 @@ pub struct PownStatusInfo {
 /// An Ergo peer as reported by the node's REST API
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[allow(dead_code)] // TODO: fields will be used for peer info display
 pub struct ErgoPeer {
     pub address: Option<String>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from node API; reserved for peer info display
     pub name: Option<String>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from node API; reserved for peer info display
     pub last_message: Option<i64>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from node API; reserved for peer info display
     pub last_handshake: Option<i64>,
-    #[allow(dead_code)]
+    #[allow(dead_code)] // Deserialized from node API; reserved for peer info display
     pub connection_type: Option<String>,
     #[serde(default)]
     pub declared_address: Option<String>,
@@ -224,59 +223,6 @@ impl PeerDiscovery {
         let host = clean.split(':').next()?;
 
         host.parse::<IpAddr>().ok()
-    }
-
-    #[allow(dead_code)] // TODO: will be used for active peer probing
-    async fn probe_xergon_agent(&self, ip: IpAddr) -> Result<(XergonPeer, RemoteXergonStatus)> {
-        let addr = SocketAddr::new(ip, self.config.xergon_agent_port);
-        let url = format!("http://{}/xergon/status", addr);
-
-        debug!(peer_addr = %addr, "Probing peer for Xergon agent");
-
-        let resp = self
-            .http_client
-            .get(&url)
-            .header("X-Xergon-Probe", "1")
-            .send()
-            .await
-            .context("Probe request failed")?;
-
-        if !resp.status().is_success() {
-            anyhow::bail!("Non-success status: {}", resp.status());
-        }
-
-        let status: RemoteXergonStatus = resp
-            .json()
-            .await
-            .context("Failed to parse Xergon status response")?;
-
-        let provider = status
-            .provider
-            .as_ref()
-            .context("Missing provider field in Xergon status")?;
-        let pown = status
-            .pown_status
-            .as_ref()
-            .context("Missing pown_status field in Xergon status")?;
-
-        // Validate that node_id is a valid 64-char hex string (SHA-256)
-        if pown.node_id.len() != 64 || hex::decode(&pown.node_id).is_err() {
-            anyhow::bail!("Invalid node_id format from peer");
-        }
-
-        let peer = XergonPeer {
-            provider_id: provider.id.clone(),
-            provider_name: provider.name.clone(),
-            region: provider.region.clone(),
-            ergo_address: pown.ergo_address.clone(),
-            node_id: pown.node_id.clone(),
-            discovered_addr: addr,
-            first_seen: chrono::Utc::now(),
-            last_seen: chrono::Utc::now(),
-            confirmations: 1,
-        };
-
-        Ok((peer, status))
     }
 
     /// Run a single discovery cycle

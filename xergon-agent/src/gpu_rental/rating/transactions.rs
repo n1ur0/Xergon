@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use tracing::{debug, info};
 
 use crate::chain::client::ErgoNodeClient;
-use crate::chain::transactions::{encode_coll_byte, encode_int, encode_string};
+use crate::chain::transactions::{encode_coll_byte, encode_group_element, encode_int, encode_string};
 
 /// Minimum ERG value for a rating box (nanoERG).
 const RATING_BOX_MIN_VALUE: u64 = 100_000; // 0.0001 ERG (lightweight)
@@ -24,6 +24,7 @@ pub async fn submit_rating_tx(
     rating_tree_hex: &str,
     rental_box_id: &str,
     rated_pk: &str,
+    rater_pk_hex: &str,
     role: &str,
     rating: i32,
     comment: Option<&str>,
@@ -40,10 +41,13 @@ pub async fn submit_rating_tx(
         anyhow::bail!("Role must be 'provider' or 'renter', got '{}'", role);
     }
 
-    // R4: Rater PK -- implicit via the P2PK address (wallet signing handles this)
-    // R5: Rated PK -- encode the rated person's public key
-    let rated_pk_bytes = hex::decode(rated_pk).unwrap_or_else(|_| rated_pk.as_bytes().to_vec());
-    let r5_hex = encode_coll_byte(&rated_pk_bytes);
+    // R4: Rater PK (GroupElement) -- who submitted this rating
+    let rater_pk_bytes = hex::decode(rater_pk_hex).context("Invalid rater PK hex")?;
+    let r4_hex = encode_group_element(&rater_pk_bytes).context("Rater PK must be 33 bytes")?;
+
+    // R5: Rated PK (GroupElement) -- who is being rated
+    let rated_pk_bytes = hex::decode(rated_pk).context("Invalid rated PK hex")?;
+    let r5_hex = encode_group_element(&rated_pk_bytes).context("Rated PK must be 33 bytes")?;
 
     // R6: Role (String)
     let role_hex = encode_string(role);
@@ -72,7 +76,8 @@ pub async fn submit_rating_tx(
             "value": RATING_BOX_MIN_VALUE.to_string(),
             "assets": [],
             "registers": {
-                "R5": r5_hex,
+                "R4": r4_hex,
+                "R5": r5_hex,  // GroupElement (ratedPK)
                 "R6": role_hex,
                 "R7": r7_hex,
                 "R8": rating_hex,

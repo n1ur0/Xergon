@@ -1,0 +1,348 @@
+/* =========================================================================
+   Mobile-first CSS overrides for Xergon Marketplace
+   ========================================================================= */
+
+/* ── Breakpoint definitions ── */
+
+/* Extra small (320px) */
+@media (max-width: 319px) {
+  :root {
+    --mobile-font-size-xs: 0.6875rem;   /* 11px */
+    --mobile-font-size-sm: 0.75rem;     /* 12px */
+    --mobile-font-size-base: 0.8125rem; /* 13px */
+    --mobile-spacing-xs: 0.25rem;
+    --mobile-spacing-sm: 0.5rem;
+    --mobile-spacing-md: 0.75rem;
+    --mobile-spacing-lg: 1rem;
+  }
+}
+
+/* Small (375px) */
+@media (min-width: 320px) and (max-width: 374px) {
+  :root {
+    --mobile-font-size-xs: 0.6875rem;
+    --mobile-font-size-sm: 0.8125rem;
+    --mobile-font-size-base: 0.875rem;
+    --mobile-spacing-xs: 0.375rem;
+    --mobile-spacing-sm: 0.625rem;
+    --mobile-spacing-md: 0.875rem;
+    --mobile-spacing-lg: 1.125rem;
+  }
+}
+
+/* Medium (414px) */
+@media (min-width: 375px) and (max-width: 413px) {
+  :root {
+    --mobile-font-size-xs: 0.75rem;
+    --mobile-font-size-sm: 0.875rem;
+    --mobile-font-size-base: 0.9375rem;
+    --mobile-spacing-xs: 0.5rem;
+    --mobile-spacing-sm: 0.75rem;
+    --mobile-spacing-md: 1rem;
+    --mobile-spacing-lg: 1.25rem;
+  }
+}
+
+/* Large mobile (414px+) */
+@media (min-width: 414px) and (max-width: 767px) {
+  :root {
+    --mobile-font-size-xs: 0.75rem;
+    --mobile-font-size-sm: 0.875rem;
+    --mobile-font-size-base: 1rem;
+    --mobile-spacing-xs: 0.5rem;
+    --mobile-spacing-sm: 0.75rem;
+    --mobile-spacing-md: 1rem;
+    --mobile-spacing-lg: 1.5rem;
+  }
+}
+
+/* Tablet (768px+) */
+@media (min-width: 768px) {
+  :root {
+    --mobile-font-size-xs: 0.75rem;
+    --mobile-font-size-sm: 0.875rem;
+    --mobile-font-size-base: 1rem;
+    --mobile-spacing-xs: 0.5rem;
+    --mobile-spacing-sm: 0.75rem;
+    --mobile-spacing-md: 1rem;
+    --mobile-spacing-lg: 1.5rem;
+  }
+}
+
+/* ── Safe area insets for notched devices ── */
+
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Layout: account for bottom nav and safe areas */
+.mobile-layout {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-content {
+  flex: 1;
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* ── Touch-specific styles ── */
+
+/* Increase tap targets for touch devices */
+@media (pointer: coarse) {
+  /* Minimum 44px tap targets per Apple HIG */
+  button,
+  a,
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exception: inline buttons that are clearly part of a larger group */
+  .btn-sm,
+  .badge,
+  [data-small-target] {
+    min-height: 32px;
+    min-width: 32px;
+  }
+
+  /* Remove hover effects on touch (they cause sticky states) */
+  @media (hover: none) {
+    .hover\:bg-surface-100:hover,
+    .hover\:bg-surface-50:hover {
+      background-color: transparent;
+    }
+
+    /* Use active state instead */
+    button:active,
+    a:active {
+      opacity: 0.7;
+      transition: opacity 0.1s;
+    }
+  }
+
+  /* Prevent text selection on interactive elements */
+  button,
+  [role="button"],
+  nav {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Larger touch spacing for tables */
+  td,
+  th {
+    padding: 0.75rem 0.5rem;
+  }
+}
+
+/* ── Pull-to-refresh handling ── */
+
+/* Prevent overscroll bounce on iOS (already in globals.css but reinforce for mobile layout) */
+.mobile-layout {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile typography ── */
+
+@media (max-width: 767px) {
+  h1 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+
+  h2 {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+  }
+
+  h3 {
+    font-size: 1.125rem;
+    line-height: 1.5rem;
+  }
+
+  body {
+    font-size: var(--mobile-font-size-base, 1rem);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  /* Prevent iOS zoom on input focus (font-size >= 16px) */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Small text exception */
+  input[type="text"].text-xs,
+  input[type="search"].text-xs {
+    font-size: 14px !important;
+  }
+}
+
+/* ── Mobile spacing ── */
+
+@media (max-width: 767px) {
+  .mobile-safe-padding {
+    padding-left: var(--mobile-spacing-md, 1rem);
+    padding-right: var(--mobile-spacing-md, 1rem);
+  }
+
+  /* Reduce vertical spacing on mobile */
+  .mobile-compact {
+    gap: var(--mobile-spacing-sm, 0.75rem);
+  }
+}
+
+/* ── Mobile-specific grid fixes ── */
+
+@media (max-width: 374px) {
+  /* Single column for extra small screens */
+  .grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (min-width: 375px) and (max-width: 413px) {
+  .sm\:grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ── Horizontal scroll containers ── */
+
+.scroll-container {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Bottom nav safe area ── */
+
+@media (max-width: 767px) {
+  /* Add bottom padding for pages with bottom nav */
+  main {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Fixed bottom elements (toasts, etc.) need to clear the bottom nav */
+  .mobile-bottom-clear {
+    bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
+
+/* ── Dark mode mobile overrides ── */
+
+.dark {
+  .mobile-layout {
+    background-color: var(--color-surface-950);
+  }
+}
+
+/* ── Responsive table wrapper ── */
+
+@media (max-width: 767px) {
+  .table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 0 calc(-1 * var(--mobile-spacing-md, 1rem));
+    padding: 0 var(--mobile-spacing-md, 1rem);
+  }
+}
+
+/* ── Mobile card layout ── */
+
+@media (max-width: 767px) {
+  .mobile-card-stack > * {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .mobile-card-stack > *:first-child {
+    border-radius: 0.75rem 0.75rem 0 0;
+    border-left: 1px solid var(--color-surface-200);
+    border-right: 1px solid var(--color-surface-200);
+  }
+
+  .mobile-card-stack > *:last-child {
+    border-radius: 0 0 0.75rem 0.75rem;
+    border-left: 1px solid var(--color-surface-200);
+    border-right: 1px solid var(--color-surface-200);
+    border-bottom: 1px solid var(--color-surface-200);
+  }
+}
+
+/* ── Animation performance for mobile ── */
+
+@media (max-width: 767px) {
+  /* Reduce animation complexity on mobile */
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .skeleton-shimmer {
+    animation: shimmer 2.4s ease-in-out infinite;
+  }
+
+  /* Use GPU-accelerated properties for transitions */
+  .mobile-transition {
+    transform: translateZ(0);
+    will-change: transform;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+  }
+}
+
+/* ── Notch / Dynamic Island considerations ── */
+
+@supports (padding: env(safe-area-inset-top)) {
+  .mobile-notch-spacer {
+    height: env(safe-area-inset-top);
+    min-height: env(safe-area-inset-top);
+  }
+
+  .mobile-home-indicator-spacer {
+    height: env(safe-area-inset-bottom);
+    min-height: env(safe-area-inset-bottom);
+  }
+}
+
+/* ── Landscape mode adjustments ── */
+
+@media (max-width: 767px) and (orientation: landscape) {
+  .mobile-content {
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Reduce font sizes slightly in landscape */
+  h1 {
+    font-size: 1.25rem;
+  }
+
+  h2 {
+    font-size: 1.125rem;
+  }
+}

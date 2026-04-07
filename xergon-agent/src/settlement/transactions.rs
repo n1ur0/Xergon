@@ -11,7 +11,7 @@
 
 use anyhow::{Context, Result};
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{info, warn};
 
 use super::models::{PaymentStatus, SettlementBatch};
@@ -30,16 +30,6 @@ struct ErgoPaymentRequest {
     fee: Option<u64>,
 }
 
-/// Ergo payment response from /wallet/payment.
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)] // TODO: will be used for payment status tracking
-struct ErgoPaymentResponse {
-    pub tx_id: String,
-    pub error: Option<u16>,
-    pub detail: Option<String>,
-}
-
 /// Ergo transaction service.
 pub struct TransactionService {
     ergo_rest_url: String,
@@ -51,6 +41,11 @@ pub struct TransactionService {
 }
 
 impl TransactionService {
+    /// Get the Ergo node REST URL this service is configured with.
+    pub fn node_url(&self) -> &str {
+        &self.ergo_rest_url
+    }
+
     pub fn new(ergo_rest_url: String) -> Result<Self> {
         let http_client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))

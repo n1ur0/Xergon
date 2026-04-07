@@ -13,12 +13,53 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
 
 use crate::chain::ChainProvider;
 use crate::config::RelayConfig;
 use crate::demand::DemandTracker;
+
+// ---------------------------------------------------------------------------
+// Circuit Breaker
+// ---------------------------------------------------------------------------
+
+/// Circuit breaker state for a provider.
+///
+/// - **Closed**: Normal operation — requests flow through.
+/// - **Open**: Provider is failing — requests are skipped (routed elsewhere).
+/// - **HalfOpen**: Probing recovery — a limited number of requests are allowed
+///   through to test if the provider has recovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CircuitState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+impl std::fmt::Display for CircuitState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CircuitState::Closed => write!(f, "Closed"),
+            CircuitState::Open => write!(f, "Open"),
+            CircuitState::HalfOpen => write!(f, "HalfOpen"),
+        }
+    }
+}
+
+/// A sticky session entry: maps a session key to a provider endpoint.
+#[derive(Debug, Clone)]
+struct StickySession {
+    endpoint: String,
+    created_at: Instant,
+}
+
+impl StickySession {
+    fn is_expired(&self, ttl: Duration) -> bool {
+        self.created_at.elapsed() > ttl
+    }
+}
 
 /// Status returned by a xergon-agent at /xergon/status
 #[allow(dead_code)] // TODO: fields will be used for provider dashboard display
@@ -61,7 +102,7 @@ pub struct AgentHealthInfo {
 }
 
 /// A provider that the relay knows about
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Provider {
     /// The base URL of this provider (e.g. "http://1.2.3.4:9099")
     pub endpoint: String,
@@ -87,6 +128,222 @@ pub struct Provider {
     pub model_pricing: HashMap<String, u64>,
     /// Models this provider serves (populated from chain sync)
     pub served_models: Vec<String>,
+    /// On-chain PoNW reputation score (0-1000, from R7 register)
+    pub pown_score: i32,
+    /// Provider region (from on-chain R9 register or /xergon/status)
+    pub region: Option<String>,
+    // -- Circuit Breaker fields --
+    /// Current circuit breaker state
+    pub circuit_state: CircuitState,
+    /// When the circuit was opened (used to determine when to transition to HalfOpen)
+    pub circuit_opened_at: Option<Instant>,
+    /// Number of probe requests currently allowed/running in HalfOpen state
+    pub half_open_probes: Arc<AtomicU32>,
+    // -- Latency tracking for Health Score V2 --
+    /// Recent latency samples from actual proxy requests (not just health polls)
+    pub latency_samples: Vec<Duration>,
+    /// When the last proxied request was made to this provider
+    pub last_request_at: Instant,
+    /// Total proxied requests to this provider
+    pub total_requests: u64,
+    /// Total failed proxied requests to this provider
+    pub failed_requests: u64,
+    // -- Admin state fields --
+    /// Whether this provider has been administratively suspended (not routed to)
+    pub suspended: std::sync::atomic::AtomicBool,
+    /// Whether this provider is draining (finish in-flight, reject new)
+    pub draining: std::sync::atomic::AtomicBool,
+}
+
+impl Clone for Provider {
+    fn clone(&self) -> Self {
+        Self {
+            endpoint: self.endpoint.clone(),
+            status: self.status.clone(),
+            latency_ms: self.latency_ms,
+            active_requests: Arc::clone(&self.active_requests),
+            is_healthy: self.is_healthy,
+            last_healthy_at: self.last_healthy_at,
+            consecutive_failures: self.consecutive_failures,
+            last_health_check: self.last_health_check,
+            last_successful_check: self.last_successful_check,
+            from_chain: self.from_chain,
+            model_pricing: self.model_pricing.clone(),
+            served_models: self.served_models.clone(),
+            pown_score: self.pown_score,
+            region: self.region.clone(),
+            circuit_state: self.circuit_state,
+            circuit_opened_at: self.circuit_opened_at,
+            half_open_probes: Arc::clone(&self.half_open_probes),
+            latency_samples: self.latency_samples.clone(),
+            last_request_at: self.last_request_at,
+            total_requests: self.total_requests,
+            failed_requests: self.failed_requests,
+            suspended: std::sync::atomic::AtomicBool::new(self.suspended.load(Ordering::Relaxed)),
+            draining: std::sync::atomic::AtomicBool::new(self.draining.load(Ordering::Relaxed)),
+        }
+    }
+}
+
+impl Provider {
+    /// Record a latency sample from a proxied request.
+    /// Maintains a bounded sliding window of samples (configurable max).
+    pub fn record_latency(&mut self, duration: Duration, max_samples: usize) {
+        self.latency_samples.push(duration);
+        // Keep only the most recent samples
+        if self.latency_samples.len() > max_samples {
+            let excess = self.latency_samples.len() - max_samples;
+            self.latency_samples.drain(..excess);
+        }
+        self.last_request_at = Instant::now();
+    }
+
+    /// Compute average latency from samples. Returns None if no samples.
+    pub fn avg_latency(&self) -> Option<Duration> {
+        if self.latency_samples.is_empty() {
+            return None;
+        }
+        let sum: Duration = self.latency_samples.iter().copied().sum();
+        Some(sum / self.latency_samples.len() as u32)
+    }
+
+    /// Compute p95 latency from samples. Returns None if fewer than 2 samples.
+    pub fn p95_latency(&self) -> Option<Duration> {
+        if self.latency_samples.len() < 2 {
+            return None;
+        }
+        let mut sorted = self.latency_samples.clone();
+        sorted.sort();
+        let idx = ((0.95 * (sorted.len() - 1) as f64).round() as usize).min(sorted.len() - 1);
+        Some(sorted[idx])
+    }
+
+    /// Compute request success rate. Returns 1.0 if no requests have been made.
+    pub fn success_rate(&self) -> f64 {
+        if self.total_requests == 0 {
+            return 1.0;
+        }
+        let successful = self.total_requests.saturating_sub(self.failed_requests);
+        successful as f64 / self.total_requests as f64
+    }
+}
+
+/// Multi-dimensional health score for provider routing (v2).
+///
+/// Combines latency, success rate, staleness (exponential decay), and PoNW
+/// into a single 0.0-1.0 overall score. Each sub-score is independently
+/// computed and combined via configurable weights.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct HealthScoreV2 {
+    /// Combined overall score (0.0 = worst, 1.0 = best)
+    pub overall_score: f64,
+    /// Latency component (sigmoid of avg_latency)
+    pub latency_score: f64,
+    /// Success rate component
+    pub success_score: f64,
+    /// Staleness component (exponential decay since last heartbeat)
+    pub staleness_score: f64,
+    /// PoNW component
+    pub ponw_score: f64,
+}
+
+impl HealthScoreV2 {
+    /// Compute health score v2 for a provider.
+    ///
+    /// Latency score uses a sigmoid: 1 / (1 + e^((latency_ms - 500) / 200))
+    ///   - 50ms  -> ~0.94
+    ///   - 200ms -> ~0.77
+    ///   - 500ms -> ~0.50
+    ///   - 1000ms -> ~0.08
+    ///
+    /// Success score: linear mapping
+    ///   - 100% -> 1.0, 90% -> 0.8, 50% -> 0.0, <50% -> 0.0
+    ///
+    /// Staleness score: exponential decay since last successful check
+    ///   - score = e^(-elapsed_minutes / decay_minutes)
+    ///   - At 0 min -> 1.0, at decay_minutes -> 0.37, at 3*decay -> 0.05
+    ///
+    /// PoNW score: work_points normalized to 0-1
+    ///
+    /// Overall: weighted sum (default: 0.4*latency + 0.3*success + 0.2*staleness + 0.1*ponw)
+    pub fn compute(
+        provider: &Provider,
+        latency_weight: f64,
+        success_weight: f64,
+        staleness_weight: f64,
+        ponw_weight: f64,
+        staleness_decay_minutes: f64,
+    ) -> Self {
+        // -- Latency score: sigmoid function --
+        // Use p95 latency if available, fall back to avg, fall back to health poll latency_ms
+        let latency_ms = provider
+            .p95_latency()
+            .map(|d| d.as_millis() as f64)
+            .or_else(|| provider.avg_latency().map(|d| d.as_millis() as f64))
+            .unwrap_or(provider.latency_ms as f64);
+
+        // Sigmoid: 1 / (1 + e^((x - midpoint) / steepness))
+        // midpoint=500ms, steepness=200
+        //   50ms  -> ~0.94
+        //   200ms -> ~0.77
+        //   500ms -> ~0.50
+        //   1000ms -> ~0.08
+        //   2000ms -> ~0.00
+        let latency_score = 1.0 / (1.0 + ((latency_ms - 500.0) / 200.0).exp());
+
+        // -- Success score: linear mapping --
+        // 100% -> 1.0, 90% -> 0.8, 50% -> 0.0
+        let raw_success = provider.success_rate();
+        let success_score = if raw_success >= 1.0 {
+            1.0
+        } else if raw_success >= 0.5 {
+            (raw_success - 0.5) * 2.0 // maps [0.5, 1.0] -> [0.0, 1.0]
+        } else {
+            0.0
+        };
+
+        // -- Staleness score: exponential decay since last successful health check --
+        let elapsed_secs = provider.last_successful_check.elapsed().as_secs_f64();
+        let elapsed_minutes = elapsed_secs / 60.0;
+        let staleness_score = if staleness_decay_minutes > 0.0 {
+            (-elapsed_minutes / staleness_decay_minutes).exp()
+        } else {
+            1.0
+        };
+
+        // -- PoNW score: work_points normalized to 0-1 --
+        let ponw_score = provider
+            .status
+            .as_ref()
+            .and_then(|s| s.pown_status.as_ref())
+            .map(|p| (p.work_points as f64 / 100.0).min(1.0))
+            .unwrap_or(0.0);
+
+        // -- Overall: weighted combination --
+        let total_weight = latency_weight + success_weight + staleness_weight + ponw_weight;
+        let overall_score = if total_weight > 0.0 {
+            (latency_weight * latency_score
+                + success_weight * success_score
+                + staleness_weight * staleness_score
+                + ponw_weight * ponw_score)
+                / total_weight
+        } else {
+            0.0
+        };
+
+        Self {
+            overall_score,
+            latency_score,
+            success_score,
+            staleness_score,
+            ponw_score,
+        }
+    }
+
+    /// Compute health score with default weights.
+    pub fn compute_default(provider: &Provider) -> Self {
+        Self::compute(provider, 0.4, 0.3, 0.2, 0.1, 5.0)
+    }
 }
 
 /// Consecutive failures before a provider is considered "degraded" (deprioritized, not removed)
@@ -99,6 +356,8 @@ const REMOVAL_THRESHOLD: u32 = 10;
 pub struct ProviderRegistry {
     /// All known providers keyed by endpoint URL
     pub(crate) providers: DashMap<String, Provider>,
+    /// Sticky session map: session_key -> (endpoint, created_at)
+    session_map: DashMap<String, StickySession>,
     http_client: Client,
     config: Arc<RelayConfig>,
 }
@@ -113,6 +372,7 @@ impl ProviderRegistry {
 
         let registry = Self {
             providers: DashMap::<String, Provider>::new(),
+            session_map: DashMap::new(),
             http_client,
             config,
         };
@@ -134,6 +394,17 @@ impl ProviderRegistry {
                     from_chain: false,
                     model_pricing: HashMap::new(),
                     served_models: Vec::new(),
+                    pown_score: 0,
+                    region: None,
+                    circuit_state: CircuitState::Closed,
+                    circuit_opened_at: None,
+                    half_open_probes: Arc::new(AtomicU32::new(0)),
+                    latency_samples: Vec::new(),
+                    last_request_at: Instant::now(),
+                    total_requests: 0,
+                    failed_requests: 0,
+                    suspended: std::sync::atomic::AtomicBool::new(false),
+                    draining: std::sync::atomic::AtomicBool::new(false),
                 },
             );
         }
@@ -173,6 +444,10 @@ impl ProviderRegistry {
                             provider.consecutive_failures = 0;
                             provider.last_health_check = Instant::now();
                             provider.last_successful_check = Instant::now();
+                            // Reset circuit breaker on successful health check
+                            provider.circuit_state = CircuitState::Closed;
+                            provider.circuit_opened_at = None;
+                            provider.half_open_probes.store(0, Ordering::Relaxed);
                         }
                         debug!(endpoint, latency_ms, ai_enabled, "Provider health check OK");
                     }
@@ -224,6 +499,20 @@ impl ProviderRegistry {
             provider.last_health_check = Instant::now();
 
             let failures = provider.consecutive_failures;
+
+            // Circuit breaker: trip if consecutive failures >= threshold
+            let failure_threshold = self.config.relay.circuit_failure_threshold;
+            if provider.circuit_state == CircuitState::Closed && failures >= failure_threshold {
+                provider.circuit_state = CircuitState::Open;
+                provider.circuit_opened_at = Some(Instant::now());
+                warn!(
+                    endpoint,
+                    consecutive_failures = failures,
+                    threshold = failure_threshold,
+                    "Circuit breaker OPENED for provider"
+                );
+            }
+
             if failures >= REMOVAL_THRESHOLD {
                 warn!(
                     endpoint,
@@ -250,15 +539,74 @@ impl ProviderRegistry {
 
     /// Get healthy providers sorted by routing score (best first).
     /// Includes degraded providers (heavily deprioritized but not excluded).
+    /// Skips providers with Open circuit state (unless recovery timeout has elapsed,
+    /// in which case they transition to HalfOpen and are included).
     pub fn ranked_providers(&self) -> Vec<Provider> {
+        let recovery_timeout = Duration::from_secs(self.config.relay.circuit_recovery_timeout_secs);
+        let half_open_max = self.config.relay.circuit_half_open_max_probes;
+
+        // First pass: transition Open circuits to HalfOpen if recovery timeout elapsed
+        {
+            let mut endpoints_to_transition: Vec<String> = Vec::new();
+            for entry in self.providers.iter() {
+                let p = entry.value();
+                if p.circuit_state == CircuitState::Open {
+                    if let Some(opened_at) = p.circuit_opened_at {
+                        if opened_at.elapsed() >= recovery_timeout {
+                            endpoints_to_transition.push(p.endpoint.clone());
+                        }
+                    }
+                }
+            }
+            for ep in endpoints_to_transition {
+                if let Some(mut prov) = self.providers.get_mut(&ep) {
+                    prov.circuit_state = CircuitState::HalfOpen;
+                    prov.half_open_probes.store(0, Ordering::Relaxed);
+                    debug!(
+                        endpoint = %ep,
+                        "Circuit breaker transitioned to HalfOpen"
+                    );
+                }
+            }
+        }
+
+        // Second pass: collect providers, filtering by circuit state
         let mut providers: Vec<Provider> = self
             .providers
             .iter()
-            .filter(|p| {
+            .filter_map(|r| {
+                let p = r.value();
+
+                // Skip administratively suspended or draining providers
+                if p.suspended.load(Ordering::Relaxed) {
+                    return None;
+                }
+                if p.draining.load(Ordering::Relaxed) {
+                    return None;
+                }
+
                 // Include healthy providers and degraded providers (below removal threshold)
-                p.is_healthy || p.consecutive_failures < REMOVAL_THRESHOLD
+                if !p.is_healthy && p.consecutive_failures >= REMOVAL_THRESHOLD {
+                    return None;
+                }
+
+                // Circuit breaker filter
+                match p.circuit_state {
+                    CircuitState::Open => {
+                        // Still in Open state (recovery timeout not elapsed), skip
+                        None
+                    }
+                    CircuitState::HalfOpen => {
+                        // Only allow if we have probe capacity
+                        if p.half_open_probes.load(Ordering::Relaxed) >= half_open_max {
+                            None
+                        } else {
+                            Some(p.clone())
+                        }
+                    }
+                    CircuitState::Closed => Some(p.clone()),
+                }
             })
-            .map(|r| r.value().clone())
             .collect();
 
         providers.sort_by(|a, b| {
@@ -275,30 +623,86 @@ impl ProviderRegistry {
     /// Get healthy providers sorted by routing score for a specific model.
     /// When `model_id` is Some, filters to providers that serve that model
     /// and uses price-aware scoring.
+    /// Skips providers with Open circuit state.
     pub fn ranked_providers_for_model(&self, model_id: Option<&str>) -> Vec<Provider> {
         let normalized_model = model_id.map(|m| m.to_lowercase().replace(' ', "-"));
+        let recovery_timeout = Duration::from_secs(self.config.relay.circuit_recovery_timeout_secs);
+        let half_open_max = self.config.relay.circuit_half_open_max_probes;
 
+        // First pass: transition Open circuits to HalfOpen if recovery timeout elapsed
+        {
+            let mut endpoints_to_transition: Vec<String> = Vec::new();
+            for entry in self.providers.iter() {
+                let p = entry.value();
+                if p.circuit_state == CircuitState::Open {
+                    if let Some(opened_at) = p.circuit_opened_at {
+                        if opened_at.elapsed() >= recovery_timeout {
+                            endpoints_to_transition.push(p.endpoint.clone());
+                        }
+                    }
+                }
+            }
+            for ep in endpoints_to_transition {
+                if let Some(mut prov) = self.providers.get_mut(&ep) {
+                    prov.circuit_state = CircuitState::HalfOpen;
+                    prov.half_open_probes.store(0, Ordering::Relaxed);
+                    debug!(
+                        endpoint = %ep,
+                        "Circuit breaker transitioned to HalfOpen"
+                    );
+                }
+            }
+        }
+
+        // Second pass: collect providers, filtering by circuit state and model
         let mut providers: Vec<Provider> = self
             .providers
             .iter()
-            .filter(|p| {
+            .filter_map(|r| {
+                let p = r.value();
+
+                // Skip administratively suspended or draining providers
+                if p.suspended.load(Ordering::Relaxed) {
+                    return None;
+                }
+                if p.draining.load(Ordering::Relaxed) {
+                    return None;
+                }
+
                 // Include healthy providers and degraded providers (below removal threshold)
-                p.is_healthy || p.consecutive_failures < REMOVAL_THRESHOLD
-            })
-            .filter(|p| {
+                if !p.is_healthy && p.consecutive_failures >= REMOVAL_THRESHOLD {
+                    return None;
+                }
+
+                // Circuit breaker filter
+                match p.circuit_state {
+                    CircuitState::Open => {
+                        // Still in Open state (recovery timeout not elapsed), skip
+                        return None;
+                    }
+                    CircuitState::HalfOpen => {
+                        if p.half_open_probes.load(Ordering::Relaxed) >= half_open_max {
+                            return None;
+                        }
+                    }
+                    CircuitState::Closed => {}
+                }
+
                 // If a model is requested, only include providers that serve it
                 if let Some(ref model) = normalized_model {
-                    p.served_models
+                    let serves_model = p.served_models
                         .iter()
                         .any(|sm| sm.to_lowercase().replace(' ', "-") == *model)
                         || p.status.as_ref().and_then(|s| s.pown_status.as_ref())
                             .map(|pown| pown.ai_model.to_lowercase().replace(' ', "-") == *model)
-                            .unwrap_or(false)
-                } else {
-                    true
+                            .unwrap_or(false);
+                    if !serves_model {
+                        return None;
+                    }
                 }
+
+                Some(p.clone())
             })
-            .map(|r| r.value().clone())
             .collect();
 
         // Sort by routing score: higher is better
@@ -316,14 +720,71 @@ impl ProviderRegistry {
 
     /// Calculate routing score for a provider.
     ///
-    /// Higher score = preferred. Components:
-    ///   - PoNW work_points: 0-100 normalized (weight: 40%)
-    ///   - Latency: inverse (lower latency = higher score) (weight: 35%)
-    ///   - Load: inverse of active_requests (weight: 25%)
+    /// When `health_v2` is enabled (default), uses the multi-dimensional v2
+    /// scoring model with latency sigmoid, success rate, exponential staleness
+    /// decay, and PoNW. Falls back to v1 when no latency samples exist or
+    /// health_v2 is disabled.
     ///
-    /// When `model_id` is provided, also incorporates pricing (30% weight):
-    ///   - Price: inverse of nanoERG cost (free providers score highest)
+    /// V2 Higher score = preferred. Components (configurable weights):
+    ///   - Latency: sigmoid of p95/avg latency (default weight: 40%)
+    ///   - Success rate: linear mapping 50-100% -> 0-1 (default weight: 30%)
+    ///   - Staleness: exponential decay since last heartbeat (default weight: 20%)
+    ///   - PoNW: work_points / 100 (default weight: 10%)
+    ///
+    /// V1 fallback: PoNW (40%) + latency inverse (35%) + load inverse (25%)
+    ///   plus price factor (30%) and degradation/recency penalties.
     fn routing_score(&self, provider: &Provider, model_id: Option<&str>) -> f64 {
+        let v2_config = &self.config.health_v2;
+
+        // Use v2 scoring if enabled AND provider has latency data or health poll data
+        if v2_config.enabled {
+            let has_latency_data = !provider.latency_samples.is_empty() || provider.latency_ms > 0;
+
+            if has_latency_data {
+                let v2 = HealthScoreV2::compute(
+                    provider,
+                    v2_config.latency_weight,
+                    v2_config.success_weight,
+                    v2_config.staleness_weight,
+                    v2_config.ponw_weight,
+                    v2_config.staleness_decay_minutes,
+                );
+
+                // Apply degradation penalty (same as v1)
+                let degradation_factor = if provider.consecutive_failures >= DEGRADED_THRESHOLD {
+                    let excess = (provider.consecutive_failures - DEGRADED_THRESHOLD) as f64;
+                    let range = (REMOVAL_THRESHOLD - DEGRADED_THRESHOLD) as f64;
+                    let base = 0.30;
+                    let min_factor = 0.05;
+                    base - (base - min_factor) * (excess / range)
+                } else {
+                    1.0
+                };
+
+                // Apply price factor for model-specific routing
+                let price_factor = if let Some(model) = model_id {
+                    let price = provider.model_pricing.get(model).copied().unwrap_or(0);
+                    1.0 / (1.0 + (price as f64) / 100_000_000.0)
+                } else {
+                    1.0
+                };
+
+                // Load factor: still penalize busy providers
+                let active = provider
+                    .active_requests
+                    .load(std::sync::atomic::Ordering::Relaxed) as f64;
+                let load_factor = 1.0 / (1.0 + active / 10.0);
+
+                return v2.overall_score * degradation_factor * price_factor * load_factor;
+            }
+        }
+
+        // --- V1 fallback: legacy scoring ---
+        self.routing_score_v1(provider, model_id)
+    }
+
+    /// Legacy v1 routing score (original implementation).
+    fn routing_score_v1(&self, provider: &Provider, model_id: Option<&str>) -> f64 {
         // PoNW score (0-100, from work_points)
         let pown_score = provider
             .status
@@ -428,17 +889,178 @@ impl ProviderRegistry {
             .find(|p| !exclude.contains(&p.endpoint))
     }
 
-    /// Increment active requests for a provider, return guard that decrements on drop
+    /// Increment active requests for a provider, return guard that decrements on drop.
+    /// If the provider is in HalfOpen state, also increments the probe counter.
     pub fn acquire_provider(&self, endpoint: &str) -> Option<ProviderRequestGuard> {
         self.providers.get(endpoint).map(|provider| {
             provider
                 .active_requests
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+            // Track HalfOpen probes
+            let is_half_open = provider.circuit_state == CircuitState::HalfOpen;
+            if is_half_open {
+                provider.half_open_probes.fetch_add(1, Ordering::Relaxed);
+            }
+
             ProviderRequestGuard {
                 endpoint: endpoint.to_string(),
                 active: provider.active_requests.clone(),
+                half_open_probes: if is_half_open {
+                    Some(provider.half_open_probes.clone())
+                } else {
+                    None
+                },
             }
         })
+    }
+
+    /// Record a successful request to a provider.
+    /// Resets the circuit breaker to Closed state and increments request counters.
+    pub fn record_success(&self, endpoint: &str) {
+        if let Some(mut provider) = self.providers.get_mut(endpoint) {
+            // Reset circuit breaker
+            if provider.circuit_state != CircuitState::Closed {
+                info!(
+                    endpoint,
+                    previous_state = %provider.circuit_state,
+                    "Circuit breaker CLOSED after successful request"
+                );
+            }
+            provider.circuit_state = CircuitState::Closed;
+            provider.circuit_opened_at = None;
+            provider.consecutive_failures = 0;
+            provider.half_open_probes.store(0, Ordering::Relaxed);
+            // Track request stats for health v2
+            provider.total_requests += 1;
+        }
+    }
+
+    /// Record a failed request to a provider.
+    /// Increments failure count and may trip the circuit breaker.
+    pub fn record_failure(&self, endpoint: &str) {
+        if let Some(mut provider) = self.providers.get_mut(endpoint) {
+            provider.consecutive_failures += 1;
+            provider.total_requests += 1;
+            provider.failed_requests += 1;
+            let failures = provider.consecutive_failures;
+            let threshold = self.config.relay.circuit_failure_threshold;
+
+            match provider.circuit_state {
+                CircuitState::Closed => {
+                    if failures >= threshold {
+                        provider.circuit_state = CircuitState::Open;
+                        provider.circuit_opened_at = Some(Instant::now());
+                        warn!(
+                            endpoint,
+                            consecutive_failures = failures,
+                            threshold,
+                            "Circuit breaker OPENED due to request failures"
+                        );
+                    }
+                }
+                CircuitState::HalfOpen => {
+                    // A failed probe means the provider is still unhealthy, re-open
+                    provider.circuit_state = CircuitState::Open;
+                    provider.circuit_opened_at = Some(Instant::now());
+                    provider.half_open_probes.store(0, Ordering::Relaxed);
+                    warn!(
+                        endpoint,
+                        "HalfOpen probe failed, circuit breaker re-OPENED"
+                    );
+                }
+                CircuitState::Open => {
+                    // Already open, just increment failures
+                }
+            }
+        }
+    }
+
+    /// Record a latency sample for a proxied request to a provider.
+    /// Used by the health v2 scoring model.
+    pub fn record_request_latency(&self, endpoint: &str, duration: Duration) {
+        let max_samples = self.config.health_v2.max_latency_samples;
+        if let Some(mut provider) = self.providers.get_mut(endpoint) {
+            provider.record_latency(duration, max_samples);
+        }
+    }
+
+    /// Compute the health score v2 for a specific provider.
+    /// Returns None if the provider is not found.
+    pub fn health_score_v2(&self, endpoint: &str) -> Option<HealthScoreV2> {
+        let provider = self.providers.get(endpoint)?;
+        let v2_config = &self.config.health_v2;
+        Some(HealthScoreV2::compute(
+            provider.value(),
+            v2_config.latency_weight,
+            v2_config.success_weight,
+            v2_config.staleness_weight,
+            v2_config.ponw_weight,
+            v2_config.staleness_decay_minutes,
+        ))
+    }
+
+    /// Derive a session key from request headers.
+    /// Uses X-Session-Id header if present, falls back to the client IP.
+    pub fn derive_session_key(headers: &axum::http::HeaderMap, client_ip: &str) -> String {
+        headers
+            .get("x-session-id")
+            .and_then(|v| v.to_str().ok())
+            .filter(|s| !s.is_empty())
+            .map(|s| format!("session:{}", s))
+            .unwrap_or_else(|| format!("ip:{}", client_ip))
+    }
+
+    /// Look up a sticky provider for a given session key and model.
+    /// Returns None if no sticky session exists, or if it's expired, or if the
+    /// provider is unhealthy / circuit-open.
+    pub fn get_sticky_provider(&self, session_key: &str) -> Option<Provider> {
+        let ttl = Duration::from_secs(self.config.relay.sticky_session_ttl_secs);
+
+        let session = self.session_map.get(session_key)?;
+        if session.is_expired(ttl) {
+            drop(session);
+            self.session_map.remove(session_key);
+            return None;
+        }
+
+        let endpoint = session.endpoint.clone();
+        drop(session);
+
+        let provider = self.providers.get(&endpoint)?;
+        let p = provider.value();
+
+        // Don't use sticky if provider is unhealthy or circuit is open
+        if !p.is_healthy || p.circuit_state == CircuitState::Open {
+            return None;
+        }
+
+        Some(p.clone())
+    }
+
+    /// Set a sticky session mapping a session key to a provider endpoint.
+    pub fn set_sticky_session(&self, session_key: &str, endpoint: &str) {
+        self.session_map.insert(
+            session_key.to_string(),
+            StickySession {
+                endpoint: endpoint.to_string(),
+                created_at: Instant::now(),
+            },
+        );
+    }
+
+    /// Get the current number of active sticky sessions.
+    #[allow(dead_code)]
+    pub fn sticky_session_count(&self) -> usize {
+        self.session_map.len()
+    }
+
+    /// Prune expired sticky sessions. Called periodically to prevent unbounded growth.
+    #[allow(dead_code)]
+    pub fn prune_expired_sessions(&self) {
+        let ttl = Duration::from_secs(self.config.relay.sticky_session_ttl_secs);
+        self.session_map
+            .retain(|_, session| !session.is_expired(ttl));
     }
 
     /// Add a single provider by endpoint URL.
@@ -465,6 +1087,17 @@ impl ProviderRegistry {
                 from_chain,
                 model_pricing: HashMap::new(),
                 served_models: Vec::new(),
+                pown_score: 0,
+                region: None,
+                circuit_state: CircuitState::Closed,
+                circuit_opened_at: None,
+                half_open_probes: Arc::new(AtomicU32::new(0)),
+                latency_samples: Vec::new(),
+                last_request_at: Instant::now(),
+                total_requests: 0,
+                failed_requests: 0,
+                suspended: std::sync::atomic::AtomicBool::new(false),
+                draining: std::sync::atomic::AtomicBool::new(false),
             },
         );
     }
@@ -473,7 +1106,6 @@ impl ProviderRegistry {
     /// Only removes providers that were discovered from chain state,
     /// unless `force` is true (which also removes static bootstrap providers).
     /// Returns true if the provider was actually removed.
-    #[allow(dead_code)] // Public API for future admin handler use
     pub fn remove_provider(&self, endpoint: &str, force: bool) -> bool {
         let ep = endpoint.trim_end_matches('/');
         if let Some(provider) = self.providers.get(ep) {
@@ -505,10 +1137,14 @@ impl ProviderRegistry {
         // 1. Add new providers discovered on-chain and populate metadata
         for cp in chain_providers {
             self.add_provider(cp.endpoint.clone(), true);
-            // Update provider metadata from chain (pricing, served models)
+            // Update provider metadata from chain (pricing, served models, reputation, region)
             if let Some(mut provider) = self.providers.get_mut(&cp.endpoint.trim_end_matches('/').to_string()) {
                 provider.model_pricing = cp.model_pricing.clone();
                 provider.served_models = cp.models.clone();
+                provider.pown_score = cp.pown_score;
+                if !cp.region.is_empty() && cp.region != "unknown" {
+                    provider.region = Some(cp.region.clone());
+                }
             }
         }
 
@@ -555,12 +1191,18 @@ pub struct ProviderRequestGuard {
     #[allow(dead_code)] // TODO: could be used for logging/debugging
     endpoint: String,
     active: Arc<std::sync::atomic::AtomicU32>,
+    /// If the provider was in HalfOpen state when acquired, this tracks the probe counter
+    half_open_probes: Option<Arc<AtomicU32>>,
 }
 
 impl Drop for ProviderRequestGuard {
     fn drop(&mut self) {
         self.active
             .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        // Decrement half-open probe counter when the request completes
+        if let Some(ref probes) = self.half_open_probes {
+            probes.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+        }
     }
 }
 
@@ -702,6 +1344,11 @@ mod tests {
                 health_poll_interval_secs: 30,
                 provider_timeout_secs: 30,
                 max_fallback_attempts: 3,
+                circuit_failure_threshold: 5,
+                circuit_recovery_timeout_secs: 30,
+                circuit_half_open_max_probes: 2,
+                sticky_session_ttl_secs: 1800,
+                onboarding_auth_token: None,
             },
             providers: ProviderSettings {
                 known_endpoints: endpoints,
@@ -716,6 +1363,22 @@ mod tests {
             free_tier: crate::config::FreeTierConfig::default(),
             events: crate::config::EventsConfig::default(),
             gossip: crate::config::GossipConfig::default(),
+            health_v2: crate::config::HealthV2Config::default(),
+            ws_chat: crate::config::WsChatConfig::default(),
+            dedup: crate::config::DedupConfig::default(),
+            cache: crate::config::CacheConfig::default(),
+            circuit_breaker: crate::circuit_breaker::CircuitBreakerConfig::default(),
+            load_shed: crate::load_shed::LoadShedConfig::default(),
+            degradation: crate::degradation::DegradationConfig::default(),
+            coalesce: crate::coalesce::CoalesceConfig::default(),
+            stream_buffer: crate::stream_buffer::StreamBufferConfig::default(),
+            adaptive_routing: crate::config::AdaptiveRoutingConfig::default(),
+            telemetry: crate::config::TelemetryConfig::default(),
+            admin: crate::config::AdminConfig::default(),
+            auto_register: crate::auto_register::AutoRegistrationConfig::default(),
+            cache_sync: crate::cache_sync::CacheSyncConfig::default(),
+            multi_region: crate::multi_region::RegionConfig::default(),
+            ws_pool: crate::config::WsPoolConfig::default(),
         })
     }
 
@@ -1020,11 +1683,432 @@ mod tests {
         // Verify the score difference is significant
         let score_healthy = registry.routing_score(&providers[0], None);
         let score_degraded = registry.routing_score(&providers[1], None);
-        assert!(
-            score_healthy > score_degraded * 2.0,
+        assert!(score_healthy > score_degraded * 2.0,
             "Healthy score ({}) should be much higher than degraded score ({})",
             score_healthy,
             score_degraded
         );
+    }
+
+    // ---- Health Score V2 tests ----
+
+    #[test]
+    fn test_health_score_v2_latency_sigmoid() {
+        // Create a provider with no latency samples but known latency_ms
+        let mut provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 50, // fast
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        // Fast provider (50ms health poll) should have high latency score
+        let v2 = HealthScoreV2::compute_default(&provider);
+        assert!(
+            v2.latency_score > 0.9,
+            "50ms should give latency_score > 0.9, got {}",
+            v2.latency_score
+        );
+
+        // Slow provider (1000ms)
+        provider.latency_ms = 1000;
+        let v2 = HealthScoreV2::compute_default(&provider);
+        assert!(
+            v2.latency_score < 0.1,
+            "1000ms should give latency_score < 0.1, got {}",
+            v2.latency_score
+        );
+
+        // Medium provider (500ms) should be ~0.5
+        provider.latency_ms = 500;
+        let v2 = HealthScoreV2::compute_default(&provider);
+        assert!(
+            (v2.latency_score - 0.5).abs() < 0.05,
+            "500ms should give latency_score ~0.5, got {}",
+            v2.latency_score
+        );
+    }
+
+    #[test]
+    fn test_health_score_v2_p95_latency_preferred_over_health_poll() {
+        let mut provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 50, // health poll says fast
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        // No samples: should use latency_ms
+        let v2_no_samples = HealthScoreV2::compute_default(&provider);
+        assert!(v2_no_samples.latency_score > 0.9);
+
+        // Add slow actual request samples
+        for _ in 0..10 {
+            provider.record_latency(Duration::from_millis(800), 100);
+        }
+
+        // With samples, p95 should dominate (800ms is slow)
+        let v2_with_samples = HealthScoreV2::compute_default(&provider);
+        assert!(
+            v2_with_samples.latency_score < v2_no_samples.latency_score,
+            "With slow request samples, latency score should be worse than health poll suggests"
+        );
+    }
+
+    #[test]
+    fn test_health_score_v2_success_rate() {
+        let provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 100,
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        // No requests: success rate = 1.0
+        assert_eq!(provider.success_rate(), 1.0);
+        let v2 = HealthScoreV2::compute_default(&provider);
+        assert_eq!(v2.success_score, 1.0);
+    }
+
+    #[test]
+    fn test_health_score_v2_staleness_decay() {
+        let mut provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 100,
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        // Fresh: staleness should be ~1.0
+        let v2_fresh = HealthScoreV2::compute_default(&provider);
+        assert!(
+            v2_fresh.staleness_score > 0.99,
+            "Fresh provider staleness should be ~1.0, got {}",
+            v2_fresh.staleness_score
+        );
+
+        // Simulate staleness by manipulating last_successful_check
+        // We can't actually backdate Instant, but we can test the formula
+        // by using a different decay_minutes parameter
+        let v2_no_decay = HealthScoreV2::compute(&provider, 0.4, 0.3, 0.2, 0.1, 0.001);
+        // With very short decay, even a tiny elapsed time decays
+        assert!(
+            v2_no_decay.staleness_score < 1.0,
+            "With tiny decay constant, staleness should be < 1.0"
+        );
+    }
+
+    #[test]
+    fn test_health_score_v2_overall_in_range() {
+        let provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: Some(XergonAgentStatus {
+                provider: None,
+                pown_status: Some(AgentPownInfo {
+                    work_points: 75,
+                    ai_enabled: true,
+                    ai_model: "llama-3".into(),
+                    ai_total_requests: 1000,
+                    ai_total_tokens: 500_000,
+                    node_id: "node1".into(),
+                }),
+                pown_health: None,
+            }),
+            latency_ms: 100,
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        let v2 = HealthScoreV2::compute_default(&provider);
+        assert!(
+            (0.0..=1.0).contains(&v2.overall_score),
+            "Overall score should be in [0, 1], got {}",
+            v2.overall_score
+        );
+        assert!(
+            (0.0..=1.0).contains(&v2.latency_score),
+            "Latency score should be in [0, 1], got {}",
+            v2.latency_score
+        );
+        assert!(
+            (0.0..=1.0).contains(&v2.success_score),
+            "Success score should be in [0, 1], got {}",
+            v2.success_score
+        );
+        assert!(
+            (0.0..=1.0).contains(&v2.staleness_score),
+            "Staleness score should be in [0, 1], got {}",
+            v2.staleness_score
+        );
+        assert!(
+            (0.0..=1.0).contains(&v2.ponw_score),
+            "PoNW score should be in [0, 1], got {}",
+            v2.ponw_score
+        );
+        // With 75 work_points, ponw should be 0.75
+        assert!(
+            (v2.ponw_score - 0.75).abs() < 0.01,
+            "PoNW should be ~0.75, got {}",
+            v2.ponw_score
+        );
+    }
+
+    #[test]
+    fn test_health_score_v2_routing_prefers_low_latency() {
+        let registry = ProviderRegistry::new(test_config(vec![]));
+
+        // Add two providers with different latencies
+        for (ep, latency) in [
+            ("http://fast:9099", 50u64),
+            ("http://slow:9099", 1000u64),
+        ] {
+            registry.add_provider(ep.into(), true);
+            let mut p = registry.providers.get_mut(ep).unwrap();
+            p.is_healthy = true;
+            p.latency_ms = latency;
+            p.status = Some(XergonAgentStatus {
+                provider: None,
+                pown_status: None,
+                pown_health: None,
+            });
+        }
+
+        let providers = registry.ranked_providers();
+        assert_eq!(providers.len(), 2);
+        // Fast provider should rank first
+        assert_eq!(providers[0].endpoint, "http://fast:9099");
+
+        let score_fast = registry.routing_score(&providers[0], None);
+        let score_slow = registry.routing_score(&providers[1], None);
+        assert!(
+            score_fast > score_slow,
+            "Fast provider ({}) should score higher than slow ({})",
+            score_fast,
+            score_slow
+        );
+    }
+
+    #[test]
+    fn test_health_score_v2_fallback_to_v1_when_disabled() {
+        // Create a config with v2 disabled
+        let mut config = test_config(vec![]).as_ref().clone();
+        config.health_v2.enabled = false;
+        let config = Arc::new(config);
+
+        let registry = ProviderRegistry::new(config);
+
+        // Add a provider
+        registry.add_provider("http://p1:9099".into(), true);
+        {
+            let mut p = registry.providers.get_mut("http://p1:9099").unwrap();
+            p.is_healthy = true;
+            p.latency_ms = 100;
+            p.status = Some(XergonAgentStatus {
+                provider: None,
+                pown_status: None,
+                pown_health: None,
+            });
+        }
+
+        // Should still produce a valid score (v1 fallback)
+        let providers = registry.ranked_providers();
+        assert_eq!(providers.len(), 1);
+        let score = registry.routing_score(&providers[0], None);
+        assert!(
+            score > 0.0,
+            "V1 fallback should produce a positive score, got {}",
+            score
+        );
+    }
+
+    #[test]
+    fn test_provider_latency_tracking() {
+        let mut provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 0,
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 0,
+            failed_requests: 0,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        // No samples initially
+        assert!(provider.avg_latency().is_none());
+        assert!(provider.p95_latency().is_none());
+
+        // Record some latencies
+        for ms in [50u64, 100, 150, 200, 250] {
+            provider.record_latency(Duration::from_millis(ms), 100);
+        }
+
+        // Check avg
+        let avg = provider.avg_latency().unwrap();
+        assert_eq!(avg.as_millis(), 150); // (50+100+150+200+250)/5
+
+        // Check p95 (95th percentile of 5 values: index = round(0.95*4) = 4 -> 250ms)
+        let p95 = provider.p95_latency().unwrap();
+        assert_eq!(p95.as_millis(), 250);
+
+        // Test bounded window: add more samples beyond max
+        for ms in [10u64; 200].iter() {
+            provider.record_latency(Duration::from_millis(*ms), 100);
+        }
+
+        // Should only keep last 100 samples
+        assert_eq!(provider.latency_samples.len(), 100);
+    }
+
+    #[test]
+    fn test_provider_success_rate() {
+        let provider = Provider {
+            endpoint: "http://test:9099".into(),
+            status: None,
+            latency_ms: 0,
+            active_requests: Arc::new(AtomicU32::new(0)),
+            is_healthy: true,
+            last_healthy_at: Utc::now(),
+            consecutive_failures: 0,
+            last_health_check: Instant::now(),
+            last_successful_check: Instant::now(),
+            from_chain: false,
+            model_pricing: HashMap::new(),
+            served_models: Vec::new(),
+            pown_score: 0,
+            region: None,
+            circuit_state: CircuitState::Closed,
+            circuit_opened_at: None,
+            half_open_probes: Arc::new(AtomicU32::new(0)),
+            latency_samples: Vec::new(),
+            last_request_at: Instant::now(),
+            total_requests: 10,
+            failed_requests: 1,
+            suspended: std::sync::atomic::AtomicBool::new(false),
+            draining: std::sync::atomic::AtomicBool::new(false),
+        };
+
+        assert!((provider.success_rate() - 0.9).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_health_v2_config_defaults() {
+        let config = crate::config::HealthV2Config::default();
+        assert!(config.enabled);
+        assert!((config.latency_weight - 0.4).abs() < 0.001);
+        assert!((config.success_weight - 0.3).abs() < 0.001);
+        assert!((config.staleness_weight - 0.2).abs() < 0.001);
+        assert!((config.ponw_weight - 0.1).abs() < 0.001);
+        assert!((config.staleness_decay_minutes - 5.0).abs() < 0.001);
+        assert_eq!(config.max_latency_samples, 100);
     }
 }

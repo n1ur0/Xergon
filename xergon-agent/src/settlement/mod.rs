@@ -14,6 +14,7 @@
 //! This runs as a periodic background task.
 
 pub mod batch;
+pub mod eutxo;
 pub mod market;
 pub mod models;
 pub mod reconcile;
@@ -27,6 +28,7 @@ use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::config::SettlementConfig;
+use crate::contract_compile;
 use models::{
     BatchStatus, PaymentStatus, ProviderEarning, SettlementBatch, SettlementLedger,
     SettlementPayment, SettlementSummary,
@@ -295,6 +297,163 @@ impl SettlementEngine {
         );
 
         Ok(batch)
+    }
+
+    /// Settle on-chain using the eUTXO engine.
+    ///
+    /// Finds settleable user staking boxes on the Ergo blockchain and
+    /// executes a settlement transaction that pays the provider. This is
+    /// the real on-chain settlement path (as opposed to the wallet-funded
+    /// batch payments in `settle()`).
+    ///
+    /// Requires `chain_enabled` in config to be true.
+    pub async fn settle_on_chain(
+        &self,
+        provider_address: &str,
+    ) -> Result<SettlementBatch> {
+        info!("Starting on-chain settlement cycle...");
+
+        // Step 1: Verify the user_staking contract is loaded
+        match contract_compile::get_contract_hex("user_staking") {
+            Some(_) => {}
+            None => {
+                warn!(
+                    "user_staking contract hex not found — contracts not loaded. \
+                     Skipping on-chain settlement."
+                );
+                anyhow::bail!("user_staking contract hex not found");
+            }
+        };
+
+        // Step 2: Find settleable boxes
+        let node_url = self.tx_service.node_url().to_string();
+        let boxes_result = eutxo::find_settleable_boxes(
+            &node_url,
+            50, // max_boxes
+            self.config.min_confirmations,
+        )
+        .await
+        .context("Failed to find settleable boxes for on-chain settlement")?;
+
+        if boxes_result.boxes.is_empty() {
+            info!("No settleable staking boxes found on-chain");
+            anyhow::bail!("No settleable boxes found");
+        }
+
+        info!(
+            boxes_found = boxes_result.boxes.len(),
+            total_value_nanoerg = boxes_result.total_value,
+            total_erg = boxes_result.total_value as f64 / NANOERG_PER_ERG as f64,
+            "Found settleable staking boxes"
+        );
+
+        // Step 3: Execute settlement via the eUTXO engine
+        let eutxo_engine = eutxo::EutxoSettlementEngine::new(
+            self.config.clone(),
+            node_url,
+        )
+        .context("Failed to create eUTXO settlement engine")?;
+
+        let tx_id = eutxo_engine
+            .execute_simple_settlement(provider_address, boxes_result.total_value)
+            .await
+            .context("eUTXO execute_simple_settlement failed")?;
+
+        // Step 4: Build a SettlementBatch from the result
+        let now = chrono::Utc::now();
+        let period_start = {
+            let ledger = self.ledger.read().await;
+            ledger
+                .last_settled_at
+                .unwrap_or_else(|| now - chrono::Duration::hours(24))
+        };
+
+        let boxes_settled = boxes_result.boxes.len() as u32;
+        let total_nanoerg = boxes_result.total_value;
+        let total_erg = total_nanoerg as f64 / NANOERG_PER_ERG as f64;
+
+        let batch = SettlementBatch {
+            batch_id: uuid_simple(),
+            created_at: now,
+            period_start,
+            period_end: now,
+            cost_per_1k_nanoerg: self.config.cost_per_1k_tokens_nanoerg,
+            payments: vec![SettlementPayment {
+                provider_id: "on-chain-settlement".to_string(),
+                ergo_address: provider_address.to_string(),
+                nanoerg_amount: total_nanoerg,
+                erg_nano: total_nanoerg,
+                tx_id: Some(tx_id.clone()),
+                status: PaymentStatus::Broadcast,
+            }],
+            total_erg,
+            total_nanoerg,
+            status: BatchStatus::Submitted,
+        };
+
+        // Step 5: Persist to ledger
+        {
+            let mut ledger = self.ledger.write().await;
+            ledger.record_batch(&batch);
+            ledger.save(&self.ledger_path()).await?;
+        }
+
+        info!(
+            batch_id = %batch.batch_id,
+            tx_id = %tx_id,
+            boxes_settled = boxes_settled,
+            total_erg = total_erg,
+            total_nanoerg = total_nanoerg,
+            "On-chain settlement cycle complete"
+        );
+
+        Ok(batch)
+    }
+
+    /// Run the periodic on-chain settlement loop.
+    ///
+    /// Runs alongside the regular settlement loop when `chain_enabled` is true.
+    /// Finds settleable staking boxes and executes real eUTXO transactions.
+    /// Errors are non-fatal — the loop continues running.
+    pub async fn run_chain_settlement_loop(&self, provider_address: String) {
+        let interval_secs = self.config.interval_secs;
+        let interval = std::time::Duration::from_secs(interval_secs);
+
+        info!(
+            interval_secs = interval_secs,
+            provider = %provider_address,
+            min_confirmations = self.config.min_confirmations,
+            "On-chain settlement loop started"
+        );
+
+        // Wait for initial delay before first settlement
+        tokio::time::sleep(interval).await;
+
+        loop {
+            match self.settle_on_chain(&provider_address).await {
+                Ok(batch) => {
+                    info!(
+                        batch_id = %batch.batch_id,
+                        total_erg = batch.total_erg,
+                        boxes_settled = batch.payments.len(),
+                        "On-chain settlement completed"
+                    );
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    if msg.contains("No settleable boxes found")
+                        || msg.contains("contract hex not found")
+                    {
+                        // Expected conditions, log at info level
+                        info!("On-chain settlement cycle skipped: {}", msg);
+                    } else {
+                        warn!(error = %e, "On-chain settlement cycle failed");
+                    }
+                }
+            }
+
+            tokio::time::sleep(interval).await;
+        }
     }
 
     /// Build a settlement batch from provider earnings.
@@ -715,7 +874,7 @@ mod tests {
     fn test_resolve_cost_per_1k_chain_price() {
         // At 50_000 nanoERG per 1M tokens on-chain:
         // per-1K = 50_000 / 1000 = 50 nanoERG per 1K tokens
-        let cache = HashMap::from([
+        let _cache = HashMap::from([
             ("llama-3.1-8b".to_string(), 50_000u64),
             ("qwen3-4b".to_string(), 100_000u64),
         ]);
@@ -761,8 +920,12 @@ mod tests {
         let earnings = tracker.drain(1_000_000).await;
         assert_eq!(earnings.len(), 2);
 
-        // prov1 accumulated 8_000_000 nanoerg
-        assert_eq!(earnings[0].earned_nanoerg, 8_000_000);
+        // Find entries by provider_id since HashMap iteration order is non-deterministic
+        let prov1 = earnings.iter().find(|e| e.provider_id == "prov1").unwrap();
+        assert_eq!(prov1.earned_nanoerg, 8_000_000);
+
+        let prov2 = earnings.iter().find(|e| e.provider_id == "prov2").unwrap();
+        assert_eq!(prov2.earned_nanoerg, 10_000_000);
 
         // After drain, should be empty
         let earnings2 = tracker.drain(1_000_000).await;

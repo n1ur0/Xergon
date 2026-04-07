@@ -1,7 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AgentConfig {
     pub ergo_node: ErgoNodeConfig,
     pub xergon: XergonConfig,
@@ -32,6 +32,12 @@ pub struct AgentConfig {
     /// Automatic model pulling config
     #[serde(default)]
     pub auto_model_pull: AutoModelPullConfig,
+    /// HuggingFace model discovery config
+    #[serde(default)]
+    pub model_discovery: ModelDiscoveryConfig,
+    /// Model caching config with LRU eviction
+    #[serde(default)]
+    pub model_cache: ModelCacheConfig,
     /// Usage proof rollup config (Merkle tree epoch batching)
     #[serde(default)]
     pub rollup: RollupConfig,
@@ -44,6 +50,30 @@ pub struct AgentConfig {
     /// Contract hex overrides (embedded contracts can be overridden per-deployment)
     #[serde(default)]
     pub contracts: ContractsConfig,
+    /// Ergo oracle configuration (ERG/USD price feed from oracle pool box)
+    #[serde(default)]
+    pub oracle: OracleConfig,
+    /// Provider on-chain registration configuration
+    #[serde(default)]
+    pub provider_registry: ProviderRegistryConfig,
+    /// Storage rent monitoring configuration
+    #[serde(default)]
+    pub storage_rent: crate::storage_rent::StorageRentConfig,
+    /// Rate limiting configuration
+    #[serde(default)]
+    pub rate_limit: crate::rate_limit::RateLimitConfig,
+    /// Audit/logging configuration
+    #[serde(default)]
+    pub audit: crate::audit::AuditConfig,
+    /// Peer reputation scoring configuration
+    #[serde(default)]
+    pub reputation: crate::reputation::ReputationConfig,
+    /// Gossip protocol configuration
+    #[serde(default)]
+    pub gossip: crate::gossip::GossipConfig,
+    /// Marketplace sync configuration (periodic provider info push to relay)
+    #[serde(default)]
+    pub marketplace_sync: crate::marketplace_sync::MarketplaceSyncConfig,
 }
 
 /// On-chain transaction configuration (Phase 2).
@@ -90,7 +120,7 @@ impl Default for ChainTxConfig {
 }
 
 /// llama-server (llama.cpp) configuration for AI inference backend detection.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LlamaServerConfig {
     /// Base URL of the llama-server instance (default: http://127.0.0.1:8080)
     #[serde(default = "default_llama_server_url")]
@@ -117,7 +147,7 @@ impl Default for LlamaServerConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ErgoNodeConfig {
     /// REST API URL of the local Ergo node (default: http://127.0.0.1:9053)
     #[serde(default = "default_ergo_url")]
@@ -128,7 +158,7 @@ fn default_ergo_url() -> String {
     "http://127.0.0.1:9053".into()
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct XergonConfig {
     /// Provider ID (e.g., "Xergon_LT")
     pub provider_id: String,
@@ -140,7 +170,7 @@ pub struct XergonConfig {
     pub ergo_address: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PeerDiscoveryConfig {
     /// How often to run a full peer discovery cycle (seconds)
     #[serde(default = "default_discovery_interval")]
@@ -178,7 +208,7 @@ fn default_max_peers_per_cycle() -> usize {
     50
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ApiConfig {
     /// Address to bind the Xergon agent REST API
     #[serde(default = "default_api_addr")]
@@ -197,7 +227,7 @@ fn default_api_addr() -> String {
 /// ERG settlement configuration.
 ///
 /// All amounts are in nanoERG (1 ERG = 10^9 nanoERG).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SettlementConfig {
     #[serde(default)]
     pub enabled: bool,
@@ -214,6 +244,15 @@ pub struct SettlementConfig {
     /// (default: 1_000_000_000 = 1 ERG minimum)
     #[serde(default = "default_min_settlement_nanoerg")]
     pub min_settlement_nanoerg: u64,
+    /// When true, settlement uses real eUTXO transactions via the Ergo node
+    /// wallet to spend user staking boxes and settle fees on-chain.
+    /// When false (default), uses in-memory batch accumulation only.
+    #[serde(default)]
+    pub chain_enabled: bool,
+    /// Minimum number of confirmations (blocks) a staking box must have before
+    /// it can be included in a settlement. Default: 30.
+    #[serde(default = "default_min_confirmations")]
+    pub min_confirmations: u32,
 }
 
 impl Default for SettlementConfig {
@@ -225,6 +264,8 @@ impl Default for SettlementConfig {
             dry_run: default_settlement_dry_run(),
             cost_per_1k_tokens_nanoerg: default_cost_per_1k_nanoerg(),
             min_settlement_nanoerg: default_min_settlement_nanoerg(),
+            chain_enabled: false,
+            min_confirmations: default_min_confirmations(),
         }
     }
 }
@@ -241,13 +282,16 @@ fn default_cost_per_1k_nanoerg() -> u64 {
 fn default_min_settlement_nanoerg() -> u64 {
     1_000_000_000 // 1 ERG minimum settlement
 }
+fn default_min_confirmations() -> u32 {
+    30
+}
 
 /// Inference proxy configuration.
 ///
 /// Controls the OpenAI-compatible inference endpoint that xergon-agent
 /// exposes to xergon-relay. Proxies requests to a local LLM backend
 /// (Ollama, llama.cpp server, etc.).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InferenceConfig {
     /// Enable the inference proxy endpoint (default: true)
     #[serde(default = "default_inference_enabled")]
@@ -266,7 +310,6 @@ pub struct InferenceConfig {
     /// List of model names this agent advertises as available for inference.
     /// Populated via `xergon-agent setup` when using Ollama or similar backends.
     #[serde(default)]
-    #[allow(dead_code)] // populated by setup, consumed in future relay integration
     pub served_models: Vec<String>,
 }
 
@@ -296,7 +339,7 @@ impl Default for InferenceConfig {
 ///
 /// Controls the price advertised on-chain in the Provider Box R6 register.
 /// Prices are in nanoERG per 1M tokens.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PricingConfig {
     /// Default price per 1M tokens in nanoERG (used if no per-model override).
     /// Default: 50000 nanoERG = 0.00005 ERG per 1M tokens.
@@ -354,7 +397,7 @@ impl PricingConfig {
 }
 
 /// GPU Bazar rental configuration (Phase 4).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GpuRentalConfig {
     /// Enable GPU rental endpoints (default: false)
     #[serde(default)]
@@ -429,7 +472,7 @@ impl Default for GpuRentalConfig {
 ///
 /// Controls auto-pulling of models from Ollama registry, HuggingFace,
 /// or P2P peers when a requested model is not locally available.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AutoModelPullConfig {
     /// Enable automatic model pulling (default: false)
     #[serde(default)]
@@ -471,11 +514,109 @@ impl Default for AutoModelPullConfig {
     }
 }
 
+/// HuggingFace model discovery configuration.
+///
+/// Controls automatic scanning of the HuggingFace Hub for compatible models
+/// with GGUF quantization, license filtering, and size limits.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelDiscoveryConfig {
+    /// Enable model discovery scanning (default: false)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Allowed license identifiers (empty = allow all commercial licenses)
+    #[serde(default)]
+    pub allowed_licenses: Vec<String>,
+    /// Maximum model download size in GB (default: 40)
+    #[serde(default = "default_max_model_size_gb")]
+    pub max_model_size_gb: u32,
+    /// Cache refresh interval in seconds (default: 86400 = 24h)
+    #[serde(default = "default_discovery_refresh_interval")]
+    pub refresh_interval_secs: u64,
+    /// Models to exclude from discovery results
+    #[serde(default)]
+    pub exclude_models: Vec<String>,
+    /// Architectures to exclude from discovery (e.g. ["phi", "gemma"])
+    #[serde(default)]
+    pub exclude_architectures: Vec<String>,
+    /// Optional HuggingFace API token for gated models
+    #[serde(default)]
+    pub huggingface_token: String,
+}
+
+fn default_max_model_size_gb() -> u32 {
+    40
+}
+
+fn default_discovery_refresh_interval() -> u64 {
+    86400 // 24 hours
+}
+
+impl Default for ModelDiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            allowed_licenses: Vec::new(),
+            max_model_size_gb: default_max_model_size_gb(),
+            refresh_interval_secs: default_discovery_refresh_interval(),
+            exclude_models: Vec::new(),
+            exclude_architectures: Vec::new(),
+            huggingface_token: String::new(),
+        }
+    }
+}
+
+/// Model caching configuration with LRU eviction.
+///
+/// Controls disk-based caching of downloaded models with automatic
+/// eviction when usage exceeds the configured limit.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ModelCacheConfig {
+    /// Enable model caching with LRU eviction (default: false)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Maximum cache size in GB (default: 100)
+    #[serde(default = "default_cache_max_size_gb")]
+    pub max_size_gb: u32,
+    /// Eviction threshold as percentage of max_size_gb (default: 80)
+    #[serde(default = "default_eviction_threshold")]
+    pub eviction_threshold_percent: f64,
+    /// Cache directory path (default: OS cache dir / xergon-agent / models)
+    #[serde(default)]
+    pub cache_dir: String,
+    /// How often to check for eviction (seconds, default: 300 = 5min)
+    #[serde(default = "default_eviction_check_interval")]
+    pub eviction_check_interval_secs: u64,
+}
+
+fn default_cache_max_size_gb() -> u32 {
+    100
+}
+
+fn default_eviction_threshold() -> f64 {
+    80.0
+}
+
+fn default_eviction_check_interval() -> u64 {
+    300
+}
+
+impl Default for ModelCacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_size_gb: default_cache_max_size_gb(),
+            eviction_threshold_percent: default_eviction_threshold(),
+            cache_dir: String::new(),
+            eviction_check_interval_secs: default_eviction_check_interval(),
+        }
+    }
+}
+
 /// Usage proof rollup configuration (Merkle tree epoch batching).
 ///
 /// Instead of creating individual usage proof boxes, batches proofs
 /// into a single commitment box with a Merkle root.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RollupConfig {
     /// Enable usage proof rollups (default: false)
     #[serde(default)]
@@ -532,7 +673,7 @@ impl Default for RollupConfig {
 /// Controls the invoice-based Lock-and-Mint bridge for accepting
 /// payments from foreign chains (BTC, ETH, ADA) to pay for
 /// Xergon inference and GPU rental.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PaymentBridgeConfig {
     /// Enable cross-chain payment bridge (default: false)
     #[serde(default)]
@@ -579,7 +720,7 @@ impl Default for PaymentBridgeConfig {
 ///
 /// Controls automatic update checking and the GitHub Releases URL
 /// used by `xergon update`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct UpdateConfig {
     /// GitHub Releases API URL for checking latest version
     #[serde(default = "default_update_release_url")]
@@ -616,7 +757,7 @@ impl Default for UpdateConfig {
 /// If a field is empty, the embedded compiled hex is used instead.
 /// This is useful for testing with different contract versions or
 /// deploying to different Ergo networks (testnet vs mainnet).
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContractsConfig {
     /// Override for provider_box.es compiled hex
     #[serde(default)]
@@ -667,6 +808,90 @@ impl Default for ContractsConfig {
             gpu_rating_hex: String::new(),
             gpu_rental_listing_hex: String::new(),
             payment_bridge_hex: String::new(),
+        }
+    }
+}
+
+/// Ergo oracle configuration (ERG/USD price feed from oracle pool box).
+///
+/// Reads the current ERG/USD rate from an oracle-core pool box on the Ergo
+/// blockchain. The pool box contains R4 (Long) with the aggregated rate in
+/// nanoERG per USD cent, which is converted to ERG/USD.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct OracleConfig {
+    /// Enable the oracle service (default: false)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Oracle pool NFT token ID for ERG/USD price feed.
+    /// When set, the agent fetches the current rate from the oracle pool box.
+    /// Example: the mainnet oracle-core pool NFT ID.
+    #[serde(default)]
+    pub pool_nft_id: String,
+    /// How often to refresh the oracle rate (seconds, default: 600 = 10 min)
+    #[serde(default = "default_oracle_refresh_interval")]
+    pub refresh_interval_secs: u64,
+}
+
+fn default_oracle_refresh_interval() -> u64 {
+    600
+}
+
+impl Default for OracleConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            pool_nft_id: String::new(),
+            refresh_interval_secs: default_oracle_refresh_interval(),
+        }
+    }
+}
+
+/// Provider on-chain registration configuration.
+///
+/// Controls whether the agent auto-registers as a provider on the Ergo blockchain.
+/// The registration creates a Provider Box with the provider_registration ErgoTree,
+/// containing R4-R7 registers and a singleton NFT token.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProviderRegistryConfig {
+    /// Enable the provider registration subsystem (default: false)
+    #[serde(default)]
+    pub enabled: bool,
+    /// Automatically register on startup if not already registered (default: false)
+    #[serde(default)]
+    pub auto_register: bool,
+    /// Amount of ERG to stake in the provider box (nanoERG, default: 1_000_000_000 = 1 ERG)
+    #[serde(default = "default_registration_stake_nanoerg")]
+    pub registration_stake_nanoerg: u64,
+    /// Provider's compressed secp256k1 public key (hex, 33 bytes).
+    /// Required for auto-registration. If empty, auto_register will be skipped.
+    #[serde(default)]
+    pub provider_pk_hex: String,
+    /// Provider endpoint URL to advertise on-chain.
+    /// If empty, defaults to the agent's own listen address.
+    #[serde(default)]
+    pub endpoint_url: String,
+    /// Price per token in nanoERG to advertise on-chain (default: 50000)
+    #[serde(default = "default_provider_price_per_token")]
+    pub price_per_token: u64,
+}
+
+fn default_registration_stake_nanoerg() -> u64 {
+    1_000_000_000 // 1 ERG
+}
+
+fn default_provider_price_per_token() -> u64 {
+    50_000 // 0.00005 ERG per 1M tokens
+}
+
+impl Default for ProviderRegistryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            auto_register: false,
+            registration_stake_nanoerg: default_registration_stake_nanoerg(),
+            provider_pk_hex: String::new(),
+            endpoint_url: String::new(),
+            price_per_token: default_provider_price_per_token(),
         }
     }
 }
@@ -762,12 +987,6 @@ impl AgentConfig {
             Ok(settings.try_deserialize()?)
         }
     }
-
-    /// Load configuration using default path resolution (env var or `config.toml`).
-    #[allow(dead_code)] // used by binary entrypoint, not tests
-    pub fn load() -> anyhow::Result<Self> {
-        Self::load_from(None)
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -842,7 +1061,6 @@ mod tests {
     // ---- Config validation tests ----
 
     fn make_test_agent_config() -> AgentConfig {
-        use config::Config;
         let toml_str = r#"
 [xergon]
 provider_id = "test_provider"

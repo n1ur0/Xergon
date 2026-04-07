@@ -60,7 +60,8 @@
   val stakeAmount = SELF.R6[Long].get
 
   // Identify the Provider Slash Token (token at index 0, supply=1)
-  val slashTokenId = SELF.tokens(0)._1
+  // PLACEHOLDER: Replace with actual slash token ID at deployment
+  val slashTokenId = fromBase16("0000000000000000000000000000000000000000000000000000000000000000")
 
   // OUTPUTS(0) convention: the successor state box is the first output.
   val outBox = OUTPUTS(0)
@@ -121,8 +122,9 @@
     outBox.R8[Int].isDefined &&
     outBox.R8[Int].get == 1 &&
 
-    // Treasury receives the slash penalty
+    // Treasury receives the slash penalty (must be a distinct output from successor)
     OUTPUTS.exists { (b: Box) =>
+      b != outBox &&
       b.propositionBytes == proveDlog(treasuryPk).propBytes &&
       b.value >= (stakeAmount / 100L) * slashPenaltyRate
     }

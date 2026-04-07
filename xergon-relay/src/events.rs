@@ -530,8 +530,9 @@ mod tests {
             region: "us-east".into(),
         };
         let frame = format_sse_frame(&event);
-        assert!(frame.starts_with(b"event: provider_online\ndata: "));
-        assert!(frame.ends_with(b"\n\n"));
-        assert!(frame.contains(b"\"provider_id\":\"box-123\""));
+        let frame_slice: &[u8] = frame.as_ref();
+        assert!(frame_slice.starts_with(b"event: provider_online\ndata: "));
+        assert!(frame_slice.ends_with(b"\n\n"));
+        assert!(frame_slice.windows(23).any(|w| w == b"\"provider_id\":\"box-123\""));
     }
 }

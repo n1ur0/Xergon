@@ -80,10 +80,9 @@
     proveDlog(providerPk) &&
     HEIGHT > challengeWindowEnd &&
     slashedFlag == 0 &&
-    // Provider receives their staked ERG (minus fees)
     OUTPUTS.exists { (b: Box) =>
-      b.propositionBytes == proveDlog(providerPk).propBytes &&
-      b.value >= SELF.value - 1000000L  // fee allowance
+      b.propositionBytes == PK(providerPk).propBytes &&
+      b.value >= SELF.value - 1000000L
     }
   }
 
@@ -100,32 +99,33 @@
   // ---------------------------------------------------------------------------
   val slashByChallenger = {
     // Not already slashed and within challenge window
-    slashedFlag == 0 &&
-    HEIGHT <= challengeWindowEnd &&
+    val notSlashed = slashedFlag == 0
+    val inWindow = HEIGHT <= challengeWindowEnd
 
     // Find the challenge proof box in inputs
-    INPUTS.exists { (inp: Box) =>
+    val hasValidProof = INPUTS.exists { (inp: Box) =>
       inp.R4[Coll[Byte]].isDefined &&
       inp.R5[Coll[Byte]].isDefined && {
         val challengeHash = inp.R4[Coll[Byte]].get
         val preimage = inp.R5[Coll[Byte]].get
-        // Verify the preimage matches the challenge hash
         blake2b256(preimage) == challengeHash
       }
-    } &&
+    }
 
     // Successor box preserves the slash token and sets slashed flag
-    outPreservesSlashToken &&
-    outBox.R4[GroupElement].isDefined &&
-    outBox.R4[GroupElement].get == providerPk &&
-    outBox.R8[Int].isDefined &&
-    outBox.R8[Int].get == 1 &&
+    val successorValid = outPreservesSlashToken &&
+      outBox.R4[GroupElement].isDefined &&
+      outBox.R4[GroupElement].get == providerPk &&
+      outBox.R8[Int].isDefined &&
+      outBox.R8[Int].get == 1
 
     // Treasury receives the slash penalty
-    OUTPUTS.exists { (b: Box) =>
-      b.propositionBytes == proveDlog(treasuryPk).propBytes &&
+    val treasuryPaid = OUTPUTS.exists { (b: Box) =>
+      b.propositionBytes == treasuryPk.propBytes &&
       b.value >= (stakeAmount / 100L) * slashPenaltyRate
     }
+
+    notSlashed && inWindow && hasValidProof && successorValid && treasuryPaid
   }
 
   // ---------------------------------------------------------------------------

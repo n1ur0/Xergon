@@ -6,7 +6,7 @@
 //! 3. Return 503 with Retry-After header while pulling
 //!
 //! Supported backends:
-//! - Ollama: `POST /api/pull` to pull models from Ollama registry
+//! - Ollama: `POST /api/pull` to pull models from Ollama registry (streaming)
 //! - llama.cpp: Download GGUF files from HuggingFace
 //! - Generic HTTP: Download from any HTTP URL
 
@@ -16,12 +16,14 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use dashmap::DashMap;
+use futures_util::StreamExt;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::config::AutoModelPullConfig;
+use crate::download_progress::ProgressTracker;
 
 /// Result of a model pull attempt.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +70,8 @@ pub struct AutoModelPull {
     pull_states: DashMap<String, PullState>,
     /// Semaphore for limiting concurrent pulls.
     concurrent_pulls: Arc<tokio::sync::Semaphore>,
+    /// Download progress tracker for real-time progress reporting.
+    progress: ProgressTracker,
 }
 
 impl AutoModelPull {
@@ -86,7 +90,13 @@ impl AutoModelPull {
             local_models: RwLock::new(HashSet::new()),
             pull_states: DashMap::new(),
             concurrent_pulls: Arc::new(tokio::sync::Semaphore::new(max_pulls)),
+            progress: ProgressTracker::new(),
         })
+    }
+
+    /// Get a reference to the progress tracker.
+    pub fn progress_tracker(&self) -> &ProgressTracker {
+        &self.progress
     }
 
     /// Check if a model is available locally.
@@ -132,6 +142,7 @@ impl AutoModelPull {
                                 error: "Pull timed out".into(),
                             },
                         );
+                        self.progress.mark_failed(&model_lower, "Pull timed out");
                         // Fall through to retry
                     } else {
                         return PullResult::PullFailed {
@@ -173,6 +184,7 @@ impl AutoModelPull {
         let hf_token = self.config.huggingface_token.clone();
         let states = self.pull_states.clone();
         let semaphore = self.concurrent_pulls.clone();
+        let progress = self.progress.clone();
 
         self.pull_states.insert(
             model.clone(),
@@ -181,10 +193,13 @@ impl AutoModelPull {
             },
         );
 
+        // Register progress tracking
+        progress.start_download(&model);
+
         tokio::spawn(async move {
             let _permit = semaphore.acquire().await.unwrap();
-            let result = do_pull_model(&http, &model, &backend_url, timeout_secs, &hf_token).await;
-            states.insert(model, PullState::Completed { result });
+            let result = do_pull_model(&http, &model, &backend_url, timeout_secs, &hf_token, &progress).await;
+            states.insert(model.clone(), PullState::Completed { result });
         });
 
         PullResult::PullFailed {
@@ -227,6 +242,9 @@ impl AutoModelPull {
                     debug!(error = %e, "Failed to refresh local model list");
                 }
 
+                // Clean up old progress entries (older than 10 minutes)
+                self.progress.cleanup(Duration::from_secs(600));
+
                 tokio::time::sleep(Duration::from_secs(interval_secs)).await;
             }
         });
@@ -251,14 +269,15 @@ async fn do_pull_model(
     backend_url: &str,
     timeout_secs: u64,
     hf_token: &str,
+    progress: &ProgressTracker,
 ) -> PullResult {
     let start = Instant::now();
 
     info!(model = %model_name, "Starting model pull");
 
-    // Strategy 1: Try Ollama pull (if backend looks like Ollama)
+    // Strategy 1: Try Ollama pull (if backend looks like Ollama) -- STREAMING
     if backend_url.contains("11434") || backend_url.contains("ollama") {
-        match pull_from_ollama(http, backend_url, model_name, timeout_secs).await {
+        match pull_from_ollama_streaming(http, backend_url, model_name, timeout_secs, progress).await {
             Ok(()) => {
                 let duration = start.elapsed().as_secs();
                 info!(model = %model_name, duration_secs = duration, "Model pulled from Ollama");
@@ -268,13 +287,20 @@ async fn do_pull_model(
                 };
             }
             Err(e) => {
+                // If cancelled, report it
+                if progress.is_cancelled(model_name) {
+                    warn!(model = %model_name, "Ollama pull cancelled");
+                    return PullResult::PullFailed {
+                        error: "Pull cancelled by user".into(),
+                    };
+                }
                 warn!(model = %model_name, error = %e, "Ollama pull failed");
             }
         }
     }
 
     // Strategy 2: Try HuggingFace download (for llama.cpp / tinygrad)
-    match pull_from_huggingface(http, model_name, hf_token, timeout_secs).await {
+    match pull_from_huggingface(http, model_name, hf_token, timeout_secs, progress).await {
         Ok(source) => {
             let duration = start.elapsed().as_secs();
             info!(
@@ -307,18 +333,24 @@ async fn do_pull_model(
     }
 }
 
-/// Pull a model from Ollama using `POST /api/pull`.
-async fn pull_from_ollama(
+/// Pull a model from Ollama using `POST /api/pull` with streaming enabled.
+///
+/// Parses the Ollama streaming response to extract download progress:
+/// ```json
+/// {"status":"downloading","digest":"sha256:...","total":4353248256,"completed":1234567890}
+/// ```
+async fn pull_from_ollama_streaming(
     http: &Client,
     backend_url: &str,
     model_name: &str,
     timeout_secs: u64,
+    progress: &ProgressTracker,
 ) -> Result<()> {
     let url = format!("{}/api/pull", backend_url.trim_end_matches('/'));
 
     let body = serde_json::json!({
         "name": model_name,
-        "stream": false,
+        "stream": true,
     });
 
     let resp = http
@@ -329,13 +361,96 @@ async fn pull_from_ollama(
         .await
         .context("Failed to send pull request to Ollama")?;
 
-    if resp.status().is_success() {
-        Ok(())
-    } else {
+    if !resp.status().is_success() {
         let status = resp.status();
         let body_text = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Ollama pull returned {}: {}", status, body_text)
+        anyhow::bail!("Ollama pull returned {}: {}", status, body_text);
     }
+
+    // Process the streaming response
+    let mut byte_stream = resp.bytes_stream();
+    let mut buffer = String::new();
+
+    while let Some(chunk) = byte_stream.next().await {
+        // Check for cancellation
+        if progress.is_cancelled(model_name) {
+            progress.mark_cancelled(model_name);
+            anyhow::bail!("Pull cancelled");
+        }
+
+        let chunk = chunk.context("Failed to read response chunk")?;
+        buffer.push_str(&String::from_utf8_lossy(&chunk));
+
+        // Ollama streams newline-delimited JSON
+        while let Some(newline_pos) = buffer.find('\n') {
+            let line = buffer[..newline_pos].trim().to_string();
+            buffer = buffer[newline_pos + 1..].to_string();
+
+            if line.is_empty() {
+                continue;
+            }
+
+            if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
+                let status = event.get("status").and_then(|s| s.as_str()).unwrap_or("");
+
+                match status {
+                    "downloading" => {
+                        let total: u64 = event
+                            .get("total")
+                            .and_then(|t| t.as_u64())
+                            .unwrap_or(0);
+                        let completed: u64 = event
+                            .get("completed")
+                            .and_then(|c| c.as_u64())
+                            .unwrap_or(0);
+
+                        progress.update_progress(model_name, completed, total);
+                        debug!(
+                            model = %model_name,
+                            completed = completed,
+                            total = total,
+                            "Downloading from Ollama"
+                        );
+                    }
+                    "verifying" => {
+                        progress.set_verifying(model_name);
+                        debug!(model = %model_name, "Verifying Ollama download");
+                    }
+                    "success" => {
+                        progress.mark_completed(model_name);
+                        return Ok(());
+                    }
+                    "error" => {
+                        let error_msg = event
+                            .get("error")
+                            .and_then(|e| e.as_str())
+                            .unwrap_or("Unknown Ollama error");
+                        progress.mark_failed(model_name, error_msg);
+                        anyhow::bail!("Ollama error: {}", error_msg);
+                    }
+                    _ => {
+                        // Other statuses like "pulling manifest", "digesting" etc.
+                        // These are informational; we keep tracking as "downloading"
+                        debug!(model = %model_name, status = %status, "Ollama pull status");
+                    }
+                }
+            }
+        }
+    }
+
+    // If we exited the loop without a "success" event, check if stream ended normally
+    // Ollama sometimes ends the stream without an explicit success event for small models
+    let current = progress.get_progress(model_name);
+    if let Some(p) = current {
+        if p.status != crate::download_progress::DownloadStatus::Failed
+            && p.status != crate::download_progress::DownloadStatus::Cancelled
+        {
+            progress.mark_completed(model_name);
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!("Ollama stream ended without success confirmation")
 }
 
 /// Pull a model from HuggingFace.
@@ -347,6 +462,7 @@ async fn pull_from_huggingface(
     model_name: &str,
     hf_token: &str,
     _timeout_secs: u64,
+    progress: &ProgressTracker,
 ) -> Result<String> {
     // Resolve the HuggingFace repo from the model name
     let (org, repo) = if model_name.contains('/') {
@@ -376,7 +492,7 @@ async fn pull_from_huggingface(
         );
     }
 
-    // We found the model on HuggingFace — record it as available
+    // We found the model on HuggingFace -- record it as available
     // In a real implementation, we'd download the GGUF file here.
     // For now, we just verify the model exists and return the source.
     let source = format!("huggingface:{}/{}", org, repo);
@@ -385,6 +501,9 @@ async fn pull_from_huggingface(
         hf_repo = format!("{}/{}", org, repo),
         "Model found on HuggingFace (download would happen here in production)"
     );
+
+    // Mark progress as completed for HuggingFace stub
+    progress.mark_completed(model_name);
 
     Ok(source)
 }

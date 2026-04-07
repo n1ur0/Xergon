@@ -38,6 +38,19 @@ interface AuthState {
 }
 
 const WALLET_TYPE_KEY = "xergon_wallet_type";
+const AUTH_COOKIE = "xergon-auth-token";
+
+/** Cookie helpers (client-side only) */
+function setAuthCookie(publicKey: string, walletType: WalletType) {
+  if (typeof window === "undefined") return;
+  const payload = btoa(JSON.stringify({ pk: publicKey, wt: walletType }));
+  document.cookie = `${AUTH_COOKIE}=${payload};path=/;max-age=${60 * 60 * 24 * 7};SameSite=Lax`;
+}
+
+function clearAuthCookie() {
+  if (typeof window === "undefined") return;
+  document.cookie = `${AUTH_COOKIE}=;path=/;max-age=0;SameSite=Lax`;
+}
 
 function getStoredWalletType(): WalletType | null {
   if (typeof window === "undefined") return null;
@@ -93,6 +106,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     setWalletPk(publicKey);
     setWalletAddress(ergoAddress);
     setStoredWalletType("cli");
+    setAuthCookie(publicKey, "cli");
     set({ user, isAuthenticated: true, isLoading: false, walletType: "cli", lastWalletError: null });
   },
 
@@ -143,6 +157,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       setWalletPk(publicKey);
       setWalletAddress(ergoAddress);
       setStoredWalletType("nautilus");
+      setAuthCookie(publicKey, "nautilus");
       set({ user, isAuthenticated: true, isLoading: false, walletType: "nautilus", lastWalletError: null });
     } catch (err) {
       // Parse the error and set a user-friendly message
@@ -178,6 +193,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     setWalletPk(address);
     setWalletAddress(address);
     setStoredWalletType(type);
+    setAuthCookie(address, type);
     set({
       user,
       isAuthenticated: true,
@@ -191,6 +207,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     setWalletPk(null);
     setWalletAddress(null);
     setStoredWalletType(null);
+    clearAuthCookie();
     set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
   },
 
@@ -198,6 +215,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     setWalletPk(null);
     setWalletAddress(null);
     setStoredWalletType(null);
+    clearAuthCookie();
     set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
   },
 
@@ -210,6 +228,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
     setWalletPk(null);
     setWalletAddress(null);
     setStoredWalletType(null);
+    clearAuthCookie();
     set({ user: null, isAuthenticated: false, walletType: null, lastWalletError: null });
   },
 
@@ -270,6 +289,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
       const ergoAddress = data.ergo_address || getWalletAddress() || pk;
       const balance = data.balance_erg ?? 0;
 
+      setAuthCookie(pk, storedType || "cli");
       set({
         user: {
           publicKey: pk,

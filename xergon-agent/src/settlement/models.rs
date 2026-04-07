@@ -163,6 +163,8 @@ impl SettlementLedger {
                 Err(_) => {
                     // Attempt to load legacy ledger and migrate
                     #[derive(Debug, Clone, serde::Deserialize)]
+                    #[allow(dead_code)]
+                    // Kept for backward-compatible deserialization of legacy ledger files
                     struct LegacySettlementPayment {
                         provider_id: String,
                         ergo_address: String,
@@ -175,6 +177,8 @@ impl SettlementLedger {
                     }
 
                     #[derive(Debug, Clone, serde::Deserialize)]
+                    #[allow(dead_code)]
+                    // Kept for backward-compatible deserialization of legacy ledger files
                     struct LegacySettlementBatch {
                         batch_id: String,
                         created_at: DateTime<Utc>,
@@ -191,6 +195,8 @@ impl SettlementLedger {
                     }
 
                     #[derive(Debug, Clone, Default, serde::Deserialize)]
+                    #[allow(dead_code)]
+                    // Kept for backward-compatible deserialization of legacy ledger files
                     struct LegacySettlementLedger {
                         batches: Vec<LegacySettlementBatch>,
                         last_settled_at: Option<DateTime<Utc>>,

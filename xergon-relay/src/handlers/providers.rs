@@ -128,11 +128,16 @@ fn trigger_lazy_scan(state: &AppState) {
         let scanner = scanner.clone();
         let cache = cache.clone();
         let registry = state.provider_registry.clone();
+        let health_scorer = state.health_scorer.clone();
         tokio::spawn(async move {
             debug!("Lazy chain scan triggered");
             let providers = scanner.scan().await;
             cache.update(providers.clone());
             registry.sync_from_chain(&providers);
+            // Bridge on-chain PoNW reputation into HealthScorer
+            for cp in &providers {
+                health_scorer.update_reputation_from_pown(&cp.provider_pk, cp.pown_score);
+            }
             info!(count = providers.len(), "Lazy chain scan complete");
         });
     }

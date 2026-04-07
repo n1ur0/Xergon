@@ -4,15 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "node server.js",
+    "dev:next": "next dev --turbopack",
     "build": "next build",
-    "start": "next start",
+    "start": "node server.js",
+    "start:next": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.0.1",
     "@xergon/sdk": "file:../xergon-sdk",
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.0",
@@ -35,12 +39,14 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.1",
     "jsdom": "^29.0.1",
     "postcss": "^8.5.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.2",
+    "ws": "^8.20.0"
   },
   "engines": {
     "node": ">=20"

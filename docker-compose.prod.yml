@@ -1,0 +1,337 @@
+# =============================================================================
+# Xergon Network -- Production Docker Compose Stack
+# =============================================================================
+#
+# Usage:
+#   cp .env.example .env   # then edit .env with your values
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Includes:
+#   - Core services (agent, relay, marketplace) with health checks & limits
+#   - Ergo node sidecar (testnet)
+#   - Monitoring (Prometheus, Grafana, Alertmanager)
+#
+# Access:
+#   Marketplace:  http://localhost:${MARKETPLACE_PORT}
+#   Agent API:    http://localhost:${AGENT_PORT}
+#   Relay API:    http://localhost:${RELAY_PORT}
+#   Grafana:      http://localhost:${GRAFANA_PORT}  (${GF_SECURITY_ADMIN_USER}/${GF_SECURITY_ADMIN_PASSWORD})
+#   Prometheus:   http://localhost:${PROMETHEUS_PORT}
+#   Alertmanager: http://localhost:${ALERTMANAGER_PORT}
+#   Ergo Node:    http://localhost:${ERGO_REST_PORT}
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Core Services
+  # ---------------------------------------------------------------------------
+
+  xergon-agent:
+    build:
+      context: ./xergon-agent
+      dockerfile: Dockerfile
+    container_name: xergon-agent
+    restart: always
+    ports:
+      - "${AGENT_PORT:-9099}:9099"
+    volumes:
+      - ./xergon-agent/config.toml:/app/config.toml:ro
+      - xergon-agent-data:/app/data
+    environment:
+      RUST_LOG: ${AGENT_LOG_LEVEL:-xergon_agent=info}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9099/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "xergon-agent"
+    networks:
+      - xergon-net
+
+  xergon-relay:
+    build:
+      context: ./xergon-relay
+      dockerfile: Dockerfile
+    container_name: xergon-relay
+    restart: always
+    ports:
+      - "${RELAY_PORT:-9090}:9090"
+    volumes:
+      - ./xergon-relay/config.toml:/app/config.toml:ro
+      - xergon-relay-data:/app/data
+    environment:
+      RUST_LOG: ${RELAY_LOG_LEVEL:-xergon_relay=info}
+    depends_on:
+      xergon-agent:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9090/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "xergon-relay"
+    networks:
+      - xergon-net
+
+  xergon-marketplace:
+    build:
+      context: ./xergon-marketplace
+      dockerfile: Dockerfile
+    container_name: xergon-marketplace
+    restart: always
+    ports:
+      - "${MARKETPLACE_PORT:-3000}:3000"
+    environment:
+      RELAY_URL: http://xergon-relay:9090
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-/api/v1}
+      NEXT_PUBLIC_XERGON_AGENT_BASE: http://xergon-agent:9099
+    depends_on:
+      xergon-relay:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "25m"
+        max-file: "3"
+        tag: "xergon-marketplace"
+    networks:
+      - xergon-net
+
+  # ---------------------------------------------------------------------------
+  # Ergo Node Sidecar (optional -- for testing/dev on testnet)
+  # ---------------------------------------------------------------------------
+  # Start with:  docker compose -f docker-compose.prod.yml up -d ergo-node
+  # Stop with:   docker compose -f docker-compose.prod.yml stop ergo-node
+  # ---------------------------------------------------------------------------
+
+  ergo-node:
+    image: ergoplatform/ergo:latest
+    container_name: xergon-ergo-node
+    restart: always
+    profiles:
+      - ergo-node
+    ports:
+      - "${ERGO_REST_PORT:-9053}:9053"
+      - "${ERGO_P2P_PORT:-9020}:9020"
+    volumes:
+      - ergo-node-data:/home/ergo/.ergo
+      - ./docker/ergo/testnet.conf:/home/ergo/.ergo/testnet.conf:ro
+    environment:
+      ERGO_NETWORK_TYPE: testnet
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9053/info"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+        reservations:
+          cpus: "0.5"
+          memory: 1G
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+        tag: "ergo-node"
+    networks:
+      - xergon-net
+
+  # ---------------------------------------------------------------------------
+  # Monitoring Stack
+  # ---------------------------------------------------------------------------
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: xergon-prometheus
+    restart: always
+    ports:
+      - "${PROMETHEUS_PORT:-9091}:9090"
+    volumes:
+      - ./docker/monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}"
+      - "--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-20GB}"
+      - "--web.enable-lifecycle"
+      - "--web.max-connections=512"
+    depends_on:
+      xergon-agent:
+        condition: service_healthy
+      xergon-relay:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2G
+        reservations:
+          cpus: "0.25"
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+        tag: "prometheus"
+    networks:
+      - xergon-net
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: xergon-grafana
+    restart: always
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-xergon_admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:-http://localhost:3001}
+      GF_INSTALL_PLUGINS: ${GF_INSTALL_PLUGINS:-}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./docker/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./docker/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/monitoring/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "25m"
+        max-file: "3"
+        tag: "grafana"
+    networks:
+      - xergon-net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: xergon-alertmanager
+    restart: always
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./docker/monitoring/alertmanager.prod.yml:/etc/alertmanager/alertmanager.yml:ro
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--web.external-url=http://localhost:${ALERTMANAGER_PORT:-9093}"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+        reservations:
+          cpus: "0.05"
+          memory: 64M
+    logging:
+      driver: json-file
+      options:
+        max-size: "25m"
+        max-file: "3"
+        tag: "alertmanager"
+    networks:
+      - xergon-net
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  xergon-agent-data:
+    name: xergon-agent-data
+  xergon-relay-data:
+    name: xergon-relay-data
+  ergo-node-data:
+    name: xergon-ergo-node-data
+  prometheus-data:
+    name: xergon-prometheus-data
+  grafana-data:
+    name: xergon-grafana-data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  xergon-net:
+    name: xergon-net
+    driver: bridge

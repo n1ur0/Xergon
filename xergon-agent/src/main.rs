@@ -234,8 +234,11 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         timestamp: chrono::Utc::now().timestamp(),
     }));
 
+    let multi_gpu = Arc::new(xergon_agent::multi_gpu::MultiGpuManager::new());
+
     let mut app_state = AppState {
         xergon_config: config.xergon.clone(),
+        ergo_node_url: config.ergo_node.rest_url.clone(),
         pown_status: pown.status(),
         peer_state: peer_state.clone(),
         node_health: node_health_state.clone(),
@@ -248,12 +251,123 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         tunnel_manager: None,
         p2p_engine: None,
         auto_pull: None,
+        model_discovery: None,
+        model_cache: None,
         rollup: None,
         metrics: Arc::new(xergon_agent::metrics::MetricsCollector::new()),
+        metrics_store: Arc::new(xergon_agent::metrics::MetricsStore::new()),
         models_loaded: Arc::new(tokio::sync::RwLock::new(Vec::new())),
         pricing: Arc::new(tokio::sync::RwLock::new(config.pricing.clone())),
         config_path: resolved_config_path,
+        oracle: None,
+        provider_registry_config: if config.provider_registry.enabled {
+            Some(Arc::new(config.provider_registry.clone()))
+        } else {
+            None
+        },
+        orchestrator: Arc::new(xergon_agent::orchestration::Orchestrator::new(
+            xergon_agent::orchestration::OrchestrationConfig::default(),
+        )),
+        benchmark_suite: None,
+        auto_healer: None,
+        download_progress: None,
+        marketplace_sync: None,
+        config_reloader: None,
+        model_registry: Arc::new(xergon_agent::model_versioning::ModelVersionRegistry::new()),
+        auto_scaler: None,
+        reputation_dashboard: None,
+        inference_queue: None,
+        model_health_monitor: None,
+        provider_mesh: None,
+        fine_tune: Arc::new(xergon_agent::fine_tune::FineTuneManager::new(2)),
+        ab_testing: Arc::new(xergon_agent::ab_testing::ABTestManager::new()),
+        multi_gpu: multi_gpu.clone(),
+        container_runtime: Arc::new(xergon_agent::container::ContainerManager::new()),
+        model_shard_manager: Arc::new(xergon_agent::model_sharding::ModelShardManager::new(
+            multi_gpu.clone(),
+        )),
+        distributed_inference: Arc::new(xergon_agent::distributed_inference::DistributedInferenceManager::new()),
+        sandbox_manager: Arc::new(xergon_agent::sandbox::SandboxManager::new()),
+        marketplace_listing: Arc::new(xergon_agent::marketplace_listing::MarketplaceListingManager::new(
+            "xergon-provider".to_string(),
+        )),
+        observability: Arc::new(xergon_agent::observability::ObservabilityManager::new(
+            xergon_agent::observability::ObservabilityConfig::default(),
+        )),
+        compression: Arc::new(xergon_agent::model_compression::CompressionManager::new(2)),
+        inference_cache: Arc::new(xergon_agent::inference_cache::InferenceCache::new_default()),
+        gpu_memory: Arc::new(xergon_agent::gpu_memory::GpuMemoryManager::new()),
+        model_migration: Arc::new(xergon_agent::model_migration::ModelMigrationManager::new()),
+        warmup_pool: Arc::new(xergon_agent::warmup::WarmupPool::new(
+            xergon_agent::warmup::WarmupConfig::default(),
+        )),
+        inference_batcher: Arc::new(xergon_agent::inference_batch::InferenceBatcher::new(
+            xergon_agent::inference_batch::BatchConfig::default(),
+        )),
+        checkpoint_manager: Arc::new(xergon_agent::checkpoint::CheckpointManager::new(
+            xergon_agent::checkpoint::CheckpointConfig::default(),
+        )),
+        quota_manager: Arc::new(xergon_agent::resource_quotas::ResourceQuotaManager::new(
+            xergon_agent::resource_quotas::QuotaConfig::default(),
+        )),
+        profiler: Arc::new(xergon_agent::inference_profiler::InferenceProfiler::default()),
+        gpu_scheduler: Arc::new(xergon_agent::gpu_scheduler::GpuScheduler::default()),
+        artifact_storage: Arc::new(xergon_agent::artifact_storage::ArtifactStorage::default()),
+        content_safety: Arc::new(tokio::sync::RwLock::new(
+            xergon_agent::content_safety::ContentSafetyFilter::new(),
+        )),
+        quantization_v2: Arc::new(xergon_agent::quantization_v2::QuantizationV2Manager::new(
+            xergon_agent::quantization_v2::QuantConfig::default(),
+        )),
+        priority_queue: Arc::new(xergon_agent::priority_queue::PriorityQueueManager::new(
+            xergon_agent::priority_queue::PriorityQueueConfig::default(),
+        )),
+        model_snapshot: Arc::new(xergon_agent::model_snapshot::SnapshotManager::new(
+            xergon_agent::model_snapshot::SnapshotConfig::default(),
+        )),
+        alignment_trainer: Arc::new(xergon_agent::alignment_training::AlignmentTrainer::new()),
+        model_serve_manager: Arc::new(xergon_agent::model_serving::ModelServeManager::new(
+            xergon_agent::model_serving::ModelServeConfig::default(),
+        )),
+        dynamic_batcher: Arc::new(xergon_agent::dynamic_batcher::DynamicBatcher::new(
+            xergon_agent::dynamic_batcher::DynamicBatchConfig::default(),
+        )),
+        ab_testing_v2: Arc::new(xergon_agent::ab_testing_v2::ABTestV2Manager::new()),
+        federated_learning: Some(Arc::new(xergon_agent::federated_learning::FederatedState::new())),
+        extended_model_registry: Some(Arc::new(xergon_agent::model_registry::ModelRegistry::new())),
+        model_optimizer: Some(Arc::new(xergon_agent::model_optimizer::ModelOptimizer::new())),
+        federated_training: Some(Arc::new(xergon_agent::federated_training::FederatedTrainingEngine::new())),
+        tensor_pipeline: Arc::new(xergon_agent::tensor_pipeline::TensorPipelineManager::new()),
+        e2e_suite: xergon_agent::e2e_integration::create_default_suite(),
+        circuit_breaker: Arc::new(xergon_agent::self_healing_circuit_breaker::SelfHealingCircuitBreaker::new()),
+        model_drift_detector: Arc::new(xergon_agent::model_drift::ModelDriftDetector::new()),
+        inference_observability: Arc::new(xergon_agent::inference_observability::InferenceObservability::new()),
+        lineage_graph: Arc::new(xergon_agent::model_lineage_graph::LineageGraph::new()),
+        prompt_versioning: Arc::new(xergon_agent::prompt_versioning::PromptVersionManager::new()),
+        inference_sandbox: Arc::new(xergon_agent::inference_sandbox::InferenceSandbox::new()),
+        model_access_control: Arc::new(xergon_agent::model_access_control::ModelAccessControl::new()),
+        audit_aggregator: Arc::new(xergon_agent::audit_log_aggregator::AuditLogAggregator::new()),
+        feature_flags: Arc::new(xergon_agent::feature_flags::FeatureFlagService::new()),
+        experiments: Arc::new(xergon_agent::experiment_framework::ExperimentFramework::new()),
+        inference_gateway: Arc::new(xergon_agent::inference_gateway::InferenceGateway::new()),
+        oracle_feeds: Arc::new(xergon_agent::ergo_oracle_feeds::ErgoOracleService::new()),
+        cost_accountant: Arc::new(xergon_agent::ergo_cost_accounting::ErgoCostAccountant::new()),
+        sigma_usd_pricer: Arc::new(xergon_agent::sigma_usd_pricing::SigmaUsdPricer::new()),
     };
+
+    // Initialize benchmark suite
+    let benchmark_suite = Arc::new(xergon_agent::benchmark::BenchmarkSuite::new());
+    app_state.benchmark_suite = Some(benchmark_suite);
+
+    // Initialize auto-heal system if enabled
+    let auto_heal_config = xergon_agent::auto_heal::AutoHealConfig::default();
+    let auto_healer = Arc::new(xergon_agent::auto_heal::AutoHealer::new(
+        auto_heal_config,
+        config.ergo_node.rest_url.clone(),
+        config.relay.relay_url.clone(),
+    ));
+    app_state.auto_healer = Some(auto_healer.clone());
+    auto_healer.spawn_loop();
 
     // Initialize airdrop service if enabled
     if config.airdrop.enabled {
@@ -272,6 +386,58 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         app_state.airdrop = Some(Arc::new(airdrop_service));
     } else {
         info!("Airdrop service disabled (set [airdrop].enabled = true to enable)");
+    }
+
+    // Initialize oracle service if enabled
+    if config.oracle.enabled {
+        match xergon_agent::oracle_service::OracleService::new(
+            config.oracle.clone(),
+            config.ergo_node.rest_url.clone(),
+        ) {
+            Ok(oracle_svc) => {
+                let oracle_svc = Arc::new(oracle_svc);
+                oracle_svc.spawn_refresh_loop();
+                info!(
+                    pool_nft = %config.oracle.pool_nft_id,
+                    refresh_secs = config.oracle.refresh_interval_secs,
+                    "Oracle service enabled — ERG/USD price feed from oracle pool box"
+                );
+                app_state.oracle = Some(oracle_svc);
+            }
+            Err(e) => {
+                warn!(error = %e, "Failed to initialize oracle service");
+            }
+        }
+    } else {
+        info!("Oracle service disabled (set [oracle].enabled = true to enable)");
+    }
+
+    // Auto-register provider on-chain if configured
+    if config.provider_registry.enabled && config.provider_registry.auto_register {
+        let node_url = config.ergo_node.rest_url.clone();
+        let client = xergon_agent::chain::client::ErgoNodeClient::new(node_url);
+        let endpoint = if config.provider_registry.endpoint_url.is_empty() {
+            format!(
+                "http://0.0.0.0:{}",
+                config.api.listen_addr.split(':').last().unwrap_or("9099")
+            )
+        } else {
+            config.provider_registry.endpoint_url.clone()
+        };
+        match xergon_agent::provider_registry::auto_register_if_needed(
+            &client,
+            &config.provider_registry,
+            &config.xergon.provider_name,
+            &endpoint,
+            &config.provider_registry.provider_pk_hex,
+            config.provider_registry.price_per_token,
+        )
+        .await
+        {
+            Ok(Some(result)) => info!(tx_id = %result.tx_id, "Auto-registered provider on-chain"),
+            Ok(None) => info!("Provider already registered on-chain"),
+            Err(e) => warn!(error = %e, "Auto-registration failed (non-fatal)"),
+        }
     }
 
     // Initialize GPU rental subsystem (metering + tunnels)
@@ -358,6 +524,21 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
                 let confirm_handle = tokio::spawn(async move {
                     confirm_engine.confirm_loop().await;
                 });
+
+                // Spawn the on-chain settlement loop if chain_enabled
+                if config.settlement.chain_enabled {
+                    let chain_engine = engine.clone();
+                    let provider_address = config.xergon.ergo_address.clone();
+                    let chain_handle = tokio::spawn(async move {
+                        chain_engine.run_chain_settlement_loop(provider_address).await;
+                    });
+                    info!(
+                        provider = %config.xergon.ergo_address,
+                        interval_secs = config.settlement.interval_secs,
+                        "On-chain (eUTXO) settlement loop spawned"
+                    );
+                    drop(chain_handle);
+                }
 
                 // Keep handles alive (we won't abort them on shutdown since settlements
                 // should complete if in-progress)
@@ -470,6 +651,7 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
             Ok(auto_pull) => {
                 let auto_pull = Arc::new(auto_pull);
                 app_state.auto_pull = Some(auto_pull.clone());
+                app_state.download_progress = Some(Arc::new(auto_pull.progress_tracker().clone()));
 
                 // Spawn model watcher to keep local model list fresh
                 auto_pull.clone().spawn_model_watcher();
@@ -495,6 +677,78 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         info!("Auto model pull disabled (set [auto_model_pull].enabled = true to enable)");
     }
 
+    // Initialize model discovery service
+    if config.model_discovery.enabled {
+        info!(
+            max_model_size_gb = config.model_discovery.max_model_size_gb,
+            refresh_interval_secs = config.model_discovery.refresh_interval_secs,
+            "Initializing HuggingFace model discovery"
+        );
+
+        match xergon_agent::model_discovery::ModelDiscovery::new(config.model_discovery.clone(), None) {
+            Ok(discovery) => {
+                let discovery = Arc::new(discovery);
+                app_state.model_discovery = Some(discovery.clone());
+
+                // Spawn background refresh loop
+                let discovery_clone = discovery.clone();
+                let refresh_interval = config.model_discovery.refresh_interval_secs;
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(refresh_interval)).await;
+                        let _ = discovery_clone.scan().await;
+                    }
+                });
+
+                // Run initial scan
+                let initial_scan = discovery.clone();
+                tokio::spawn(async move {
+                    let _ = initial_scan.scan().await;
+                });
+
+                info!("HuggingFace model discovery enabled");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to initialize model discovery");
+            }
+        }
+    } else {
+        info!("Model discovery disabled (set [model_discovery].enabled = true to enable)");
+    }
+
+    // Initialize model cache with LRU eviction
+    if config.model_cache.enabled {
+        info!(
+            max_size_gb = config.model_cache.max_size_gb,
+            eviction_threshold = config.model_cache.eviction_threshold_percent,
+            "Initializing model cache with LRU eviction"
+        );
+
+        match xergon_agent::model_cache::ModelCache::new(config.model_cache.clone()) {
+            Ok(cache) => {
+                let cache = Arc::new(cache);
+                app_state.model_cache = Some(cache.clone());
+
+                // Spawn background eviction checker
+                let cache_clone = cache.clone();
+                let check_interval = config.model_cache.eviction_check_interval_secs;
+                tokio::spawn(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(check_interval)).await;
+                        let _ = cache_clone.check_and_evict().await;
+                    }
+                });
+
+                info!("Model cache with LRU eviction enabled");
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to initialize model cache");
+            }
+        }
+    } else {
+        info!("Model cache disabled (set [model_cache].enabled = true to enable)");
+    }
+
     // Initialize usage proof rollup system
     if config.rollup.enabled {
         info!(
@@ -516,6 +770,35 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         info!("Usage proof rollup system enabled");
     } else {
         info!("Usage proof rollup disabled (set [rollup].enabled = true to enable)");
+    }
+
+    // Initialize storage rent monitoring
+    if config.storage_rent.enabled {
+        let watched_count = config.storage_rent.watched_boxes.len();
+        if watched_count == 0 {
+            info!("Storage rent monitoring enabled but no watched_boxes configured — nothing to monitor");
+        } else {
+            info!(
+                check_interval_blocks = config.storage_rent.check_interval_blocks,
+                buffer_factor = config.storage_rent.topup_buffer_factor,
+                min_topup_nanoerg = config.storage_rent.min_topup_amount_nanoerg,
+                watched = watched_count,
+                "Initializing storage rent monitor"
+            );
+
+            let rent_client = xergon_agent::chain::client::ErgoNodeClient::new(
+                config.ergo_node.rest_url.clone(),
+            );
+            let rent_monitor = xergon_agent::storage_rent::StorageRentMonitor::new(
+                rent_client,
+                config.storage_rent.clone(),
+            );
+            rent_monitor.spawn();
+
+            info!("Storage rent monitor spawned as background task");
+        }
+    } else {
+        info!("Storage rent monitoring disabled (set [storage_rent].enabled = true to enable)");
     }
 
     // Initialize relay registration client
@@ -590,7 +873,7 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
     let chain_tx_config: xergon_agent::config::ChainTxConfig =
         serde_json::from_value(serde_json::to_value(&config.chain)?)
             .context("Failed to convert chain config")?;
-    let usage_proof_accumulator = if chain_tx_config.usage_proof_tx_enabled
+    let _usage_proof_accumulator = if chain_tx_config.usage_proof_tx_enabled
         || chain_tx_config.heartbeat_tx_enabled
     {
         let acc = Arc::new(xergon_agent::chain::usage_proofs::UsageProofAccumulator::new(
@@ -625,8 +908,8 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         let pown = pown.clone();
         let chain_tx_config_for_hb = chain_tx_config;
         let chain_client_for_hb = chain_client.clone();
-        let proof_acc_for_hb = usage_proof_accumulator.clone();
         let region = config.xergon.region.clone();
+        let hb_endpoint = config.provider_registry.endpoint_url.clone();
         let pricing_cfg = config.pricing.clone();
         let served_models = config.inference.served_models.clone();
         let handle = tokio::spawn(async move {
@@ -637,20 +920,24 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
                     let cc = chain_client_for_hb;
                     let nft_id = chain_tx_config_for_hb.provider_nft_token_id.clone();
                     let hb_region = region.clone();
-                    let acc = proof_acc_for_hb.clone();
+                    let pown = pown.clone();
                     Some(Box::new(move || {
                         let cc = cc.clone();
                         let nft_id = nft_id.clone();
                         let hb_region = hb_region.clone();
-                        let acc = acc.clone().expect("usage_proof_accumulator must exist when heartbeat_tx_enabled");
+                        let hb_endpoint = hb_endpoint.clone();
+                        let pown = pown.clone();
                         let pricing_cfg = pricing_cfg.clone();
                         let served_models = served_models_for_onchain.clone();
                         tokio::spawn(async move {
-                            let tokens=acc.total_tokens();
-                            let requests = acc.total_requests();
                             let models_r6 = pricing_cfg.build_r6_json(&served_models);
+                            // Read current PoNW score (work_points) for R7
+                            let pown_status = pown.status();
+                            let status = pown_status.read().await;
+                            let ponw = status.work_points as i32;
+                            drop(status);
                             match xergon_agent::chain::transactions::submit_heartbeat_tx(
-                                &cc, &nft_id, tokens, requests, &hb_region, &models_r6,
+                                &cc, &nft_id, &hb_endpoint, &models_r6, ponw, &hb_region,
                             ).await {
                                 Ok(tx_id) => info!(tx_id = %tx_id, "On-chain heartbeat submitted"),
                                 Err(e) => warn!(error = %e, "On-chain heartbeat tx failed (non-fatal)"),
@@ -813,6 +1100,31 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
             }
         })
     };
+
+    // Initialize marketplace sync (periodic push of provider info to relay)
+    if config.marketplace_sync.enabled && !config.relay.relay_url.is_empty() {
+        info!(
+            interval_secs = config.marketplace_sync.sync_interval_secs,
+            include_benchmarks = config.marketplace_sync.include_benchmarks,
+            include_models = config.marketplace_sync.include_models,
+            include_gpu_info = config.marketplace_sync.include_gpu_info,
+            "Initializing marketplace sync"
+        );
+
+        let marketplace_sync = Arc::new(xergon_agent::marketplace_sync::MarketplaceSync::new(
+            config.marketplace_sync.clone(),
+            config.relay.relay_url.clone(),
+            Arc::new(app_state.clone()),
+        ));
+        app_state.marketplace_sync = Some(marketplace_sync.clone());
+
+        // Spawn the sync loop
+        marketplace_sync.spawn_loop();
+
+        info!("Marketplace sync enabled");
+    } else {
+        info!("Marketplace sync disabled (enable [marketplace_sync].enabled and configure relay.relay_url)");
+    }
 
     // Start API server (blocks until shutdown)
     if config.inference.enabled {
@@ -1126,7 +1438,7 @@ fn provider_list_prices(config_path: Option<PathBuf>) -> Result<()> {
         println!("  Per-model overrides:");
         // Sort by model name for consistent output
         let mut sorted: Vec<_> = config.pricing.models.iter().collect();
-        sorted.sort_by_key(|(k, _)| k.clone());
+        sorted.sort_by_key(|(k, _)| k.to_string());
         for (model, price) in sorted {
             let is_default = *price == config.pricing.default_price_per_1m_tokens;
             let note = if is_default { " (same as default)" } else { "" };
@@ -1195,6 +1507,8 @@ fn provider_remove_price(model: String, config_path: Option<PathBuf>) -> Result<
 ///
 /// Sends GET {url}/v1/models and extracts the first model ID from the
 /// OpenAI-compatible response: `{"data": [{"id": "model-name", ...}]}`.
+#[allow(dead_code)]
+// Kept as a convenience wrapper; currently only probe_llama_server_all_models is used
 async fn probe_llama_server(client: &reqwest::Client, base_url: &str) -> Option<String> {
     probe_llama_server_all_models(client, base_url)
         .await

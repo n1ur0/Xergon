@@ -80,17 +80,6 @@ impl LatencyHistogram {
             for (i, &boundary) in LATENCY_BUCKETS_MS.iter().enumerate() {
                 cumulative += counts[i];
                 if cumulative >= target {
-                    // Linear interpolation inside the bucket when possible.
-                    if i > 0 {
-                        let prev_cum = cumulative - counts[i];
-                        let prev_boundary = LATENCY_BUCKETS_MS[i - 1];
-                        let bucket_count = counts[i];
-                        if bucket_count > 0 && cumulative >= target && prev_cum < target {
-                            let frac = (target - prev_cum) as f64 / bucket_count as f64;
-                            return prev_boundary
-                                + ((boundary - prev_boundary) as f64 * frac) as u64;
-                        }
-                    }
                     return boundary;
                 }
             }

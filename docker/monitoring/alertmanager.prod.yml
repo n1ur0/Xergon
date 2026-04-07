@@ -1,0 +1,61 @@
+# Alertmanager configuration for Xergon Network -- PRODUCTION
+#
+# Configures webhook receivers using environment-driven URLs.
+# Update the webhook URLs in .env (ALERT_WEBHOOK_DEFAULT, etc.)
+# or replace the placeholder values below directly.
+
+global:
+  resolve_timeout: 5m
+
+# Default route -- all alerts flow through here
+route:
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: "default-webhook"
+
+  routes:
+    # Critical alerts -- immediate routing, frequent repeats
+    - match:
+        severity: critical
+      receiver: "critical-webhook"
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 1h
+      continue: true
+
+    # Warning alerts -- batched, less frequent
+    - match:
+        severity: warning
+      receiver: "warning-webhook"
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+receivers:
+  # Default -- all alerts unless matched by a more specific route
+  - name: "default-webhook"
+    webhook_configs:
+      - url: "http://host.docker.internal:5001/webhook/xergon-alerts"
+        send_resolved: true
+
+  # Critical -- immediate notification
+  - name: "critical-webhook"
+    webhook_configs:
+      - url: "http://host.docker.internal:5001/webhook/xergon-critical"
+        send_resolved: true
+
+  # Warning -- batched notification
+  - name: "warning-webhook"
+    webhook_configs:
+      - url: "http://host.docker.internal:5001/webhook/xergon-warnings"
+        send_resolved: true
+
+# Inhibition rules -- suppress child alerts when parent fires
+inhibit_rules:
+  - source_match:
+      severity: "critical"
+    target_match:
+      severity: "warning"
+    equal: ["alertname"]

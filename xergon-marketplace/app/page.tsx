@@ -1,5 +1,27 @@
 import Link from "next/link";
-import { PlaygroundSection } from "@/components/playground/PlaygroundSection";
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { DynamicPlaygroundSection } from "@/components/playground/DynamicPlaygroundSection";
+
+export const metadata: Metadata = {
+  title: "Xergon Network - Decentralized AI Compute Marketplace",
+  description:
+    "Access open-source AI models powered by the Ergo blockchain. No lock-in, no middlemen — just transparent, pay-per-token inference on a trustless network. Browse Llama, Qwen, Mistral, DeepSeek and more.",
+  openGraph: {
+    title: "Xergon Network - Decentralized AI Compute Marketplace",
+    description:
+      "Access open-source AI models powered by the Ergo blockchain. Pay-per-token inference, no lock-in.",
+    url: "/",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Xergon Network - Decentralized AI Compute Marketplace",
+    description:
+      "Access open-source AI models powered by the Ergo blockchain. Pay-per-token inference, no lock-in.",
+  },
+  alternates: { canonical: "/" },
+};
 
 export default function Page() {
   return (
@@ -35,7 +57,9 @@ export default function Page() {
       </section>
 
       {/* Playground v2 */}
-      <PlaygroundSection />
+      <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-16 md:py-24 text-center text-surface-400">Loading playground...</div>}>
+        <DynamicPlaygroundSection />
+      </Suspense>
 
       {/* Features */}
       <section className="mx-auto max-w-6xl px-6 py-24">

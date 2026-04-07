@@ -16,7 +16,7 @@ use tracing::{debug, info};
 
 use crate::chain::client::ErgoNodeClient;
 use crate::chain::transactions::{
-    encode_coll_byte, encode_int, encode_long, encode_string,
+    encode_coll_byte, encode_group_element, encode_int, encode_long, encode_string,
 };
 use crate::gpu_rental::scanner::BLOCKS_PER_HOUR;
 
@@ -36,26 +36,16 @@ pub async fn create_listing_tx(
     vram_gb: i32,
     price_per_hour_nanoerg: u64,
     region: &str,
-    provider_address: &str,
+    _provider_address: &str,
+    provider_pk_hex: &str,
 ) -> Result<String> {
-    // provider_address is used for future R4 PK encoding; currently the wallet
-    // implicitly provides the PK via proveDlog when signing.
-    let _provider_address = provider_address;
-
     if listing_tree_hex.is_empty() {
         anyhow::bail!("GPU listing contract ErgoTree not configured — cannot create listing");
     }
 
-    // Encode registers as Sigma constants
-    // R4: provider PK is implicit via the P2PK address (wallet signing handles this)
-    // But we still need to set R4 with a placeholder; the wallet will use proveDlog.
-    // For the wallet payment API, the address field determines who can sign.
-    // R4 will be the provider's PK — but since we use the listing contract as the
-    // ErgoTree, R4 must be set explicitly.
-    //
-    // Actually, we need to encode the provider's PK in R4 as a SigmaProp (GroupElement).
-    // The wallet payment API doesn't directly support SigmaProp encoding in registers,
-    // so we encode it as a GroupElement constant and the contract uses proveDlog().
+    // R4: Provider public key (GroupElement) — spending authorization
+    let pk_bytes = hex::decode(provider_pk_hex).context("Invalid provider PK hex")?;
+    let r4_hex = encode_group_element(&pk_bytes).context("Provider PK must be 33 bytes")?;
 
     // R5: GPU type (String)
     let gpu_type_hex = encode_string(gpu_type);
@@ -77,6 +67,7 @@ pub async fn create_listing_tx(
                 "amount": 1
             }],
             "registers": {
+                "R4": r4_hex,
                 "R5": gpu_type_hex,
                 "R6": vram_hex,
                 "R7": price_hex,
@@ -130,6 +121,13 @@ pub async fn update_listing_tx(
     let regs = &listing_box.additional_registers;
 
     // Re-encode registers, updating only the ones that changed
+    // R4: Provider public key — preserve from existing box
+    let r4_raw_hex = crate::chain::scanner::get_register(regs, "R4")
+        .and_then(|v| crate::chain::scanner::parse_group_element(v))
+        .context("Missing R4 (provider PK) in existing listing box")?;
+    let r4_pk_bytes = hex::decode(&r4_raw_hex).context("Invalid provider PK hex from R4")?;
+    let r4_hex = encode_group_element(&r4_pk_bytes).context("Provider PK must be 33 bytes")?;
+
     let gpu_type_hex = crate::chain::scanner::get_register(regs, "R5")
         .and_then(|v| crate::chain::scanner::parse_coll_byte(v))
         .map(|s| encode_string(&s))
@@ -165,7 +163,7 @@ pub async fn update_listing_tx(
         }
     };
 
-    // R4 is preserved implicitly — the wallet proves proveDlog of the same key
+    // R4 is preserved explicitly from the existing box (decoded above)
     let listing_nft_id = listing_box
         .assets
         .first()
@@ -181,6 +179,7 @@ pub async fn update_listing_tx(
                 "amount": 1
             }],
             "registers": {
+                "R4": r4_hex,
                 "R5": gpu_type_hex,
                 "R6": vram_hex,
                 "R7": price_hex,
@@ -214,13 +213,16 @@ pub async fn update_listing_tx(
 /// The rental box holds ERG value = hours * price_per_hour.
 /// The renter's wallet pays this amount.
 ///
-/// Returns the transaction ID on success.
+/// `renter_pk_hex` must be a 33-byte compressed secp256k1 public key in hex,
+/// matching the renter's wallet key that will sign the transaction.
+///
+/// Returns (tx_id, deadline_height, cost_nanoerg) on success.
 pub async fn rent_gpu_tx(
     client: &ErgoNodeClient,
     rental_tree_hex: &str,
     listing_box_id: &str,
     hours: i32,
-    renter_address: &str,
+    renter_pk_hex: &str,
 ) -> Result<(String, i32, u64)> {
     if rental_tree_hex.is_empty() {
         anyhow::bail!("GPU rental contract ErgoTree not configured — cannot create rental");
@@ -256,18 +258,13 @@ pub async fn rent_gpu_tx(
     let provider_pk_hex = crate::chain::scanner::get_register(regs, "R4")
         .and_then(|v| crate::chain::scanner::parse_group_element(v))
         .context("Missing R4 (provider PK) in listing box")?;
-    // Encode as GroupElement constant for R4 (same Sigma encoding as listing)
-    let provider_pk_bytes = hex::decode(&provider_pk_hex).unwrap_or_default();
-    let r4_hex = encode_coll_byte(&provider_pk_bytes);
+    // Encode as GroupElement constant for R4 (same Sigma encoding as listing box)
+    let provider_pk_bytes = hex::decode(&provider_pk_hex).context("Invalid provider PK hex")?;
+    let r4_hex = encode_group_element(&provider_pk_bytes).context("Provider PK must be 33 bytes")?;
 
-    // R5: renter PK — from the renter's address (wallet will prove this)
-    // We use the renter_address as a placeholder; the wallet signing handles proveDlog.
-    // For the SigmaProp register, we need to encode the PK.
-    // Since the wallet payment API doesn't directly set R4/R5 with the wallet's PK,
-    // we'll rely on the contract checking proveDlog at spend time.
-    // R5 is set to the renter's address encoded as bytes.
-    let renter_addr_bytes = renter_address.as_bytes();
-    let r5_hex = encode_coll_byte(renter_addr_bytes);
+    // R5: renter PK (GroupElement) — the renter's compressed secp256k1 public key
+    let renter_pk_bytes = hex::decode(renter_pk_hex).context("Invalid renter PK hex")?;
+    let r5_hex = encode_group_element(&renter_pk_bytes).context("Renter PK must be 33 bytes")?;
 
     // R6: deadline height (Int)
     let deadline_hex = encode_int(deadline_height);

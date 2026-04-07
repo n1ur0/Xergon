@@ -27,6 +27,38 @@ pub struct RelayConfig {
     pub events: EventsConfig,
     #[serde(default)]
     pub gossip: GossipConfig,
+    #[serde(default)]
+    pub health_v2: HealthV2Config,
+    #[serde(default)]
+    pub ws_chat: WsChatConfig,
+    #[serde(default)]
+    pub ws_pool: WsPoolConfig,
+    #[serde(default)]
+    pub dedup: DedupConfig,
+    #[serde(default)]
+    pub cache: CacheConfig,
+    #[serde(default)]
+    pub circuit_breaker: CircuitBreakerConfig,
+    #[serde(default)]
+    pub load_shed: LoadShedConfig,
+    #[serde(default)]
+    pub degradation: DegradationConfig,
+    #[serde(default)]
+    pub coalesce: CoalesceConfig,
+    #[serde(default)]
+    pub stream_buffer: StreamBufferConfig,
+    #[serde(default)]
+    pub adaptive_routing: AdaptiveRoutingConfig,
+    #[serde(default)]
+    pub telemetry: TelemetryConfig,
+    #[serde(default)]
+    pub admin: AdminConfig,
+    #[serde(default)]
+    pub auto_register: crate::auto_register::AutoRegistrationConfig,
+    #[serde(default)]
+    pub cache_sync: crate::cache_sync::CacheSyncConfig,
+    #[serde(default)]
+    pub multi_region: crate::multi_region::RegionConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -50,6 +82,27 @@ pub struct RelaySettings {
     /// Max fallback attempts
     #[serde(default = "default_max_fallback")]
     pub max_fallback_attempts: usize,
+
+    /// Circuit breaker: consecutive failures before opening circuit (default: 5)
+    #[serde(default = "default_circuit_failure_threshold")]
+    pub circuit_failure_threshold: u32,
+
+    /// Circuit breaker: seconds before transitioning Open -> HalfOpen (default: 30)
+    #[serde(default = "default_circuit_recovery_timeout_secs")]
+    pub circuit_recovery_timeout_secs: u64,
+
+    /// Circuit breaker: max probe requests allowed in HalfOpen state (default: 2)
+    #[serde(default = "default_circuit_half_open_max_probes")]
+    pub circuit_half_open_max_probes: u32,
+
+    /// Sticky sessions: TTL in seconds for session affinity (default: 1800 = 30 min)
+    #[serde(default = "default_sticky_session_ttl_secs")]
+    pub sticky_session_ttl_secs: u64,
+
+    /// Auth token required for provider onboarding API (POST /v1/providers/onboard).
+    /// When None, onboarding is open (no auth required).
+    #[serde(default)]
+    pub onboarding_auth_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -141,6 +194,18 @@ fn default_provider_timeout() -> u64 {
 }
 fn default_max_fallback() -> usize {
     3
+}
+fn default_circuit_failure_threshold() -> u32 {
+    5
+}
+fn default_circuit_recovery_timeout_secs() -> u64 {
+    30
+}
+fn default_circuit_half_open_max_probes() -> u32 {
+    2
+}
+fn default_sticky_session_ttl_secs() -> u64 {
+    1800 // 30 minutes
 }
 fn default_known_endpoints() -> Vec<String> {
     vec!["http://127.0.0.1:9099".into()]
@@ -498,6 +563,83 @@ fn default_events_max_subscribers() -> usize {
     1000
 }
 
+/// Configuration for the latency-aware health scoring v2 model.
+///
+/// When enabled, routing uses a multi-dimensional health score with
+/// exponential decay for staleness instead of the simple linear recency
+/// penalty from v1.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HealthV2Config {
+    /// Enable/disable health scoring v2 (default: true).
+    /// When false, falls back to the legacy v1 scoring model.
+    #[serde(default = "default_health_v2_enabled")]
+    pub enabled: bool,
+
+    /// Weight for latency score in overall health (default: 0.4).
+    /// Sigmoid maps: 50ms -> ~1.0, 500ms -> ~0.5, 2000ms -> ~0.1
+    #[serde(default = "default_health_v2_latency_weight")]
+    pub latency_weight: f64,
+
+    /// Weight for success rate score (default: 0.3).
+    /// 100% success -> 1.0, 90% -> 0.8, 50% -> 0.0
+    #[serde(default = "default_health_v2_success_weight")]
+    pub success_weight: f64,
+
+    /// Weight for staleness/exponential decay score (default: 0.2).
+    /// Decays over `staleness_decay_minutes` since last heartbeat.
+    #[serde(default = "default_health_v2_staleness_weight")]
+    pub staleness_weight: f64,
+
+    /// Weight for PoNW score (default: 0.1).
+    #[serde(default = "default_health_v2_ponw_weight")]
+    pub ponw_weight: f64,
+
+    /// Minutes over which staleness score decays from 1.0 -> ~0.37 (default: 5).
+    /// Uses exponential decay: score = e^(-t / decay_minutes).
+    #[serde(default = "default_health_v2_staleness_decay_minutes")]
+    pub staleness_decay_minutes: f64,
+
+    /// Maximum number of latency samples retained per provider (default: 100).
+    #[serde(default = "default_health_v2_max_latency_samples")]
+    pub max_latency_samples: usize,
+}
+
+impl Default for HealthV2Config {
+    fn default() -> Self {
+        Self {
+            enabled: default_health_v2_enabled(),
+            latency_weight: default_health_v2_latency_weight(),
+            success_weight: default_health_v2_success_weight(),
+            staleness_weight: default_health_v2_staleness_weight(),
+            ponw_weight: default_health_v2_ponw_weight(),
+            staleness_decay_minutes: default_health_v2_staleness_decay_minutes(),
+            max_latency_samples: default_health_v2_max_latency_samples(),
+        }
+    }
+}
+
+fn default_health_v2_enabled() -> bool {
+    true
+}
+fn default_health_v2_latency_weight() -> f64 {
+    0.4
+}
+fn default_health_v2_success_weight() -> f64 {
+    0.3
+}
+fn default_health_v2_staleness_weight() -> f64 {
+    0.2
+}
+fn default_health_v2_ponw_weight() -> f64 {
+    0.1
+}
+fn default_health_v2_staleness_decay_minutes() -> f64 {
+    5.0
+}
+fn default_health_v2_max_latency_samples() -> usize {
+    100
+}
+
 /// Configuration for multi-relay gossip consensus.
 ///
 /// When GOSSIP_PEERS is non-empty, this relay participates in a gossip
@@ -537,6 +679,272 @@ impl Default for GossipConfig {
 
 fn default_gossip_interval() -> u64 {
     30
+}
+
+/// Configuration for WebSocket chat transport (GET /v1/chat/ws).
+#[derive(Debug, Clone, Deserialize)]
+pub struct WsChatConfig {
+    /// Enable/disable WebSocket chat endpoint (default: true).
+    #[serde(default = "default_ws_chat_enabled")]
+    pub enabled: bool,
+    /// Maximum concurrent WebSocket chat connections (default: 1000).
+    #[serde(default = "default_ws_chat_max_connections")]
+    pub max_connections: usize,
+}
+
+impl Default for WsChatConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_ws_chat_enabled(),
+            max_connections: default_ws_chat_max_connections(),
+        }
+    }
+}
+
+fn default_ws_chat_enabled() -> bool {
+    true
+}
+fn default_ws_chat_max_connections() -> usize {
+    1000
+}
+
+/// Configuration for WebSocket connection pooling to backend providers.
+/// See [`crate::ws_pool::WsPoolConfig`] for field documentation.
+pub use crate::ws_pool::WsPoolConfig;
+
+/// Configuration for request deduplication.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DedupConfig {
+    /// Enable/disable request deduplication (default: true).
+    #[serde(default = "default_dedup_enabled")]
+    pub enabled: bool,
+    /// Time window in seconds for considering requests as duplicates (default: 30).
+    #[serde(default = "default_dedup_window_secs")]
+    pub window_secs: u64,
+    /// TTL-based dedup window in seconds (default: 30).
+    /// Don't dedup requests that were registered longer ago than this.
+    #[serde(default = "default_dedup_ttl_secs")]
+    pub dedup_ttl_secs: u64,
+}
+
+impl Default for DedupConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_dedup_enabled(),
+            window_secs: default_dedup_window_secs(),
+            dedup_ttl_secs: default_dedup_ttl_secs(),
+        }
+    }
+}
+
+fn default_dedup_enabled() -> bool {
+    true
+}
+fn default_dedup_window_secs() -> u64 {
+    30
+}
+fn default_dedup_ttl_secs() -> u64 {
+    30
+}
+
+/// Configuration for the response cache.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CacheConfig {
+    /// Enable/disable response caching (default: true).
+    #[serde(default = "default_cache_enabled")]
+    pub enabled: bool,
+    /// Maximum number of cache entries (default: 10000).
+    #[serde(default = "default_cache_max_entries")]
+    pub max_entries: usize,
+    /// Default TTL for cached responses in seconds (default: 60).
+    #[serde(default = "default_cache_default_ttl")]
+    pub default_ttl_secs: u64,
+    /// TTL for /v1/models in seconds (default: 30).
+    #[serde(default = "default_cache_model_ttl")]
+    pub model_list_ttl_secs: u64,
+    /// TTL for /v1/providers in seconds (default: 15).
+    #[serde(default = "default_cache_provider_ttl")]
+    pub provider_list_ttl_secs: u64,
+    /// TTL for /v1/health in seconds (default: 5).
+    #[serde(default = "default_cache_health_ttl")]
+    pub health_ttl_secs: u64,
+    /// Maximum size of a single cached entry in bytes (default: 102400 = 100KB).
+    #[serde(default = "default_cache_max_entry_size")]
+    pub max_entry_size_bytes: usize,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_cache_enabled(),
+            max_entries: default_cache_max_entries(),
+            default_ttl_secs: default_cache_default_ttl(),
+            model_list_ttl_secs: default_cache_model_ttl(),
+            provider_list_ttl_secs: default_cache_provider_ttl(),
+            health_ttl_secs: default_cache_health_ttl(),
+            max_entry_size_bytes: default_cache_max_entry_size(),
+        }
+    }
+}
+
+fn default_cache_enabled() -> bool {
+    true
+}
+fn default_cache_max_entries() -> usize {
+    10_000
+}
+fn default_cache_default_ttl() -> u64 {
+    60
+}
+fn default_cache_model_ttl() -> u64 {
+    30
+}
+fn default_cache_provider_ttl() -> u64 {
+    15
+}
+fn default_cache_health_ttl() -> u64 {
+    5
+}
+fn default_cache_max_entry_size() -> usize {
+    102_400 // 100KB
+}
+
+/// Configuration for the standalone circuit breaker (per-provider fault tolerance).
+/// This supplements the provider-embedded circuit breaker with metrics and
+/// a centralized management API.
+pub use crate::circuit_breaker::CircuitBreakerConfig;
+
+/// Configuration for load shedding and request prioritization.
+pub use crate::load_shed::LoadShedConfig;
+
+/// Configuration for graceful degradation.
+pub use crate::degradation::DegradationConfig;
+
+/// Configuration for request coalescing.
+pub use crate::coalesce::CoalesceConfig;
+
+/// Configuration for stream buffering.
+pub use crate::stream_buffer::StreamBufferConfig;
+
+/// Configuration for the adaptive routing system.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct AdaptiveRoutingConfig {
+    /// Whether the AdaptiveRouter is used for provider selection in the proxy path.
+    /// When disabled, the legacy ProviderRegistry scoring is used. (default: true)
+    #[serde(default = "default_adaptive_enabled")]
+    pub enabled: bool,
+
+    /// Routing strategy (default: health_score)
+    #[serde(default = "default_adaptive_strategy")]
+    pub strategy: String,
+
+    /// Enable geo-based routing (default: true)
+    #[serde(default = "default_adaptive_geo_enabled")]
+    pub geo_routing_enabled: bool,
+
+    /// Number of fallback providers to try (default: 3)
+    #[serde(default = "default_adaptive_fallback_count")]
+    pub fallback_count: u32,
+
+    /// Sticky session TTL in seconds (default: 300)
+    #[serde(default = "default_adaptive_sticky_ttl")]
+    pub sticky_session_ttl_secs: u64,
+
+    /// Circuit breaker threshold: health score below this triggers circuit break (default: 0.1)
+    #[serde(default = "default_adaptive_circuit_threshold")]
+    pub circuit_breaker_threshold: f64,
+}
+
+impl Default for AdaptiveRoutingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_adaptive_enabled(),
+            strategy: default_adaptive_strategy(),
+            geo_routing_enabled: default_adaptive_geo_enabled(),
+            fallback_count: default_adaptive_fallback_count(),
+            sticky_session_ttl_secs: default_adaptive_sticky_ttl(),
+            circuit_breaker_threshold: default_adaptive_circuit_threshold(),
+        }
+    }
+}
+
+fn default_adaptive_enabled() -> bool {
+    true
+}
+
+fn default_adaptive_strategy() -> String {
+    "health_score".into()
+}
+fn default_adaptive_geo_enabled() -> bool {
+    true
+}
+fn default_adaptive_fallback_count() -> u32 {
+    3
+}
+fn default_adaptive_sticky_ttl() -> u64 {
+    300
+}
+fn default_adaptive_circuit_threshold() -> f64 {
+    0.1
+}
+
+/// Configuration for the admin API.
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminConfig {
+    /// Enable/disable the admin API (default: false).
+    #[serde(default)]
+    pub enabled: bool,
+    /// API key required for admin endpoints (sent as `X-Admin-Key` header).
+    /// When empty, admin API is disabled regardless of `enabled`.
+    #[serde(default)]
+    pub api_key: String,
+}
+
+impl Default for AdminConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            api_key: String::new(),
+        }
+    }
+}
+
+/// Configuration for OpenTelemetry distributed tracing.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TelemetryConfig {
+    /// Enable/disable OpenTelemetry tracing (default: false).
+    /// Also enabled when OTEL_EXPORTER_OTLP_ENDPOINT env var is set.
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// OTLP gRPC exporter endpoint (default: "http://localhost:4317").
+    /// Overridden by OTEL_EXPORTER_OTLP_ENDPOINT env var if set.
+    #[serde(default = "default_telemetry_endpoint")]
+    pub otlp_endpoint: String,
+
+    /// OpenTelemetry service name (default: "xergon-relay").
+    /// Overridden by OTEL_SERVICE_NAME env var if set.
+    #[serde(default = "default_telemetry_service_name")]
+    pub service_name: String,
+}
+
+impl Default for TelemetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            otlp_endpoint: default_telemetry_endpoint(),
+            service_name: default_telemetry_service_name(),
+        }
+    }
+}
+
+fn default_telemetry_endpoint() -> String {
+    "http://localhost:4317".into()
+}
+
+fn default_telemetry_service_name() -> String {
+    "xergon-relay".into()
 }
 
 /// Check whether a CORS wildcard warning should be emitted.

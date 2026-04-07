@@ -22,17 +22,27 @@
   //      same ErgoTree (scriptPreserved), preventing NFT hijacking.
   //
   // IMPORTANT: The deployer address below is a PLACEHOLDER.
-  // Replace "DEPLOYER_ADDRESS_HERE" with the actual Ergo address
-  // of the protocol deployer before compiling this contract.
+  //
+  // Deployment methods:
+  //   1. Automated: Set DEPLOYER_ADDRESS env var and run deploy-testnet.sh.
+  //      The script substitutes the placeholder at deploy time.
+  //      Example: export DEPLOYER_ADDRESS="3WwxnK...your-testnet-address"
+  //
+  //   2. Manual: Replace "DEPLOYER_ADDRESS_HERE" below with your Ergo address
+  //      before compiling this contract.
   //
   // *** DEPLOYMENT SAFETY CHECK ***
-  // The placeholder string below will cause a compilation error if
-  // deployed as-is. If you see a "cannot resolve PK" error, you
-  // have not replaced the placeholder with a real Ergo address.
+  // The placeholder string will cause a compilation error if deployed as-is.
+  // This is intentional -- it prevents accidental deployment without setting
+  // the real deployer address. If you see a "cannot resolve PK" error, you
+  // have not set the DEPLOYER_ADDRESS or replaced the placeholder.
   //
   // Example valid addresses:
   //   Mainnet: "3WvsT2Gm4EpsM9Pg18PdY6XyhNNMqDsgv2e"
   //   Testnet: "3WwxnK... (testnet address)"
+  //
+  // See contracts/DEPLOY.md for full deployment instructions.
+  // See contracts/testnet-config.toml for configuration options.
   //
   // Security Notes:
   //   - [INFO] Single-key deployer control is a centralization risk.
@@ -44,7 +54,8 @@
   //
   // =========================================================================
 
-  // Deployer public key -- REPLACE WITH ACTUAL DEPLOYER ADDRESS BEFORE DEPLOYMENT
+  // Deployer public key.
+  // Set via DEPLOYER_ADDRESS env var (automated deploy) or replace manually.
   // >>> DEPLOYMENT WILL FAIL WITH PLACEHOLDER — MUST SET REAL ADDRESS <<<
   val deployerPk = PK("DEPLOYER_ADDRESS_HERE")
 

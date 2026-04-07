@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { LocaleInit } from "@/components/LocaleInit";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { ChatWidgetWrapper } from "@/components/chat/ChatWidgetWrapper";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -18,10 +19,78 @@ export const viewport: Viewport = {
   ],
 };
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "https://xergon.network";
+
 export const metadata: Metadata = {
-  title: "Xergon Marketplace",
+  title: {
+    default: "Xergon Marketplace",
+    template: "%s | Xergon Network",
+  },
   description:
-    "GPU-first AI inference marketplace. Pay with ERG, powered by the Ergo blockchain.",
+    "GPU-first AI inference marketplace. Pay with ERG, powered by the Ergo blockchain. Access open-source AI models with transparent, pay-per-token pricing on a trustless decentralized network.",
+  keywords: [
+    "AI marketplace",
+    "decentralized AI",
+    "GPU inference",
+    "Ergo blockchain",
+    "ERG",
+    "open-source AI models",
+    "Llama",
+    "Mistral",
+    "Qwen",
+    "DeepSeek",
+    "pay-per-token",
+    "Xergon",
+  ],
+  authors: [{ name: "Xergon Network" }],
+  creator: "Xergon Network",
+  metadataBase: new URL(SITE_URL),
+  alternates: {
+    canonical: "/",
+    languages: {
+      en: "/",
+      ja: "/?lang=ja",
+      zh: "/?lang=zh",
+      es: "/?lang=es",
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: SITE_URL,
+    siteName: "Xergon Network",
+    title: "Xergon Network - Decentralized AI Compute Marketplace",
+    description:
+      "Access open-source AI models powered by the Ergo blockchain. No lock-in, no middlemen — transparent, pay-per-token inference on a trustless network.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Xergon Network - Decentralized AI Compute Marketplace",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Xergon Network - Decentralized AI Compute Marketplace",
+    description:
+      "Access open-source AI models powered by the Ergo blockchain. Pay-per-token inference, no lock-in.",
+    images: ["/og-image.png"],
+    creator: "@xergonnetwork",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -84,6 +153,7 @@ export default function RootLayout({
           </ErrorBoundary>
         </ThemeProvider>
         <Toaster position="bottom-center" richColors />
+        <ChatWidgetWrapper />
       </body>
     </html>
   );

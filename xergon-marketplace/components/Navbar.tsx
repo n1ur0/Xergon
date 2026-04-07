@@ -8,24 +8,41 @@ import { useChainBalance } from "@/lib/hooks/use-chain-data";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { WalletStatus } from "@/components/wallet/WalletStatus";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useFocusTrap } from "@/lib/a11y/utils";
 
 const NAV_LINKS = [
   { href: "/playground", label: "Playground" },
+  { href: "/docs/getting-started", label: "Docs" },
   { href: "/models", label: "Models" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/analytics/models", label: "Analytics Models" },
+  { href: "/analytics/providers", label: "Analytics Providers" },
+  { href: "/analytics/regions", label: "Analytics Regions" },
   { href: "/explorer", label: "Explorer" },
   { href: "/gpu", label: "GPU Bazar" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/metrics", label: "Metrics" },
+  { href: "/capacity", label: "Capacity" },
+  { href: "/costs", label: "Costs" },
   { href: "/pricing", label: "Pricing" },
   { href: "/commitments", label: "Commitments" },
   { href: "/oracle", label: "Oracle" },
+  { href: "/monitor", label: "Rent Monitor" },
   { href: "/health", label: "Status" },
+  { href: "/admin", label: "Admin" },
+  { href: "/onboarding", label: "Onboard" },
+  { href: "/operator", label: "Operator" },
 ] as const;
 
 /** Links only shown when authenticated */
 const AUTH_NAV_LINKS = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/profile", label: "Profile" },
+  { href: "/profile/rentals", label: "Rentals" },
+  { href: "/profile/notifications", label: "Notifications" },
   { href: "/transactions", label: "Transactions" },
+  { href: "/earnings", label: "Earnings" },
   { href: "/become-provider", label: "Become a Provider" },
   { href: "/settings", label: "Settings" },
 ] as const;
@@ -161,6 +178,7 @@ export function Navbar() {
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <ThemeToggle />
+            {isAuthenticated && <NotificationBell />}
             {/* Desktop: wallet + auth */}
             <div className="hidden md:flex items-center gap-3">
               {isAuthenticated && user ? (

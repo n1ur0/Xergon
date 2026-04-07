@@ -1,0 +1,14 @@
+/Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/deps/thiserror-864a7b0858204244.d: /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/build/thiserror-07031b29e81bd906/out/private.rs
+
+/Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/deps/libthiserror-864a7b0858204244.rlib: /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/build/thiserror-07031b29e81bd906/out/private.rs
+
+/Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/deps/libthiserror-864a7b0858204244.rmeta: /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs /Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs /Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/build/thiserror-07031b29e81bd906/out/private.rs
+
+/Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/lib.rs:
+/Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/aserror.rs:
+/Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/display.rs:
+/Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/var.rs:
+/Users/n1ur0/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/thiserror-2.0.18/src/private.rs:
+/Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/build/thiserror-07031b29e81bd906/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/n1ur0/Documents/git/Xergon-Network/xergon-marketplace/target/debug/build/thiserror-07031b29e81bd906/out

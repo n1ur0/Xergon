@@ -1,13 +1,21 @@
 "use client";
 
+import { useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { nanoergToErg, type GpuRental } from "@/lib/api/gpu";
-import { Clock, MapPin, Cpu, RotateCcw, Plus } from "lucide-react";
+import { useRealtimeUpdates, type RentalEvent } from "@/hooks/use-realtime-updates";
+import {
+  RentalStatusBadge,
+  deriveStatusFromEvent,
+  type RentalStatus,
+} from "@/components/gpu/RentalStatusBadge";
+import { Clock, MapPin, Cpu, RotateCcw, Plus, Wifi, WifiOff, RefreshCw } from "lucide-react";
 
 interface MyRentalsProps {
   rentals: GpuRental[];
   onExtend?: (rental: GpuRental) => void;
   onRefund?: (rental: GpuRental) => void;
+  onRefresh?: () => void;
 }
 
 function timeRemaining(deadlineHeight: number, currentHeight?: number): string {
@@ -24,8 +32,47 @@ function timeRemaining(deadlineHeight: number, currentHeight?: number): string {
   return `~${hours} hour${hours !== 1 ? "s" : ""} remaining`;
 }
 
-export function MyRentals({ rentals, onExtend, onRefund }: MyRentalsProps) {
-  if (rentals.length === 0) {
+export function MyRentals({ rentals, onExtend, onRefund, onRefresh }: MyRentalsProps) {
+  const { isConnected, events, reconnect } = useRealtimeUpdates();
+
+  // Apply SSE events to update rental statuses in real-time
+  const updatedRentals = useMemo(() => {
+    if (events.length === 0) return rentals;
+
+    // Build a map of rental ID -> latest status from events
+    const statusMap = new Map<string, RentalStatus>();
+    for (const event of events) {
+      if (event.type === "provider_heartbeat") continue;
+      const status = deriveStatusFromEvent(event);
+      if (status) {
+        statusMap.set(event.rentalId, status);
+      }
+    }
+
+    return rentals.map((rental) => {
+      const eventId = rental.rental_box_id || rental.rental_tx_id;
+      const eventStatus = statusMap.get(eventId);
+
+      if (!eventStatus) return rental;
+
+      const updated = { ...rental };
+      switch (eventStatus) {
+        case "active":
+          updated.active = true;
+          break;
+        case "completed":
+        case "failed":
+          updated.active = false;
+          break;
+        case "pending":
+          // pending doesn't change the rental state
+          break;
+      }
+      return updated;
+    });
+  }, [rentals, events]);
+
+  if (updatedRentals.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-surface-200 bg-surface-0 p-8 text-center">
         <Cpu className="w-8 h-8 text-surface-800/20 mx-auto mb-2" />
@@ -39,8 +86,60 @@ export function MyRentals({ rentals, onExtend, onRefund }: MyRentalsProps) {
 
   return (
     <div className="space-y-3">
-      {rentals.map((rental) => {
+      {/* Live status header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+              isConnected
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-surface-50 text-surface-800/30 border border-surface-200",
+            )}
+          >
+            {isConnected ? (
+              <>
+                <Wifi className="w-3 h-3" />
+                Live
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3 h-3" />
+                Offline
+              </>
+            )}
+          </span>
+          <span className="text-[10px] text-surface-800/30">
+            Real-time status updates
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {!isConnected && (
+            <button
+              onClick={reconnect}
+              className="flex items-center gap-1 rounded-lg bg-surface-100 px-2 py-0.5 text-[10px] font-medium text-surface-800/50 hover:bg-surface-200 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Reconnect
+            </button>
+          )}
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              className="flex items-center gap-1 rounded-lg bg-surface-100 px-2 py-0.5 text-[10px] font-medium text-surface-800/50 hover:bg-surface-200 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Refresh
+            </button>
+          )}
+        </div>
+      </div>
+
+      {updatedRentals.map((rental) => {
         const cost = nanoergToErg(rental.total_cost_nanoerg);
+        const eventId = rental.rental_box_id || rental.rental_tx_id;
+        const initialStatus = rental.active ? "active" : "completed";
+
         return (
           <div
             key={rental.rental_box_id}
@@ -59,16 +158,11 @@ export function MyRentals({ rentals, onExtend, onRefund }: MyRentalsProps) {
                   <span className="font-semibold text-surface-900 truncate">
                     {rental.gpu_type}
                   </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-medium",
-                      rental.active
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-surface-100 text-surface-800/40",
-                    )}
-                  >
-                    {rental.active ? "Active" : "Expired"}
-                  </span>
+                  {/* Real-time status badge replaces the static one */}
+                  <RentalStatusBadge
+                    rentalId={eventId}
+                    initialStatus={initialStatus}
+                  />
                 </div>
                 <div className="flex items-center gap-3 mt-1 text-xs text-surface-800/50">
                   <span className="flex items-center gap-1">

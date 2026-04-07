@@ -54,7 +54,7 @@ export interface PendingChallenge {
 }
 
 /** Wallet type for ErgoAuth connections */
-export type ErgoAuthWalletType = "ergoauth";
+export type ErgoAuthWalletType = "nautilus" | "spectrum" | "ergo-wallet" | "mobile" | "other";
 
 /**
  * `ergoauth://` deep link structure.

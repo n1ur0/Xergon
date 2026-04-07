@@ -7,6 +7,8 @@
  */
 
 import type { XergonClientConfig, LogInterceptor } from './types';
+import type { RetryOptions } from './retry';
+import { retryWithBackoff } from './retry';
 import { hmacSign, buildHmacPayload } from './auth';
 import { XergonError } from './errors';
 
@@ -17,12 +19,15 @@ export class XergonClientCore {
   private publicKey: string | null;
   private privateKey: string | null;
   private interceptors: LogInterceptor[];
+  private retryOptions: RetryOptions | false;
 
-  constructor(config: XergonClientConfig = {}) {
+  constructor(config: XergonClientConfig & { retries?: RetryOptions | false } = {}) {
     this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     this.publicKey = config.publicKey ?? null;
     this.privateKey = config.privateKey ?? null;
     this.interceptors = [];
+    // Default: enable retry with sensible defaults; set false to disable
+    this.retryOptions = config.retries !== undefined ? config.retries : {};
   }
 
   // ── Auth ─────────────────────────────────────────────────────────────
@@ -123,76 +128,88 @@ export class XergonClientCore {
       headers?: Record<string, string>;
       signal?: AbortSignal;
       skipAuth?: boolean;
+      retries?: RetryOptions | false;
     },
   ): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
-    const bodyStr = body !== undefined ? JSON.stringify(body) : '';
+    const doRequest = async (): Promise<T> => {
+      const url = `${this.baseUrl}${path}`;
+      const bodyStr = body !== undefined ? JSON.stringify(body) : '';
 
-    const startTime = Date.now();
+      const startTime = Date.now();
 
-    try {
-      const headers: Record<string, string> = {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...options?.headers,
-      };
+      try {
+        const headers: Record<string, string> = {
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          ...options?.headers,
+        };
 
-      if (!options?.skipAuth) {
-        const authHeaders = await this.buildAuthHeaders(method, path, bodyStr);
-        Object.assign(headers, authHeaders);
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: body !== undefined ? bodyStr : undefined,
-        signal: options?.signal,
-      });
-
-      const durationMs = Date.now() - startTime;
-
-      this.emitLog({ method, url, status: res.status, durationMs });
-
-      if (!res.ok) {
-        let errorData: unknown;
-        try {
-          errorData = await res.json();
-        } catch {
-          errorData = { message: res.statusText };
+        if (!options?.skipAuth) {
+          const authHeaders = await this.buildAuthHeaders(method, path, bodyStr);
+          Object.assign(headers, authHeaders);
         }
+
+        const res = await fetch(url, {
+          method,
+          headers,
+          body: body !== undefined ? bodyStr : undefined,
+          signal: options?.signal,
+        });
+
+        const durationMs = Date.now() - startTime;
+
+        this.emitLog({ method, url, status: res.status, durationMs });
+
+        if (!res.ok) {
+          let errorData: unknown;
+          try {
+            errorData = await res.json();
+          } catch {
+            errorData = { message: res.statusText };
+          }
+          this.emitLog({
+            method,
+            url,
+            status: res.status,
+            durationMs,
+            error: String(errorData),
+          });
+          throw XergonError.fromResponse(errorData);
+        }
+
+        // Handle empty responses (204, etc.)
+        const contentType = res.headers.get('content-type');
+        if (
+          !contentType ||
+          contentType === 'text/plain' ||
+          res.status === 204
+        ) {
+          const text = await res.text();
+          return text as T;
+        }
+
+        return (await res.json()) as T;
+      } catch (err) {
+        if (err instanceof XergonError) throw err;
+
+        const durationMs = Date.now() - startTime;
         this.emitLog({
           method,
           url,
-          status: res.status,
           durationMs,
-          error: String(errorData),
+          error: err instanceof Error ? err.message : String(err),
         });
-        throw XergonError.fromResponse(errorData);
+        throw err;
       }
+    };
 
-      // Handle empty responses (204, etc.)
-      const contentType = res.headers.get('content-type');
-      if (
-        !contentType ||
-        contentType === 'text/plain' ||
-        res.status === 204
-      ) {
-        const text = await res.text();
-        return text as T;
-      }
+    // Determine retry config: per-request option > client-level > disabled
+    const perRequestRetry = options?.retries !== undefined ? options.retries : this.retryOptions;
 
-      return (await res.json()) as T;
-    } catch (err) {
-      if (err instanceof XergonError) throw err;
-
-      const durationMs = Date.now() - startTime;
-      this.emitLog({
-        method,
-        url,
-        durationMs,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      throw err;
+    if (perRequestRetry === false) {
+      return doRequest();
     }
+
+    return retryWithBackoff(doRequest, perRequestRetry);
   }
 
   /**

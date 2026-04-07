@@ -37,35 +37,35 @@ static USAGE_PROOF_HEX: &str =
 static USER_STAKING_HEX: &str =
     include_str!("../contracts/compiled/user_staking.hex");
 
-/// Embedded contract hex: gpu_rental.es (placeholder - not yet compiled)
+/// Embedded contract hex: gpu_rental.es
 static GPU_RENTAL_HEX: &str =
     include_str!("../contracts/compiled/gpu_rental.hex");
 
-/// Embedded contract hex: usage_commitment.es (placeholder - not yet compiled)
+/// Embedded contract hex: usage_commitment.es
 static USAGE_COMMITMENT_HEX: &str =
     include_str!("../contracts/compiled/usage_commitment.hex");
 
-/// Embedded contract hex: relay_registry.es (placeholder - not yet compiled)
+/// Embedded contract hex: relay_registry.es
 static RELAY_REGISTRY_HEX: &str =
     include_str!("../contracts/compiled/relay_registry.hex");
 
-/// Embedded contract hex: gpu_rating.es (placeholder - not yet compiled)
+/// Embedded contract hex: gpu_rating.es
 static GPU_RATING_HEX: &str =
     include_str!("../contracts/compiled/gpu_rating.hex");
 
-/// Embedded contract hex: gpu_rental_listing.es (placeholder - not yet compiled)
+/// Embedded contract hex: gpu_rental_listing.es
 static GPU_RENTAL_LISTING_HEX: &str =
     include_str!("../contracts/compiled/gpu_rental_listing.hex");
 
-/// Embedded contract hex: payment_bridge.es (placeholder - not yet compiled)
+/// Embedded contract hex: payment_bridge.es
 static PAYMENT_BRIDGE_HEX: &str =
     include_str!("../contracts/compiled/payment_bridge.hex");
 
-/// Embedded contract hex: provider_slashing.es (placeholder - not yet compiled)
+/// Embedded contract hex: provider_slashing.es
 static PROVIDER_SLASHING_HEX: &str =
     include_str!("../contracts/compiled/provider_slashing.hex");
 
-/// Embedded contract hex: governance_proposal.es (placeholder - not yet compiled)
+/// Embedded contract hex: governance_proposal.es
 static GOVERNANCE_PROPOSAL_HEX: &str =
     include_str!("../contracts/compiled/governance_proposal.hex");
 

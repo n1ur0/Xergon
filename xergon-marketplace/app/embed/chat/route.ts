@@ -246,12 +246,15 @@ function buildWidgetHTML(config: {
   function simpleMD(text) {
     if (!text) return '';
     var html = escHTML(text);
-    // Code blocks
-    html = html.replace(/\x60\x60\x60(\\w*)\\n([\\s\\S]*?)\x60\x60\x60/g, function(_, lang, code) {
+    // Code blocks - use BT variable to avoid backtick-in-template-literal issues
+    var BT = String.fromCharCode(96);
+    var fenceRegex = new RegExp(BT + BT + BT + '(\\\\w*)\\\\n([\\\\s\\\\S]*?)' + BT + BT + BT, 'g');
+    html = html.replace(fenceRegex, function(_, lang, code) {
       return '<pre style="margin:8px 0;border-radius:8px;background:#1e1e2e;padding:12px;overflow-x:auto;font-size:13px;color:#cdd6f4"><code class="hljs">' + code.trim() + '</code></pre>';
     });
     // Inline code
-    html = html.replace(/\x60([^\x60]+)\x60/g, '<code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:13px;font-family:monospace;color:' + escHTML(CONFIG.primaryColor) + '">$1</code>');
+    var inlineCodeRegex = new RegExp(BT + '([^' + BT + ']+)' + BT, 'g');
+    html = html.replace(inlineCodeRegex, '<code style="background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:13px;font-family:monospace;color:' + escHTML(CONFIG.primaryColor) + '">$1</code>');
     // Bold
     html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
     // Italic

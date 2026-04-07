@@ -1,0 +1,195 @@
+# =========================================================================
+# Xergon Network -- Testnet Deployment Configuration
+# =========================================================================
+#
+# Configuration for deploying Xergon Network contracts to the Ergo testnet.
+# All values can be overridden via environment variables.
+#
+# Usage:
+#   export DEPLOYER_ADDRESS="3WwxnK..."
+#   ./scripts/deploy-testnet.sh
+#
+# The deploy script reads this file for defaults but env vars take precedence.
+# =========================================================================
+
+# ---------------------------------------------------------------------------
+# [node] -- Ergo node connection settings
+# ---------------------------------------------------------------------------
+[node]
+# REST API URL of the Ergo node (use 9053 for REST, 9052 is P2P)
+# Override: ERGO_NODE_URL
+url = "http://127.0.0.1:9053"
+
+# API key for the node REST API (if authentication is enabled)
+# Override: ERGO_API_KEY
+api_key = ""
+
+# Target network -- must match the connected node
+network = "testnet"
+
+# ---------------------------------------------------------------------------
+# [deployer] -- Who is deploying the contracts
+# ---------------------------------------------------------------------------
+[deployer]
+# Ergo address of the protocol deployer.
+# This address is embedded in treasury.ergo as the only authorized spender.
+# Override: DEPLOYER_ADDRESS
+address = ""
+
+# Transaction fee in nanoERG (1 ERG = 1,000,000,000 nanoERG).
+# Default: 0.001 ERG per transaction.
+fee = 1000000
+
+# Maximum fee you're willing to pay per transaction (safety limit)
+max_fee = 10000000
+
+# ---------------------------------------------------------------------------
+# [contracts] -- List of all Xergon Network contracts
+# ---------------------------------------------------------------------------
+# Each contract has a name, file path, and optional notes.
+# The deploy script iterates over these files, compiles each one,
+# and optionally funds a box at the resulting P2S address.
+#
+# .ergo files use Sigma/ErgoScript curly-brace syntax.
+# .es files use raw ErgoScript syntax (legacy/pre-Sigma).
+# Both compile via the same node endpoint (/script/p2sAddress).
+# ---------------------------------------------------------------------------
+
+[[contracts]]
+name = "provider_box"
+file = "provider_box.ergo"
+description = "Provider state box -- singleton NFT state machine for provider registration and heartbeat"
+requires_deployer = false
+
+[[contracts]]
+name = "user_staking"
+file = "user_staking.ergo"
+description = "User staking box -- holds ERG as prepaid inference balance"
+requires_deployer = false
+
+[[contracts]]
+name = "usage_proof"
+file = "usage_proof.ergo"
+description = "Usage proof box -- immutable on-chain receipt for inference requests"
+requires_deployer = false
+
+[[contracts]]
+name = "treasury"
+file = "treasury.ergo"
+description = "Treasury box -- protocol ERG reserve + Xergon Network NFT (deployer-controlled)"
+requires_deployer = true  # MUST set DEPLOYER_ADDRESS
+
+[[contracts]]
+name = "governance_proposal_ergo"
+file = "governance_proposal.ergo"
+description = "Governance proposal box (.ergo) -- singleton NFT state machine for protocol governance"
+requires_deployer = false
+
+[[contracts]]
+name = "governance_proposal_es"
+file = "governance_proposal.es"
+description = "Governance proposal box (.es) -- same contract in ErgoScript syntax"
+requires_deployer = false
+
+[[contracts]]
+name = "payment_bridge"
+file = "payment_bridge.es"
+description = "Payment bridge -- cross-chain lock-and-mint invoice escrow (BTC/ETH/ADA)"
+requires_deployer = false
+
+[[contracts]]
+name = "gpu_rental"
+file = "gpu_rental.es"
+description = "GPU rental -- time-boxed escrow for GPU compute rental"
+requires_deployer = false
+
+[[contracts]]
+name = "gpu_rental_listing"
+file = "gpu_rental_listing.es"
+description = "GPU rental listing -- provider GPU listing on the GPU Bazar marketplace"
+requires_deployer = false
+
+[[contracts]]
+name = "gpu_rating"
+file = "gpu_rating.es"
+description = "GPU rating -- on-chain reputation ratings for GPU Bazar"
+requires_deployer = false
+
+[[contracts]]
+name = "provider_slashing_es"
+file = "provider_slashing.es"
+description = "Provider slashing (.es) -- stake guard with challenge-based slashing (no hardcoded treasury)"
+requires_deployer = false
+
+[[contracts]]
+name = "provider_slashing_ergo"
+file = "provider_slashing.ergo"
+description = "Provider slashing (.ergo) -- stake guard with hardcoded treasury address for penalty routing"
+requires_deployer = true  # MUST set TREASURY_ADDRESS
+
+[[contracts]]
+name = "relay_registry"
+file = "relay_registry.es"
+description = "Relay registry -- on-chain relay registration with heartbeat tracking"
+requires_deployer = false
+
+[[contracts]]
+name = "usage_commitment"
+file = "usage_commitment.es"
+description = "Usage commitment -- batched Merkle root commitment replacing N individual proof boxes"
+requires_deployer = false
+
+# ---------------------------------------------------------------------------
+# [params] -- Deployment parameters
+# ---------------------------------------------------------------------------
+[params]
+# Minimum box value on Ergo in nanoERG (~0.001 ERG)
+# Boxes below this value cannot be created on-chain.
+min_box_value = 1000000
+
+# Amount to fund the treasury box with (nanoERG)
+# Default: 0.05 ERG. Increase for production.
+treasury_funding = 50000000
+
+# Amount to fund each slashing box with (nanoERG)
+# Default: 0.05 ERG. This is the initial stake amount.
+slashing_funding = 50000000
+
+# Amount to fund governance proposal boxes (nanoERG)
+governance_funding = 10000000
+
+# Amount to fund generic contract boxes (nanoERG)
+# This is the minimum value for boxes that just need to exist on-chain.
+generic_funding = 1000000
+
+# Storage rent period in blocks (4 years at ~2 min/block)
+# After this many blocks, cleanup paths in contracts become active.
+storage_rent_blocks = 1051200
+
+# Slash penalty rate as a percentage (e.g., 20 = 20%)
+# Applied in provider_slashing contracts.
+slash_penalty_rate = 20
+
+# Invoice timeout in blocks for payment_bridge
+# ~24 hours at 2 min/block.
+invoice_timeout_blocks = 720
+
+# ---------------------------------------------------------------------------
+# [explorer] -- Block explorer settings for verification
+# ---------------------------------------------------------------------------
+[explorer]
+# Testnet explorer base URL (used for verification links)
+testnet_url = "https://testnet.ergoplatform.com"
+
+# Mainnet explorer base URL (for reference)
+mainnet_url = "https://explorer.ergoplatform.com"
+
+# ---------------------------------------------------------------------------
+# [output] -- Deployment output settings
+# ---------------------------------------------------------------------------
+[output]
+# Path for the deployment manifest JSON (relative to contracts dir)
+manifest_file = "deployment-manifest.json"
+
+# Path for compiled ErgoTree hex files (relative to contracts dir)
+compiled_dir = "compiled"
