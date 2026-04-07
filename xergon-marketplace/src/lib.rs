@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod billing_invoicing;
 pub mod ergopay_qr;
 pub mod protocol_health;
+pub mod provider_monitor;
 pub mod deployment_templates;
 pub mod ensemble_marketplace;
 pub mod dispute_resolution;

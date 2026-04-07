@@ -365,7 +365,7 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 
 ### Must Build
 
-**Phase 72 done. Next: Phase 73.**
+**Phase 73 done. Next: Phase 74.**
 
 | Component | What's Next | Phase |
 |-----------|-------------|-------|
@@ -377,6 +377,26 @@ input validation to prevent value loss, dust outputs, and invalid on-chain state
 | Agent | Distributed model serving v2 (shard coordinator, tensor pipeline, cross-provider inference merge) | 72 ✅ |
 | SDK | `xergon ensemble` CLI (ensemble config, model groups, routing rules, A/B weight controls) | 72 ✅ |
 | Marketplace | Ensemble marketplace (model group bundles, performance comparison, routing strategy marketplace) | 72 ✅ |
+| Relay | Network health monitor (provider heartbeat, consensus health, topology, latency matrix, anomaly detection) | 73 ✅ |
+| Agent | Proof verifier pipeline (ZK proof verification, proof batching, verification receipts, fraud detection) | 73 ✅ |
+| SDK | `xergon monitor` CLI (health check, provider status, network stats, alert rules, dashboard) | 73 ✅ |
+| Marketplace | Provider monitor (uptime tracking, SLA monitoring, reputation correlation, alert feeds) | 73 ✅ |
+
+### Phase 73 -- Network Health Monitor, Proof Verifier, Monitor CLI, Provider Monitor [DONE]
+
+- [x] Relay: Network health monitor (network_health_monitor.rs, provider heartbeat tracking, consensus health scoring, network topology visualization, latency matrix computation, anomaly detection engine, alert rules, 8+ REST endpoints)
+- [x] Agent: Proof verifier pipeline (proof_verifier.rs, ZK proof verification, proof batching, verification receipts, fraud detection, trust score integration)
+- [x] SDK: `xergon monitor` CLI (monitor.ts, health/providers/uptime/SLAs/alerts/anomalies/topology/latency/stats subcommands, JSON/table output, provider/region/severity filters)
+- [x] Marketplace: Provider monitor (provider_monitor.rs, uptime tracking, SLA monitoring, reputation correlation, alert feeds)
+- [x] All 4 crates compile clean: relay 0 errors, agent 0 errors, marketplace 0 errors, SDK 0 errors.
+
+### Phase 72 -- Ensemble Router, Shard Coordinator, Ensemble CLI, Ensemble Marketplace [DONE]
+
+- [x] Relay: Multi-model ensemble router (request fan-out, response aggregation, confidence scoring, fallback merge)
+- [x] Agent: Distributed model serving v2 (shard coordinator, tensor pipeline, cross-provider inference merge)
+- [x] SDK: `xergon ensemble` CLI (ensemble config, model groups, routing rules, A/B weight controls)
+- [x] Marketplace: Ensemble marketplace (model group bundles, performance comparison, routing strategy marketplace)
+- [x] All 4 crates compile clean.
 
 ### Phase 69 -- UTXO Consolidation, ErgoPay Builder, Proxy Contract Manager, Consolidate/ErgoPay CLI, Protocol Health Dashboard, ErgoPay QR Page [DONE]
 

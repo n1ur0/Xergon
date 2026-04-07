@@ -74,6 +74,7 @@ const commandModules: Record<string, () => Promise<{ [key: string]: Command }>> 
   rent: () => import('./commands/rent').then(m => ({ rent: m.rentCommand })),
   treasury: () => import('./commands/treasury').then(m => ({ treasury: m.treasuryCommand })),
   ensemble: () => import('./commands/ensemble').then(m => ({ ensemble: m.ensembleCommand })),
+  monitor: () => import('./commands/monitor').then(m => ({ monitor: m.monitorCommand })),
 };
 
 // Cache for loaded commands
