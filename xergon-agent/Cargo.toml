@@ -24,7 +24,7 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 # Configuration
-config = { version = "0.14", features = ["toml"] }
+config = { version = "0.15", features = ["toml"] }
 toml_edit = "0.22"
 # Error handling
 anyhow = "1"
