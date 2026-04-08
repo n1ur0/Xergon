@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{debug, warn};
 
 /// Status of a single health check.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

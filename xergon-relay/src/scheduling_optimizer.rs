@@ -22,7 +22,6 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use crate::proxy::AppState;
 
@@ -315,7 +314,7 @@ impl SchedulingOptimizer {
 
         // Record strategy distribution
         let strategy_key = format!("{:?}", strategy_name);
-        if let Some(mut count) = self.strategy_counts.get_mut(&strategy_key) {
+        if let Some(count) = self.strategy_counts.get_mut(&strategy_key) {
             count.fetch_add(1, Ordering::Relaxed);
         } else {
             self.strategy_counts
@@ -426,7 +425,7 @@ impl SchedulingOptimizer {
 
     /// Increment request count for a provider.
     fn increment_request_count(&self, provider_id: &str) {
-        if let Some(mut count) = self.request_counts.get_mut(provider_id) {
+        if let Some(count) = self.request_counts.get_mut(provider_id) {
             count.fetch_add(1, Ordering::Relaxed);
         } else {
             self.request_counts

@@ -11,16 +11,17 @@ use axum::{
     body::Body,
     extract::{Multipart, Path, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::{
+        Response
+    },
 };
 use chrono::Utc;
 use dashmap::DashMap;
 use serde::Serialize;
 use std::path::{Path as StdPath, PathBuf};
-use std::sync::Arc;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use tracing::{info, warn, debug};
+use tracing::{info, warn};
 
 use crate::proxy::{ProxyError, AppState};
 

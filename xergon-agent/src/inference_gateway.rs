@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -612,7 +611,7 @@ impl Default for InferenceGateway {
 
 use axum::{
     extract::{Path, State},
-    response::{IntoResponse, Json},
+    response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
 };

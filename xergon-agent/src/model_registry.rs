@@ -29,10 +29,10 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Json, Router,
 };
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -480,7 +480,7 @@ impl ModelRegistry {
         );
 
         // Reset metrics for the promoted version so we start fresh
-        if let Some(mut info) = self.versions.get_mut(&version_id) {
+        if let Some(info) = self.versions.get_mut(&version_id) {
             *info.metrics.lock().unwrap() = VersionMetrics::default();
             info.metrics.lock().unwrap().last_updated = Some(Utc::now());
         }
@@ -790,7 +790,7 @@ impl ModelRegistry {
 
             if let Some(prev_id) = {
                 let entry = self.entries.get(model_name);
-                entry.and_then(|e| {
+                entry.and_then(|_e| {
                     // Get the promoted_from of current version
                     let info = self.versions.get(&version_id)?;
                     info.promoted_from_version_id
@@ -834,7 +834,7 @@ impl ModelRegistry {
             let _ = self.execute_rollback(model_name, version_id, {
                 // Find the previous version
                 let entry = self.entries.get(model_name);
-                let prev = entry.and_then(|e| {
+                let prev = entry.and_then(|_e| {
                     let current_info = self.versions.get(&version_id)?;
                     current_info.promoted_from_version_id
                 });

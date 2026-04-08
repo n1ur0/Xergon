@@ -439,7 +439,7 @@ pub async fn rate_limit_middleware(
     // Check rate limit (async because it may query balance checker)
     match rate_limit.check(public_key.as_deref()).await {
         Ok(info) => {
-            let mut response = next.run(req).await;
+            let response = next.run(req).await;
             inject_rate_limit_headers(response, &info)
         }
         Err(response) => response,

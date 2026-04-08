@@ -9,13 +9,10 @@
 //! downgrade) specific keys.
 
 use dashmap::DashMap;
-use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 // ---------------------------------------------------------------------------
 // Tier enum

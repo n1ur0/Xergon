@@ -229,6 +229,7 @@ fn build_test_state(mock_url: &str) -> AppState {
         babel_fee_manager: std::sync::Arc::new(crate::babel_fee_integration::BabelFeeManager::new()),
         request_coalescer: std::sync::Arc::new(crate::request_coalescing::RequestCoalescer::new()),
         protocol_adapter: std::sync::Arc::new(crate::protocol_adapter::ProtocolAdapter::new()),
+        ensemble_router: std::sync::Arc::new(crate::ensemble_router::EnsembleRouter::new()),
     }
 }
 
@@ -366,6 +367,7 @@ fn build_empty_state() -> AppState {
         babel_fee_manager: std::sync::Arc::new(crate::babel_fee_integration::BabelFeeManager::new()),
         request_coalescer: std::sync::Arc::new(crate::request_coalescing::RequestCoalescer::new()),
         protocol_adapter: std::sync::Arc::new(crate::protocol_adapter::ProtocolAdapter::new()),
+        ensemble_router: std::sync::Arc::new(crate::ensemble_router::EnsembleRouter::new()),
     }
 }
 

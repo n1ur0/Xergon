@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Enhanced WebSocket V2 — Channels, presence, typing indicators, message history.
 //!
 //! REST endpoints:

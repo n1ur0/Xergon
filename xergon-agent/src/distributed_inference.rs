@@ -13,9 +13,7 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
@@ -265,7 +263,7 @@ impl DistributedInferenceManager {
         );
 
         let max_retries = request.max_retries.unwrap_or(3);
-        let timeout_secs = request.timeout_secs.unwrap_or(30);
+        let _timeout_secs = request.timeout_secs.unwrap_or(30);
 
         // Try preferred node first, then fall back to selection
         let node = if let Some(ref preferred) = request.preferred_node {
@@ -527,6 +525,7 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::time::Duration;
 
     /// Helper: create a healthy inference node.
@@ -921,7 +920,7 @@ mod tests {
         // Since DistributedInferenceManager doesn't implement Clone, we use
         // Arc to share it across tasks.
         let mgr = Arc::new(mgr);
-        let mut handles = Vec::new();
+        let mut handles: Vec<tokio::task::JoinHandle<ForwardResult>> = Vec::new();
         for _ in 0..20 {
             let mgr = mgr.clone();
             handles.push(tokio::spawn(async move {

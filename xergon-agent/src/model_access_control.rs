@@ -25,7 +25,7 @@
 //! - GET  /v1/rbac/user/{id}/roles        — Get roles for a user
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
@@ -908,7 +908,7 @@ pub async fn get_user_roles_handler(
 
 /// Build the model access control router.
 pub fn build_rbac_router(state: crate::api::AppState) -> axum::Router {
-    use axum::routing::{delete, get, post};
+    use axum::routing::{get, post};
 
     axum::Router::new()
         .route("/v1/rbac/roles", post(create_role_handler).get(list_roles_handler))

@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
@@ -1132,7 +1131,7 @@ impl ComplianceEngine {
         let mut messages: Vec<String> = vec![];
         let mut requests_allowed = true;
         let mut tokens_allowed = true;
-        let mut model_access_allowed = true;
+        let model_access_allowed = true;
 
         // Get or create usage record
         let current_requests = self.get_user_request_count(user_id);
@@ -1709,7 +1708,7 @@ impl ComplianceEngine {
         &self,
         request_id: &str,
         user_id: &str,
-        model_id: &str,
+        _model_id: &str,
         toxicity_score: f64,
         pii_detected: bool,
         token_count: u32,

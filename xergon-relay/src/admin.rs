@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Admin API for the Xergon relay
 //!
 //! Provides endpoints for provider management, system stats, cache control,
@@ -11,9 +12,9 @@ use axum::{
     routing::{delete, get, patch, post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 use std::sync::atomic::Ordering;
-use tracing::{info, warn};
+use tracing::{info};
 
 use crate::degradation::DegradationLevel;
 use crate::proxy::AppState;

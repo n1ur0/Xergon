@@ -24,7 +24,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::api::AppState;
 
@@ -289,7 +289,7 @@ impl ModelServeManager {
 
     /// Record a completed request for metrics.
     pub fn record_request(&self, model_id: &str, tokens: u64, latency_ms: u64, is_error: bool) {
-        if let Some(mut model) = self.models.get_mut(model_id) {
+        if let Some(model) = self.models.get_mut(model_id) {
             model.total_requests.fetch_add(1, Ordering::Relaxed);
             model.total_tokens.fetch_add(tokens, Ordering::Relaxed);
             if is_error {

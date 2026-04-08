@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Model Registry
 //!
 //! Maintains an aggregated, thread-safe view of all models available across

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! UTXO Consolidation Engine for storage rent protection.
 //!
 //! Ergo storage rent: boxes older than 4 years (1,051,200 blocks) can be spent by miners.
@@ -6,7 +7,6 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -232,7 +232,7 @@ impl RentEstimatorService {
         else { Priority::Safe }
     }
 
-    pub fn rent_saved_by_consolidation(boxes: &[BoxInfo], current_height: u64) -> u64 {
+    pub fn rent_saved_by_consolidation(boxes: &[BoxInfo], _current_height: u64) -> u64 {
         // Each box pays min_value in rent. Consolidating N boxes into 1 saves (N-1) box minimums.
         let individual_rents: u64 = boxes.iter()
             .map(|b| Self::min_box_value(b.byte_size))
@@ -305,7 +305,7 @@ impl ConsolidationPlanner {
 
     /// Create consolidation plan for an address.
     pub fn create_plan(&self, address: &str) -> Vec<ConsolidationPlan> {
-        let boxes = self.tracker.boxes_by_address(address);
+        let _boxes = self.tracker.boxes_by_address(address);
         let dust = self.dust_collector.collect_dust_for_address(address);
 
         if dust.is_empty() {

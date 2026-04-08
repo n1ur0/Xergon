@@ -22,7 +22,6 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -148,6 +147,7 @@ pub struct DeleteCheckpointResponse {
 pub struct CheckpointManager {
     config: tokio::sync::RwLock<CheckpointConfig>,
     checkpoints: DashMap<String, ModelCheckpoint>,
+    #[allow(dead_code)]
     storage_path: PathBuf,
 }
 

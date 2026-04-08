@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Encrypted Inference Module
 //!
 //! Provides end-to-end encrypted inference routing through the Xergon relay.

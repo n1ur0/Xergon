@@ -29,7 +29,8 @@ export interface Command {
   description: string;
   aliases: string[];
   options: CommandOption[];
-  action: (args: ParsedArgs, ctx: CLIContext) => Promise<void>;
+  action: (args: ParsedArgs, ctx: CLIContext) => void | Promise<void>;
+  subcommands?: any[];
 }
 
 export interface ParsedArgs {

@@ -229,7 +229,7 @@ impl ContentNegotiator {
 
         // Handle wildcard types
         if best_type.is_none() {
-            for (ct, q) in &parsed.types {
+            for (_ct, q) in &parsed.types {
                 // Check for */* or application/*
                 if *q < self.min_quality {
                     continue;
@@ -276,7 +276,7 @@ impl ContentNegotiator {
         let mut best = "identity".to_string();
         let mut best_q = 0.0_f32;
 
-        for (enc, default_q) in &preferred {
+        for (enc, _default_q) in &preferred {
             let q = encodings.get(*enc).copied().unwrap_or(0.0_f32);
             if q > 0.0 && q > best_q {
                 best_q = q;
@@ -310,7 +310,7 @@ impl ContentNegotiator {
         let mut best = "utf-8".to_string();
         let mut best_q = 0.0_f32;
 
-        for (cs, default_q) in &preferred {
+        for (cs, _default_q) in &preferred {
             let q = charsets.get(*cs).copied().unwrap_or(0.0_f32);
             if q > 0.0 && q > best_q {
                 best_q = q;

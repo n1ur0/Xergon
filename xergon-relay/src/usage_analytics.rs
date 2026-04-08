@@ -4,11 +4,10 @@
 //! aggregates into daily summaries, and provides per-model, per-key,
 //! and per-tier breakdowns via admin endpoints.
 
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
-use tracing::{debug, info};
+use tracing::{debug};
 
 use crate::rate_limit_tiers::RateLimitTier;
 

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Request Coalescing for chat completions.
 //!
 //! When multiple identical chat requests arrive within a short time window,
@@ -10,9 +11,9 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Instant};
+use tokio::sync::{mpsc};
 use tracing::{debug, warn};
 
 // ---------------------------------------------------------------------------
@@ -474,7 +475,7 @@ impl RequestCoalescer {
 
     /// Get current statistics.
     pub fn get_stats(&self) -> CoalesceStats {
-        let mut stats = CoalesceStats {
+        let stats = CoalesceStats {
             active_batches: self.pending.len(),
             total_coalesced: AtomicU64::new(
                 self.stats.total_coalesced.load(Ordering::Relaxed),

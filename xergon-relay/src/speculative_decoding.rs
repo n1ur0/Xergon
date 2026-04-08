@@ -7,9 +7,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use uuid::Uuid;
 use crate::proxy::AppState;
 
@@ -391,7 +389,7 @@ impl SpeculativeDecodingCoordinator {
 
         const VERIFY_OVERHEAD: f64 = 0.1;
         let expected_cost = accept_rate * VERIFY_OVERHEAD + (1.0 - accept_rate) * 1.0;
-        let speedup = if expected_cost > 0.0 {
+        let _speedup = if expected_cost > 0.0 {
             1.0 / expected_cost
         } else {
             1.0

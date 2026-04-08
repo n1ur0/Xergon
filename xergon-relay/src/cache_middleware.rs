@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Caching middleware for GET responses with ETag/conditional request support.
 //!
 //! For cacheable GET routes:
@@ -10,7 +11,7 @@
 //! - Forwards request through
 
 use axum::body::Body;
-use axum::http::{header, HeaderMap, Method, StatusCode};
+use axum::http::{header, Method, StatusCode};
 use axum::middleware::Next;
 use axum::response::Response;
 use bytes::Bytes;
@@ -133,7 +134,7 @@ impl CacheLayerState {
 /// This is used as `axum::middleware::from_fn_with_state(cache_state, cache_middleware)`.
 pub async fn cache_middleware(
     axum::extract::State(state): axum::extract::State<CacheLayerState>,
-    mut req: axum::extract::Request,
+    req: axum::extract::Request,
     next: Next,
 ) -> Response {
     let method = req.method().clone();
@@ -174,7 +175,7 @@ pub async fn cache_middleware(
     }
 
     // Forward the request
-    let mut response = next.run(req).await;
+    let response = next.run(req).await;
 
     // Only cache successful responses with body
     let status = response.status();

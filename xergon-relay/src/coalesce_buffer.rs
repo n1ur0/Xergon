@@ -12,7 +12,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tracing::{debug, info, warn};
+use tracing::{debug, warn};
 
 use crate::coalesce::{
     CoalesceConfig, CoalesceResult, RequestCoalescer, SseChunk,
@@ -122,7 +122,7 @@ impl RequestMultiplexer {
                 self.buffer_manager.create_buffer(&hash);
 
                 // Subscribe the first entry to the buffer
-                if let Some(receiver) = self.buffer_manager.subscribe(
+                if let Some(_receiver) = self.buffer_manager.subscribe(
                     &hash,
                     &entry.id,
                     self.config.channel_buffer_size,

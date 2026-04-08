@@ -8,7 +8,7 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -156,7 +156,8 @@ pub struct EpochReward {
 
 /// Read-only snapshot of a pool for borrowing (avoids AtomicU64 Clone).
 #[derive(Debug, Clone)]
-struct PoolSnapshot {
+#[allow(dead_code)]
+pub(crate) struct PoolSnapshot {
     pub pool_id: String,
     pub name: String,
     pub reward_token_id: String,
@@ -179,7 +180,7 @@ impl PoolSnapshot {
 }
 
 impl StakingPool {
-    pub fn snapshot(&self) -> PoolSnapshot {
+    pub(crate) fn snapshot(&self) -> PoolSnapshot {
         PoolSnapshot {
             pool_id: self.pool_id.clone(),
             name: self.name.clone(),
@@ -455,7 +456,7 @@ impl PoolManager {
             pos.erg_staked = pos.erg_staked.saturating_sub(actual_erg);
 
             if pos.total_staked() == 0 {
-                drop(pos);
+                let _ = pos;
                 self.positions.remove(&key);
                 if let Some(mut p) = self.pools.get_mut(pool_id) {
                     p.value_mut().active_stakers.fetch_sub(1, Ordering::Relaxed);
@@ -586,7 +587,7 @@ impl PoolManager {
         self.pools.get(pool_id).map(|p| p.value().apy_percent())
     }
 
-    pub fn suggest_optimal_pool(&self, staker_address: &str, amount: u64) -> Vec<YieldSuggestion> {
+    pub fn suggest_optimal_pool(&self, _staker_address: &str, amount: u64) -> Vec<YieldSuggestion> {
         let mut pool_apis: Vec<(String, f64)> = self.pools
             .iter()
             .filter(|p| p.value().status == PoolStatus::Active)

@@ -18,8 +18,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::info;
 
 // ---------------------------------------------------------------------------
 // Data types

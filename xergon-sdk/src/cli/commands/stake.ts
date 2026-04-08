@@ -10,7 +10,7 @@
 //!   - `stake apy`      — show APY leaderboard across pools
 //!   - `stake suggest`  — yield optimization suggestions
 
-import { Command } from '@cliffy/command';
+import type { Command } from '../mod';
 import { Table } from '@cliffy/table';
 import { colors } from '@cliffy/colors';
 

@@ -1,9 +1,9 @@
+#![allow(dead_code)]
 //! Protocol version management with semver negotiation and migration paths.
 //!
 //! Provides a registry of supported protocol versions, deprecation tracking,
 //! version negotiation between client and server, and migration path resolution.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::{
@@ -16,7 +16,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::proxy::AppState;
 
@@ -280,7 +280,7 @@ impl ProtocolRegistry {
     pub fn new(initial_version: &str) -> Self {
         let version = ProtocolVersion::parse(initial_version)
             .unwrap_or_else(|| ProtocolVersion::new(1, 0, 0));
-        let mut registry = Self {
+        let registry = Self {
             versions: DashMap::new(),
             migration_handlers: DashMap::new(),
             current_version: std::sync::RwLock::new(version.clone()),

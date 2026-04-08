@@ -9,11 +9,10 @@ pub use communication::{A2AMessage, AgentLoad};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::collections::VecDeque;
 use thiserror::Error;
 use uuid::Uuid;
 use chrono::Utc;
-use tracing::{info, warn, debug};
+use tracing::{info, warn};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -414,7 +413,7 @@ impl Orchestrator {
         Ok(best_pk)
     }
 
-    fn select_agent(&self, task: &Task) -> Result<String, OrchestrationError> {
+    fn select_agent(&self, _task: &Task) -> Result<String, OrchestrationError> {
         let mut capable: Vec<_> = self.agents.iter()
             .filter(|a| a.value().has_capacity())
             .collect();

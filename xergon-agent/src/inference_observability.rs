@@ -289,6 +289,7 @@ pub struct InferenceObservability {
     /// Configuration.
     config: Arc<tokio::sync::RwLock<ObservabilityConfig>>,
     /// Runtime statistics.
+    #[allow(dead_code)]
     stats: ObservabilityStats,
     /// Atomic counters for lock-free updates.
     traces_created: AtomicU64,

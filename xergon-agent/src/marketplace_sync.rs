@@ -27,7 +27,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::api::AppState;
 use crate::benchmark::BenchmarkResult;
-use crate::config::PricingConfig;
 use crate::hardware;
 
 // ---------------------------------------------------------------------------

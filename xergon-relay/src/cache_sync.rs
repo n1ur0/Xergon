@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Distributed Cache Synchronization
 //!
 //! Periodically syncs inference cache entries across relay nodes using
@@ -6,13 +7,12 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::proxy::AppState;
 use axum::response::IntoResponse;

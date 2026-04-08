@@ -21,7 +21,6 @@ use axum::{
 use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -363,7 +362,7 @@ impl SelfHealingCircuitBreaker {
     /// Get detailed stats for a circuit.
     pub fn get_stats(&self, provider_id: &str) -> Option<CircuitStats> {
         self.circuits.get(provider_id).map(|data| {
-            let effective_open_ms = data.effective_open_duration_ms();
+            let _effective_open_ms = data.effective_open_duration_ms();
             CircuitStats {
                 provider_id: provider_id.to_string(),
                 state: data.state.clone(),

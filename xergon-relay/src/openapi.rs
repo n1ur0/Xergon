@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! OpenAPI 3.0.3 Specification Generator
 //!
 //! Builds an OpenAPI spec programmatically as serde_json::Value (no utoipa dependency).
@@ -6,8 +7,10 @@
 //! - GET /v1/docs — Swagger UI HTML page
 
 use axum::{
-    http::StatusCode,
-    response::{Html, IntoResponse, Json},
+    response::{
+        Html,
+        Json
+    },
 };
 use serde_json::{json, Value};
 

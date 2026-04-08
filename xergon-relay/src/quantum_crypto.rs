@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Quantum-Resistant Cryptographic Primitives Module
 //!
 //! Provides post-quantum cryptographic primitives for the Xergon relay:
@@ -324,7 +325,7 @@ pub fn pq_encapsulate(public_key: &PostQuantumKeyPair) -> (Vec<u8>, KEMCiphertex
     for _ in 0..KEM_MATRIX_K {
         e1_vec.push(prng.next_i16());
     }
-    let mut e2_val = prng.next_i16();
+    let e2_val = prng.next_i16();
 
     // Compute u = A^T * r + e1
     let mut u_vec = Vec::with_capacity(KEM_MATRIX_K);
@@ -456,7 +457,7 @@ pub fn pq_decapsulate(
     for _ in 0..KEM_MATRIX_K {
         e1_vec.push(prng.next_i16());
     }
-    let mut e2_val = prng.next_i16();
+    let e2_val = prng.next_i16();
 
     // Recompute v = T^T * r + e2
     let mut v_val = 0i32;
@@ -792,7 +793,7 @@ impl HomomorphicVerifier {
             (proof.layer_index, &proof.merkle_proof, &proof.leaf_hash)
         {
             // Check model commitment exists
-            let commitment = self
+            let _commitment = self
                 .models
                 .get(&proof.model_commitment)
                 .ok_or_else(|| {

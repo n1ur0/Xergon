@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Streaming Response Buffer.
 //!
 //! Buffers SSE chunks as they arrive from a provider, allowing multiple
@@ -6,7 +7,7 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::{debug, warn};

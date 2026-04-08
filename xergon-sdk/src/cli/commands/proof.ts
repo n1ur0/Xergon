@@ -77,6 +77,45 @@ interface TrustScoreBreakdown {
   lastUpdated: string;
 }
 
+// ── Pipeline Types ──────────────────────────────────────────────────
+
+type PipelineProofType = 'ponw' | 'attestation' | 'model-hash' | 'stake';
+
+interface PipelineSubmission {
+  id: string;
+  providerId: string;
+  proofType: PipelineProofType;
+  commitmentHash: string;
+  submittedAt: string;
+  verified: boolean;
+  verificationResult?: string;
+  onChainTxId?: string;
+}
+
+interface PipelineBatch {
+  batchId: string;
+  proofs: PipelineSubmission[];
+  submittedAt: string;
+  status: 'pending' | 'processing' | 'completed' | 'partial' | 'failed';
+}
+
+interface FraudCheckResult {
+  providerId: string;
+  fraudDetected: boolean;
+  fraudType?: string;
+  suspiciousSubmissions: string[];
+  riskScore: number;
+}
+
+interface PipelineStatusSummary {
+  totalSubmitted: number;
+  totalVerified: number;
+  totalRejected: number;
+  fraudDetected: number;
+  pendingBatches: number;
+  avgVerificationMs: number;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 function isJsonOutput(args: ParsedArgs): boolean {
@@ -546,21 +585,347 @@ async function handleTrust(args: ParsedArgs, ctx: CLIContext): Promise<void> {
   }
 }
 
+// ── Subcommand: pipeline ──────────────────────────────────────────
+
+async function handlePipeline(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  ctx.output.info('Fetching proof pipeline status...');
+
+  try {
+    let summary: PipelineStatusSummary;
+
+    if (ctx.client?.proof?.pipeline) {
+      summary = await ctx.client.proof.pipeline();
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(summary, null, 2));
+      return;
+    }
+
+    ctx.output.write(ctx.output.colorize('Sigma Proof Pipeline Status', 'bold'));
+    ctx.output.write(ctx.output.colorize('─'.repeat(40), 'dim'));
+    ctx.output.write('');;
+    ctx.output.write(ctx.output.formatText({
+      'Total Submitted': String(summary.totalSubmitted),
+      'Total Verified': ctx.output.colorize(String(summary.totalVerified), 'green'),
+      'Total Rejected': ctx.output.colorize(String(summary.totalRejected), 'red'),
+      'Fraud Detected': ctx.output.colorize(String(summary.fraudDetected), summary.fraudDetected > 0 ? 'red' : 'green'),
+      'Pending Batches': String(summary.pendingBatches),
+      'Avg Verification': summary.avgVerificationMs.toFixed(1) + ' ms',
+    }, 'Pipeline Summary'));
+
+    const rate = summary.totalSubmitted > 0
+      ? ((summary.totalVerified / summary.totalSubmitted) * 100).toFixed(1)
+      : '0.0';
+    ctx.output.write('');
+    ctx.output.write(`  Verification rate: ${ctx.output.colorize(rate + '%', 'cyan')}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to fetch pipeline status: ${message}`);
+    process.exit(1);
+  }
+}
+
+// ── Subcommand: submit (pipeline) ─────────────────────────────────
+
+async function handlePipelineSubmit(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  const providerId = args.options.provider ? String(args.options.provider) : undefined;
+  const proofType = args.options.type ? String(args.options.type) : undefined;
+  const proofFile = args.options.proof ? String(args.options.proof) : undefined;
+
+  const validTypes: PipelineProofType[] = ['ponw', 'attestation', 'model-hash', 'stake'];
+  if (!providerId || !proofType || !proofFile) {
+    ctx.output.writeError('Usage: xergon proof submit --provider <id> --type ponw|attestation|model-hash|stake --proof <file>');
+    process.exit(1);
+    return;
+  }
+  if (!validTypes.includes(proofType as PipelineProofType)) {
+    ctx.output.writeError(`Invalid proof type: ${proofType}. Must be one of: ${validTypes.join(', ')}`);
+    process.exit(1);
+    return;
+  }
+
+  const resolvedPath = path.resolve(proofFile);
+  if (!fs.existsSync(resolvedPath)) {
+    ctx.output.writeError(`Proof file not found: ${resolvedPath}`);
+    process.exit(1);
+    return;
+  }
+
+  const proofData = fs.readFileSync(resolvedPath);
+  ctx.output.info(`Submitting ${proofType} proof for provider ${providerId.substring(0, 16)}... (${proofData.length} bytes)`);
+
+  try {
+    let result: PipelineSubmission;
+
+    if (ctx.client?.proof?.pipelineSubmit) {
+      result = await ctx.client.proof.pipelineSubmit({
+        providerId,
+        proofType: proofType as PipelineProofType,
+        proof: proofData,
+      });
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    ctx.output.success('Proof submitted to pipeline');
+    ctx.output.write('');
+    ctx.output.write(ctx.output.formatText({
+      'Submission ID': result.id,
+      'Provider ID': providerId,
+      'Proof Type': result.proofType.toUpperCase(),
+      'Commitment Hash': result.commitmentHash.substring(0, 24) + '...',
+      Status: ctx.output.colorize(result.verified ? 'VERIFIED' : 'PENDING', result.verified ? 'green' : 'yellow'),
+      'Submitted At': formatTimestamp(result.submittedAt),
+    }, 'Pipeline Submission'));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to submit proof to pipeline: ${message}`);
+    process.exit(1);
+  }
+}
+
+// ── Subcommand: batch ─────────────────────────────────────────────
+
+async function handleBatch(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  const batchFile = args.options.file ? String(args.options.file) : undefined;
+
+  if (!batchFile) {
+    ctx.output.writeError('Usage: xergon proof batch --file <file>');
+    process.exit(1);
+    return;
+  }
+
+  const resolvedPath = path.resolve(batchFile);
+  if (!fs.existsSync(resolvedPath)) {
+    ctx.output.writeError(`Batch file not found: ${resolvedPath}`);
+    process.exit(1);
+    return;
+  }
+
+  let batchData: Array<{ providerId: string; proofType: string; proofPath: string }>;
+  try {
+    const raw = fs.readFileSync(resolvedPath, 'utf-8');
+    batchData = JSON.parse(raw);
+    if (!Array.isArray(batchData)) {
+      throw new Error('Batch file must contain a JSON array');
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to parse batch file: ${message}`);
+    process.exit(1);
+    return;
+  }
+
+  ctx.output.info(`Submitting batch of ${batchData.length} proof(s) to pipeline...`);
+
+  try {
+    let result: PipelineBatch;
+
+    if (ctx.client?.proof?.batch) {
+      result = await ctx.client.proof.batch({ proofs: batchData });
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    ctx.output.success(`Batch submitted: ${result.batchId}`);
+    ctx.output.write('');
+    ctx.output.write(ctx.output.formatText({
+      'Batch ID': result.batchId,
+      'Proofs Count': String(result.proofs.length),
+      Status: ctx.output.colorize(result.status.toUpperCase(), 'cyan'),
+      'Submitted At': formatTimestamp(result.submittedAt),
+    }, 'Batch Submission'));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to submit batch: ${message}`);
+    process.exit(1);
+  }
+}
+
+// ── Subcommand: verify (pipeline) ─────────────────────────────────
+
+async function handlePipelineVerify(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  const proofId = args.options.id ? String(args.options.id) : undefined;
+
+  if (!proofId) {
+    ctx.output.writeError('Usage: xergon proof verify --id <id>');
+    process.exit(1);
+    return;
+  }
+
+  ctx.output.info(`Verifying pipeline proof ${proofId.substring(0, 16)}...`);
+
+  try {
+    let result: PipelineSubmission;
+
+    if (ctx.client?.proof?.pipelineVerify) {
+      result = await ctx.client.proof.pipelineVerify(proofId);
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    const statusColor = result.verified ? 'green' : 'red';
+    ctx.output.write(ctx.output.colorize(
+      result.verified ? 'Proof verified successfully' : 'Proof verification failed',
+      statusColor,
+    ));
+    ctx.output.write('');
+    ctx.output.write(ctx.output.formatText({
+      'Submission ID': result.id,
+      'Provider ID': result.providerId,
+      'Proof Type': result.proofType.toUpperCase(),
+      'Commitment Hash': result.commitmentHash.substring(0, 24) + '...',
+      Verified: ctx.output.colorize(String(result.verified), statusColor),
+      'Verification Result': result.verificationResult || '-',
+      'On-Chain Tx': result.onChainTxId || '-',
+      'Submitted At': formatTimestamp(result.submittedAt),
+    }, 'Pipeline Verification'));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to verify proof: ${message}`);
+    process.exit(1);
+  }
+}
+
+// ── Subcommand: receipt ───────────────────────────────────────────
+
+async function handleReceipt(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  const proofId = args.options.id ? String(args.options.id) : undefined;
+
+  if (!proofId) {
+    ctx.output.writeError('Usage: xergon proof receipt --id <id>');
+    process.exit(1);
+    return;
+  }
+
+  ctx.output.info(`Fetching verification receipt for ${proofId.substring(0, 16)}...`);
+
+  try {
+    let receipt: PipelineSubmission;
+
+    if (ctx.client?.proof?.receipt) {
+      receipt = await ctx.client.proof.receipt(proofId);
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(receipt, null, 2));
+      return;
+    }
+
+    ctx.output.write(ctx.output.colorize('Verification Receipt', 'bold'));
+    ctx.output.write(ctx.output.colorize('─'.repeat(40), 'dim'));
+    ctx.output.write('');
+    ctx.output.write(ctx.output.formatText({
+      'Submission ID': receipt.id,
+      'Provider ID': receipt.providerId,
+      'Proof Type': receipt.proofType.toUpperCase(),
+      'Commitment Hash': receipt.commitmentHash,
+      Verified: ctx.output.colorize(String(receipt.verified), receipt.verified ? 'green' : 'yellow'),
+      'Verification Result': receipt.verificationResult || '-',
+      'On-Chain Tx ID': receipt.onChainTxId || '-',
+      'Submitted At': formatTimestamp(receipt.submittedAt),
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to fetch receipt: ${message}`);
+    process.exit(1);
+  }
+}
+
+// ── Subcommand: fraud-check ───────────────────────────────────────
+
+async function handleFraudCheck(args: ParsedArgs, ctx: CLIContext): Promise<void> {
+  const providerId = args.options.provider ? String(args.options.provider) : undefined;
+
+  if (!providerId) {
+    ctx.output.writeError('Usage: xergon proof fraud-check --provider <id>');
+    process.exit(1);
+    return;
+  }
+
+  ctx.output.info(`Running fraud analysis for provider ${providerId.substring(0, 16)}...`);
+
+  try {
+    let result: FraudCheckResult;
+
+    if (ctx.client?.proof?.fraudCheck) {
+      result = await ctx.client.proof.fraudCheck(providerId);
+    } else {
+      throw new Error('Proof client not available.');
+    }
+
+    if (isJsonOutput(args)) {
+      ctx.output.write(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    const riskColor = result.riskScore >= 80 ? 'red' : result.riskScore >= 50 ? 'yellow' : 'green';
+    const fraudColor = result.fraudDetected ? 'red' : 'green';
+
+    ctx.output.write(ctx.output.colorize('Fraud Analysis Report', 'bold'));
+    ctx.output.write(ctx.output.colorize('─'.repeat(40), 'dim'));
+    ctx.output.write('');
+    ctx.output.write(ctx.output.formatText({
+      'Provider ID': providerId,
+      'Fraud Detected': ctx.output.colorize(String(result.fraudDetected), fraudColor),
+      'Fraud Type': result.fraudType || 'None',
+      'Risk Score': ctx.output.colorize(result.riskScore.toFixed(1) + ' / 100', riskColor),
+      'Suspicious Submissions': String(result.suspiciousSubmissions.length),
+    }, 'Fraud Check'));
+
+    if (result.suspiciousSubmissions.length > 0) {
+      ctx.output.write('');
+      ctx.output.write(ctx.output.colorize('Suspicious Submissions:', 'yellow'));
+      for (const subId of result.suspiciousSubmissions) {
+        ctx.output.write(`  ${ctx.output.colorize('!', 'red')} ${subId}`);
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.output.writeError(`Failed to run fraud check: ${message}`);
+    process.exit(1);
+  }
+}
+
 // ── Command action ─────────────────────────────────────────────────
 
 async function proofAction(args: ParsedArgs, ctx: CLIContext): Promise<void> {
   const sub = args.positional[0];
 
   if (!sub) {
-    ctx.output.writeError('Usage: xergon proof <verify|submit|list|status|anchor|trust> [options]');
+    ctx.output.writeError('Usage: xergon proof <verify|submit|list|status|anchor|trust|pipeline|batch|receipt|fraud-check> [options]');
     ctx.output.write('');
     ctx.output.write('Subcommands:');
-    ctx.output.write('  verify    Verify a ZK proof against a commitment');
-    ctx.output.write('  submit    Submit a proof to the relay');
-    ctx.output.write('  list      List proofs for a provider');
-    ctx.output.write('  status    Check proof verification status');
-    ctx.output.write('  anchor    Anchor a verified proof on Ergo blockchain');
-    ctx.output.write('  trust     Show provider trust score breakdown');
+    ctx.output.write('  verify       Verify a ZK proof against a commitment');
+    ctx.output.write('  submit       Submit a proof to the relay');
+    ctx.output.write('  list         List proofs for a provider');
+    ctx.output.write('  status       Check proof verification status');
+    ctx.output.write('  anchor       Anchor a verified proof on Ergo blockchain');
+    ctx.output.write('  trust        Show provider trust score breakdown');
+    ctx.output.write('  pipeline     Show proof pipeline status summary');
+    ctx.output.write('  batch        Submit batch of proofs from JSON file');
+    ctx.output.write('  receipt      Get verification receipt');
+    ctx.output.write('  fraud-check  Check for fraud patterns');
     process.exit(1);
     return;
   }
@@ -584,9 +949,21 @@ async function proofAction(args: ParsedArgs, ctx: CLIContext): Promise<void> {
     case 'trust':
       await handleTrust(args, ctx);
       break;
+    case 'pipeline':
+      await handlePipeline(args, ctx);
+      break;
+    case 'batch':
+      await handleBatch(args, ctx);
+      break;
+    case 'receipt':
+      await handleReceipt(args, ctx);
+      break;
+    case 'fraud-check':
+      await handleFraudCheck(args, ctx);
+      break;
     default:
       ctx.output.writeError(`Unknown subcommand: ${sub}`);
-      ctx.output.write('Valid subcommands: verify, submit, list, status, anchor, trust');
+      ctx.output.write('Valid subcommands: verify, submit, list, status, anchor, trust, pipeline, batch, receipt, fraud-check');
       process.exit(1);
       break;
   }
@@ -660,13 +1037,37 @@ const proofOptions: CommandOption[] = [
     default: 'all',
     type: 'string',
   },
+  {
+    name: 'type',
+    short: '',
+    long: '--type',
+    description: 'Proof type for pipeline submit: ponw, attestation, model-hash, stake',
+    required: false,
+    type: 'string',
+  },
+  {
+    name: 'file',
+    short: '',
+    long: '--file',
+    description: 'Path to JSON file for batch submission',
+    required: false,
+    type: 'string',
+  },
+  {
+    name: 'id',
+    short: '',
+    long: '--id',
+    description: 'Proof or subscription ID for verify/receipt operations',
+    required: false,
+    type: 'string',
+  },
 ];
 
 // ── Command export ─────────────────────────────────────────────────
 
 export const proofCommand: Command = {
   name: 'proof',
-  description: 'ZKP verification: verify, submit, list, anchor proofs, and inspect trust scores',
+  description: 'ZKP verification: verify, submit, list, anchor proofs, inspect trust scores, and manage sigma proof pipeline',
   aliases: ['zkp', 'proofs'],
   options: proofOptions,
   action: proofAction,

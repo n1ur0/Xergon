@@ -5,16 +5,15 @@
 //!
 //! Configuration is read from `[audit]` in the agent config TOML.
 
-use std::sync::Arc;
 
 use axum::{
     body::Body,
     extract::Request,
-    http::{header, StatusCode},
+    http::header,
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{error, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -374,6 +373,7 @@ pub async fn audit_middleware(
 mod tests {
     use super::*;
     use axum::body::Bytes;
+    use axum::http::StatusCode;
     use axum::http::{Request as HttpRequest, Method};
     use tower::ServiceExt;
 

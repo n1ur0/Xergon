@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Babel Fee Integration — Ergo transaction fee calculation and management
 //!
 //! Implements Ergo's fee model for inference requests:
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::proxy::AppState;
 
@@ -261,7 +262,7 @@ impl BabelFeeManager {
     /// Estimate the fee for a request without recording it.
     pub fn estimate_fee(
         &self,
-        request_id: &str,
+        _request_id: &str,
         payload_size_bytes: usize,
         tier: FeeTier,
         user_id: &str,

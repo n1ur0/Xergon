@@ -14,7 +14,6 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::proxy::AppState;
@@ -767,6 +766,7 @@ pub fn build_router(state: AppState) -> Router<AppState> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::thread;
 
     /// Helper to build a test provider capability.

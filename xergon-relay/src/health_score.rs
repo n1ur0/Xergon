@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Provider Health Scoring module.
 //!
 //! Maintains per-provider health scores based on latency, reliability,
@@ -8,7 +9,7 @@ use dashmap::DashMap;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use tracing::{debug, trace};
 
 // ---------------------------------------------------------------------------

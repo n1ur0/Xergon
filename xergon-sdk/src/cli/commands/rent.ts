@@ -60,6 +60,7 @@ interface RentEstimateResult {
   deficit: bigint;
   ageBlocks: number;
   daysUntilRent: number;
+  daysUntilDeadline: number;
   annualRentCost: bigint;
   riskLevel: RiskLevel;
   recommendations: string[];
@@ -139,12 +140,12 @@ function computeAnnualRent(byteSize: number): bigint {
 function getMockBoxes(): BoxRentInfo[] {
   const height = RENT_ACTIVATION_HEIGHT + 1_000_000; // ~3.8 years after activation
   return [
-    { boxId: 'a1b2c3d4e5f6...old1', boxType: 'Provider', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(50_000_000), creationHeight: RENT_ACTIVATION_HEIGHT, currentHeight: height, ageBlocks: 1_000_000, byteSize: 320, daysUntilDeadline: computeDaysUntilRent(1_000_000), riskLevel: computeRiskLevel(computeDaysUntilRent(1_000_000)), tokens: [] },
-    { boxId: 'f6e5d4c3b2a1...old2', boxType: 'Treasury', address: '9hPU9YXhJ5oJ3k2', valueNanoerg: BigInt(500_000_000), creationHeight: RENT_ACTIVATION_HEIGHT + 100_000, currentHeight: height, ageBlocks: 900_000, byteSize: 450, daysUntilDeadline: computeDaysUntilRent(900_000), riskLevel: computeRiskLevel(computeDaysUntilRent(900_000)), tokens: [{ tokenId: 'token-abc', amount: BigInt(1000) }] },
-    { boxId: '112233445566...new1', boxType: 'Provider', address: '9hPU9YXhJ5oJ3k3', valueNanoerg: BigInt(1_000_000_000), creationHeight: height - 100_000, currentHeight: height, ageBlocks: 100_000, byteSize: 280, daysUntilDeadline: computeDaysUntilRent(100_000), riskLevel: computeRiskLevel(computeDaysUntilRent(100_000)), tokens: [] },
-    { boxId: '778899aabbcc...new2', boxType: 'Settlement', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(200_000_000), creationHeight: height - 50_000, currentHeight: height, ageBlocks: 50_000, byteSize: 200, daysUntilDeadline: computeDaysUntilRent(50_000), riskLevel: computeRiskLevel(computeDaysUntilRent(50_000)), tokens: [] },
-    { boxId: 'ddeeff001122...dust1', boxType: 'Dust', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(72_000), creationHeight: RENT_ACTIVATION_HEIGHT, currentHeight: height, ageBlocks: 1_000_000, byteSize: 200, daysUntilDeadline: computeDaysUntilRent(1_000_000), riskLevel: computeRiskLevel(computeDaysUntilRent(1_000_000)), tokens: [] },
-    { boxId: '334455667788...dust2', boxType: 'Dust', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(36_000), creationHeight: RENT_ACTIVATION_HEIGHT + 200_000, currentHeight: height, ageBlocks: 800_000, byteSize: 100, daysUntilDeadline: computeDaysUntilRent(800_000), riskLevel: computeRiskLevel(computeDaysUntilRent(800_000)), tokens: [] },
+    { boxId: 'a1b2c3d4e5f6...old1', boxType: 'Provider', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(50_000_000), creationHeight: RENT_ACTIVATION_HEIGHT, currentHeight: height, ageBlocks: 1_000_000, byteSize: 320, minBoxValue: computeMinBoxValue(320), daysUntilDeadline: computeDaysUntilRent(1_000_000), riskLevel: computeRiskLevel(computeDaysUntilRent(1_000_000)), tokens: [] },
+    { boxId: 'f6e5d4c3b2a1...old2', boxType: 'Treasury', address: '9hPU9YXhJ5oJ3k2', valueNanoerg: BigInt(500_000_000), creationHeight: RENT_ACTIVATION_HEIGHT + 100_000, currentHeight: height, ageBlocks: 900_000, byteSize: 450, minBoxValue: computeMinBoxValue(450), daysUntilDeadline: computeDaysUntilRent(900_000), riskLevel: computeRiskLevel(computeDaysUntilRent(900_000)), tokens: [{ tokenId: 'token-abc', amount: BigInt(1000) }] },
+    { boxId: '112233445566...new1', boxType: 'Provider', address: '9hPU9YXhJ5oJ3k3', valueNanoerg: BigInt(1_000_000_000), creationHeight: height - 100_000, currentHeight: height, ageBlocks: 100_000, byteSize: 280, minBoxValue: computeMinBoxValue(280), daysUntilDeadline: computeDaysUntilRent(100_000), riskLevel: computeRiskLevel(computeDaysUntilRent(100_000)), tokens: [] },
+    { boxId: '778899aabbcc...new2', boxType: 'Settlement', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(200_000_000), creationHeight: height - 50_000, currentHeight: height, ageBlocks: 50_000, byteSize: 200, minBoxValue: computeMinBoxValue(200), daysUntilDeadline: computeDaysUntilRent(50_000), riskLevel: computeRiskLevel(computeDaysUntilRent(50_000)), tokens: [] },
+    { boxId: 'ddeeff001122...dust1', boxType: 'Dust', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(72_000), creationHeight: RENT_ACTIVATION_HEIGHT, currentHeight: height, ageBlocks: 1_000_000, byteSize: 200, minBoxValue: computeMinBoxValue(200), daysUntilDeadline: computeDaysUntilRent(1_000_000), riskLevel: computeRiskLevel(computeDaysUntilRent(1_000_000)), tokens: [] },
+    { boxId: '334455667788...dust2', boxType: 'Dust', address: '9hPU9YXhJ5oJ3k1', valueNanoerg: BigInt(36_000), creationHeight: RENT_ACTIVATION_HEIGHT + 200_000, currentHeight: height, ageBlocks: 800_000, byteSize: 100, minBoxValue: computeMinBoxValue(100), daysUntilDeadline: computeDaysUntilRent(800_000), riskLevel: computeRiskLevel(computeDaysUntilRent(800_000)), tokens: [] },
   ];
 }
 
@@ -293,6 +294,7 @@ function runEstimate(boxId: string, json: boolean): string {
     deficit,
     ageBlocks: box.ageBlocks,
     daysUntilRent: box.daysUntilDeadline,
+    daysUntilDeadline: box.daysUntilDeadline,
     annualRentCost: annualRent,
     riskLevel: box.riskLevel,
     recommendations,

@@ -13,13 +13,11 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
-use crate::multi_gpu::{GpuDevice, MultiGpuManager};
+use crate::multi_gpu::MultiGpuManager;
 
 // ---------------------------------------------------------------------------
 // Data types
@@ -184,7 +182,7 @@ impl ModelShardManager {
 
         // Check VRAM per device
         let vram_per_shard = request.estimated_vram_mb / request.num_shards as u64;
-        for (i, device) in devices.iter().take(request.num_shards as usize).enumerate() {
+        for (_i, device) in devices.iter().take(request.num_shards as usize).enumerate() {
             let free_vram = device.vram_mb.saturating_sub(device.vram_used_mb);
             if free_vram < vram_per_shard {
                 return Err(format!(

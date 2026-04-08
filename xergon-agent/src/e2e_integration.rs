@@ -25,8 +25,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
+use tracing::{debug, info, warn};
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -201,6 +200,7 @@ pub struct E2ETestSuite {
     /// Configuration
     config: RwLock<E2ETestConfig>,
     /// Counter for generating test IDs
+    #[allow(dead_code)]
     test_counter: AtomicU64,
 }
 
@@ -226,6 +226,7 @@ impl E2ETestSuite {
     }
 
     /// Generate a unique test run ID.
+    #[allow(dead_code)]
     fn next_test_id(&self) -> String {
         format!("e2e-{}", self.test_counter.fetch_add(1, Ordering::SeqCst))
     }
@@ -309,7 +310,7 @@ impl E2ETestSuite {
         if parallel {
             let mut handles = Vec::new();
             for id in test_ids {
-                let suite = self as *const E2ETestSuite as usize;
+                let _suite = self as *const E2ETestSuite as usize;
                 let id_clone = id.clone();
                 // We cannot capture &self across tasks, so we use a simpler approach
                 // and just run sequentially when parallel is false

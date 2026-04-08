@@ -1,9 +1,7 @@
 //! Enhanced connection pooling with health tracking, circuit-breaker integration,
 //! adaptive sizing, and connection prewarming.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use axum::{
@@ -13,10 +11,8 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
 use tracing::{debug, info, warn};
 
 use crate::proxy::AppState;

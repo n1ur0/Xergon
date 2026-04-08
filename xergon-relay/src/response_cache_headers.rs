@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! HTTP response caching with header management, ETag support, and conditional requests.
 //!
 //! Provides a DashMap-backed response cache that generates proper `Cache-Control`,
@@ -593,8 +594,8 @@ mod tests {
         let cache = ResponseCache::new();
         cache.put("key1", 200, HeaderMap::new(), b"hello".to_vec(), CachePolicy::Public, None);
         let entry = cache.get("key1").unwrap();
-        assert_eq!(entry.status, 200);
-        assert_eq!(entry.body, b"hello");
+        assert_eq!(entry.0, 200);
+        assert_eq!(entry.1, b"hello");
     }
 
     #[test]

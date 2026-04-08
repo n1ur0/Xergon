@@ -74,7 +74,6 @@ const commandModules: Record<string, () => Promise<{ [key: string]: Command }>> 
   rent: () => import('./commands/rent').then(m => ({ rent: m.rentCommand })),
   treasury: () => import('./commands/treasury').then(m => ({ treasury: m.treasuryCommand })),
   ensemble: () => import('./commands/ensemble').then(m => ({ ensemble: m.ensembleCommand })),
-  monitor: () => import('./commands/monitor').then(m => ({ monitor: m.monitorCommand })),
   bridge: () => import('./commands/bridge').then(m => ({ bridge: m.bridgeCommand })),
   stake: () => import('./commands/stake').then(m => ({ stake: m.stakeCommand })),
   pay: () => import('./commands/pay').then(m => ({ pay: m.payCommand })),

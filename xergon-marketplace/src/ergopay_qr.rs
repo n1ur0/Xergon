@@ -74,6 +74,7 @@ impl std::fmt::Display for ErgoPayStatus {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct StoredErgoPayRequest {
     request: ErgoPayQrRequest,
     response: ErgoPayQrResponse,

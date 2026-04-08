@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Cross-chain payment bridge for the Xergon Network relay.
 //!
 //! Implements Rosen-bridge-style guarded cross-chain transfers between Ergo

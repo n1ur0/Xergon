@@ -542,7 +542,7 @@ async fn main() -> Result<()> {
         let ws_broadcaster = ws_broadcaster.clone();
         let model_reg = model_registry.clone();
         let health_scorer_ref = health_scorer.clone();
-        let geo_router_ref = geo_router.clone();
+        let _geo_router_ref = geo_router.clone();
         tokio::spawn(async move {
             loop {
                 // Capture health state before polling
@@ -912,7 +912,7 @@ async fn main() -> Result<()> {
     };
 
     // Spawn model registry stale entry prune task (every 5 minutes)
-    let model_prune_handle = {
+    let _model_prune_handle = {
         let model_reg = model_registry.clone();
         tokio::spawn(async move {
             loop {

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Middleware chain v2 — request processing pipeline with ordered middleware
 //!
 //! Provides a pluggable middleware pipeline for request processing:

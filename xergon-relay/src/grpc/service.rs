@@ -11,7 +11,7 @@ use prost::Message;
 use serde_json::Value;
 use tracing::{error, info};
 
-use crate::grpc::proto::{self, *};
+use crate::grpc::proto::{*};
 use crate::AppState;
 
 // ---------------------------------------------------------------------------

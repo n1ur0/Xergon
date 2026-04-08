@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Request/Response Schema Validation
 //!
 //! Defines JSON schemas for all request/response types and provides

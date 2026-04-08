@@ -5,7 +5,6 @@
 //! - Broadcast event channel for SSE streaming
 //! - Cancel support via cancellation tokens
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -105,7 +104,7 @@ struct DownloadState {
 }
 
 impl DownloadState {
-    fn new(model: &str) -> Self {
+    fn new(_model: &str) -> Self {
         Self {
             status: DownloadStatus::Pending,
             bytes_downloaded: 0,

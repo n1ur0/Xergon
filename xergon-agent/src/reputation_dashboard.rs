@@ -16,9 +16,8 @@ use chrono::{Duration, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tracing::debug;
 
-use crate::reputation::{ReputationScore, ReputationStore};
+use crate::reputation::ReputationStore;
 
 // ---------------------------------------------------------------------------
 // Data types for API responses
@@ -237,7 +236,7 @@ impl ReputationDashboard {
     pub fn get_leaderboard(&self, limit: usize) -> Vec<LeaderboardEntry> {
         let top_peers = self.reputation.get_top_peers(limit);
 
-        let mut entries: Vec<LeaderboardEntry> = top_peers
+        let entries: Vec<LeaderboardEntry> = top_peers
             .iter()
             .enumerate()
             .map(|(idx, (peer_pk, score))| {

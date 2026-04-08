@@ -8,7 +8,7 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashSet};
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use tracing::{debug, info};
 

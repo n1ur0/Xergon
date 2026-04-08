@@ -21,7 +21,7 @@ use axum::{
 };
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::{info};
 
 use crate::proxy::AppState;
 

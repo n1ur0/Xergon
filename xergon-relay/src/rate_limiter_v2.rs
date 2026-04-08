@@ -428,7 +428,7 @@ impl RateLimiterV2 {
         drop(cfg);
 
         match most_restrictive {
-            Some(mut denied) => denied,
+            Some(denied) => denied,
             None => {
                 // No rules matched — allow or deny based on config
                 let cfg = self.config.read().unwrap();
@@ -486,7 +486,7 @@ impl RateLimiterV2 {
 
         if new_tokens >= 1.0 {
             counter.tokens.store(new_tokens as u64 - 1, Ordering::Relaxed);
-            let window_end = *last_refill + Duration::from_secs(rule.window_secs);
+            let _window_end = *last_refill + Duration::from_secs(rule.window_secs);
             let remaining = (new_tokens as u64).saturating_sub(1) as u32;
             let mut result = RateLimitResult::allowed(remaining, Utc::now());
             result.rule_id = Some(rule.id.clone());

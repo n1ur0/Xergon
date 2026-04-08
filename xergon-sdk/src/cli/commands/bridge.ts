@@ -6,7 +6,7 @@
 //!   - `bridge history` — list transfer history with filters
 //!   - `bridge chains` — list supported chains and their config
 
-import { Command } from '@cliffy/command';
+import type { Command } from '../mod';
 import { Table } from '@cliffy/table';
 import { colors } from '@cliffy/colors';
 
@@ -262,7 +262,7 @@ async function historyAction(options: Record<string, unknown>) {
         expired: colors.red,
         fraud_reported: colors.red,
         refunded: colors.gray,
-      }[t.status] ?? colors.white;
+      }[t.status as string] ?? colors.white;
 
       console.log(`  ${colors.bold(t.transfer_id)}  ${statusColor(t.status)}`);
       console.log(`    ${t.source_chain} -> ${t.target_chain}  |  ${(t.amount / 1e9).toFixed(4)} ERG  |  fee: ${(t.fee / 1e9).toFixed(6)} ERG`);
@@ -299,7 +299,7 @@ async function chainsAction(options: Record<string, unknown>) {
     new Table()
       .header(['Chain', 'Status', 'Min Confirm', 'Timeout (blocks)', 'Fee (bps)', 'Min Amount', 'Max Amount'])
       .rows(chains.map((c: Record<string, unknown>) => [
-        colors.bold(c.chain),
+        colors.bold(String(c.chain)),
         c.enabled ? colors.green('Enabled') : colors.red('Disabled'),
         String(c.min_confirmations),
         String(c.lock_timeout_blocks),

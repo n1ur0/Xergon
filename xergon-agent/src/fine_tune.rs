@@ -14,11 +14,8 @@
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
 use tokio::process::Child;
-use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -550,7 +547,7 @@ async fn monitor_training_process(
 ) {
     // Read stderr for progress lines
     let stderr = child.stderr.take();
-    if let Some(mut stderr) = stderr {
+    if let Some(stderr) = stderr {
         use tokio::io::{AsyncBufReadExt, BufReader};
         let reader = BufReader::new(stderr);
         let mut lines = reader.lines();

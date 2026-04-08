@@ -5,7 +5,6 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Gossip configuration.
@@ -182,6 +181,7 @@ impl GossipEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     fn default_engine() -> GossipEngine {
         GossipEngine::new(GossipConfig::default())

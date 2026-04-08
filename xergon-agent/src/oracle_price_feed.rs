@@ -7,7 +7,6 @@
 
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 // ---------------------------------------------------------------------------
@@ -246,7 +245,7 @@ impl Default for OracleState {
 
 impl OracleState {
     /// Compute median price from valid oracle datapoints with deviation filtering.
-    pub fn compute_median_price(&self, oracle_id: &str) -> Result<(f64, f64, usize), String> {
+    pub fn compute_median_price(&self, _oracle_id: &str) -> Result<(f64, f64, usize), String> {
         let config = self.config.get("default").unwrap();
         let pool = self.pool_box.get("main").ok_or("No pool box")?;
         let current_epoch = pool.epoch_counter;
@@ -349,7 +348,7 @@ impl OracleState {
     /// Compute epoch number from block height.
     pub fn epoch_from_height(&self, height: u64) -> i32 {
         let config = self.config.get("default").unwrap();
-        (height as i32 / config.epoch_length_blocks as i32)
+        height as i32 / config.epoch_length_blocks as i32
     }
 
     /// Get oracle feed health.

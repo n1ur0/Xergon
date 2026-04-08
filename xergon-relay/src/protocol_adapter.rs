@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Protocol Adapter — Normalize requests across LLM providers
 //!
 //! Provides a unified request/response format that abstracts away differences
@@ -14,8 +15,7 @@ use axum::{
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{info};
 
 use crate::proxy::AppState;
 

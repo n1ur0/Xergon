@@ -25,7 +25,6 @@ use tokio_tungstenite::tungstenite::protocol::Message as TungsteniteMessage;
 use tracing::{debug, error, info, warn};
 
 use crate::proxy::AppState;
-use crate::ws_pool::WsConnectionPool;
 
 // ---------------------------------------------------------------------------
 // WebSocket message types

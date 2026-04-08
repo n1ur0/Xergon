@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Multi-model ensemble routing module for the Xergon Network relay.
 //!
 //! Handles request fan-out to multiple model providers, response aggregation,
@@ -10,7 +11,10 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json, Router,
-    routing::{get, post, put},
+    routing::{
+        get,
+        post
+    },
 };
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -348,7 +352,7 @@ impl EnsembleRouter {
     /// the prompt).
     pub async fn fan_out_request(&self, req: FanOutRequest) -> Result<AggregatedResponse, String> {
         let cfg = self.config.read().await;
-        let timeout = req.timeout_ms.unwrap_or(cfg.timeout_ms);
+        let _timeout = req.timeout_ms.unwrap_or(cfg.timeout_ms);
         let strategy = req
             .strategy
             .as_ref()
@@ -454,7 +458,7 @@ impl EnsembleRouter {
 
         // Separate successful and failed responses.
         let successful: Vec<&ModelResponse> = responses.iter().filter(|r| r.error.is_none()).collect();
-        let failed: Vec<&ModelResponse> = responses.iter().filter(|r| r.error.is_some()).collect();
+        let _failed: Vec<&ModelResponse> = responses.iter().filter(|r| r.error.is_some()).collect();
 
         let (final_text, confidence, fallback_used) = if successful.is_empty() {
             // All failed -- try fallback merge.
@@ -599,7 +603,7 @@ fn majority_vote(
 fn weighted_average(
     successful: &[&ModelResponse],
     weights: &HashMap<String, f64>,
-    all_responses: &[ModelResponse],
+    _all_responses: &[ModelResponse],
 ) -> (String, f64, bool) {
     let mut best: Option<(&ModelResponse, f64)> = None;
 
@@ -629,7 +633,7 @@ fn weighted_average(
 fn first_confident(
     successful: &[&ModelResponse],
     threshold: f64,
-    all_responses: &[ModelResponse],
+    _all_responses: &[ModelResponse],
 ) -> (String, f64, bool) {
     for r in successful {
         if r.confidence_score >= threshold {

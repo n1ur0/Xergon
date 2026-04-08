@@ -94,6 +94,7 @@ pub const COMPONENT_ORACLE_FEEDS: &str = "oracle_feeds";
 pub const COMPONENT_MARKETPLACE_API: &str = "marketplace_api";
 pub const COMPONENT_STORAGE_RENT_MONITOR: &str = "storage_rent_monitor";
 
+#[allow(dead_code)]
 const ALL_COMPONENTS: &[&str] = &[
     COMPONENT_RELAY_NODE,
     COMPONENT_BLOCKCHAIN_SYNC,
@@ -149,6 +150,7 @@ impl HealthRingBuffer {
         result
     }
 
+    #[allow(dead_code)]
     fn len(&self) -> usize {
         let total = self.write_index.load(Ordering::Relaxed) as usize;
         total.min(self.capacity)

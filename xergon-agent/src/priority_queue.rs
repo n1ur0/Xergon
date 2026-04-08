@@ -18,10 +18,9 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::info;
 
 // ---------------------------------------------------------------------------
 // Core Types
@@ -246,7 +245,7 @@ struct PriorityStats {
 
 impl PriorityQueueManager {
     pub fn new(config: PriorityQueueConfig) -> Self {
-        let mut queues = DashMap::new();
+        let queues = DashMap::new();
         for level in PriorityLevel::all() {
             queues.insert(*level, BinaryHeap::new());
         }

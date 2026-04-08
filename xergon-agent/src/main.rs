@@ -343,6 +343,7 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         model_drift_detector: Arc::new(xergon_agent::model_drift::ModelDriftDetector::new()),
         inference_observability: Arc::new(xergon_agent::inference_observability::InferenceObservability::new()),
         lineage_graph: Arc::new(xergon_agent::model_lineage_graph::LineageGraph::new()),
+        model_hash_chain: Arc::new(xergon_agent::model_hash_chain::ModelHashChain::new()),
         prompt_versioning: Arc::new(xergon_agent::prompt_versioning::PromptVersionManager::new()),
         inference_sandbox: Arc::new(xergon_agent::inference_sandbox::InferenceSandbox::new()),
         model_access_control: Arc::new(xergon_agent::model_access_control::ModelAccessControl::new()),
@@ -353,6 +354,10 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
         oracle_feeds: Arc::new(xergon_agent::ergo_oracle_feeds::ErgoOracleService::new()),
         cost_accountant: Arc::new(xergon_agent::ergo_cost_accounting::ErgoCostAccountant::new()),
         sigma_usd_pricer: Arc::new(xergon_agent::sigma_usd_pricing::SigmaUsdPricer::new()),
+        lifecycle_manager: None,
+        chaos_engine: Arc::new(xergon_agent::chaos_testing::ChaosEngine::new()),
+        sigma_proof_builder: Some(Arc::new(xergon_agent::sigma_proof_builder::SigmaProofBuilderState::new())),
+        token_operations: Some(Arc::new(xergon_agent::token_operations::TokenOperationsState::new())),
     };
 
     // Initialize benchmark suite

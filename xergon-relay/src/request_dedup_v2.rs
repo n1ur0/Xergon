@@ -4,10 +4,9 @@
 //! supports fuzzy (semantic similarity) deduplication, caches responses, and evicts entries
 //! based on TTL expiry or LRU policy when the cache is full.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Instant};
 
 use axum::{
     extract::State,

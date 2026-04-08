@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! API Versioning Infrastructure
 //!
 //! Provides version extraction, deprecation headers, and a version metadata endpoint.

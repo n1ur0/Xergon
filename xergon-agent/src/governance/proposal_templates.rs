@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::governance::types::{GovernanceError, ProposalCategory, ValidationResult};
+use crate::governance::types::{ProposalCategory, ValidationResult};
 
 // ---------------------------------------------------------------------------
 // Template parameter types

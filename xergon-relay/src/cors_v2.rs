@@ -352,7 +352,7 @@ impl CorsManagerV2 {
         request_origin: &str,
         request_path: &str,
         request_method: &str,
-        request_headers: &[String],
+        _request_headers: &[String],
     ) -> Option<Response> {
         let origin_config = self.check_cors(request_origin, request_path)?;
 
@@ -698,7 +698,7 @@ mod tests {
         assert!(rule.matches_path("/v1/chat/completions"));
         assert!(rule.matches_path("/v1/models"));
         assert!(!rule.matches_path("/api/models"));
-        assert!(!rule matches_path("/v1extra"));
+        assert!(!rule.matches_path("/v1extra"));
     }
 
     #[test]

@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use uuid::Uuid;
 use chrono::Utc;
 
@@ -293,7 +292,7 @@ impl TopUpEngine {
             return Err(format!("Box {} is not underfunded (deficit: {})", box_id, status.value_deficit));
         }
 
-        let deficit_abs = status.value_deficit.unsigned_abs();
+        let _deficit_abs = status.value_deficit.unsigned_abs();
         let target = status.min_value_nanoerg + (status.min_value_nanoerg as f64 * TOPUP_BUFFER_FACTOR) as u64;
         let amount_needed = target.saturating_sub(status.value_nanoerg);
         let fee_estimate = 1_000_000u64;
@@ -603,7 +602,9 @@ impl EmergencyHandler {
 
 pub struct RentGuardService {
     scanner: Arc<RentScanner>,
+    #[allow(dead_code)]
     topup_engine: Arc<TopUpEngine>,
+    #[allow(dead_code)]
     migration_planner: Arc<BoxMigrationPlanner>,
     budget: Arc<RentBudgetManager>,
     emergency_handler: Arc<EmergencyHandler>,

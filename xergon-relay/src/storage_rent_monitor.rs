@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Storage Rent Monitor — Public REST API for Ergo storage rent status queries.
 //!
 //! This module provides endpoints for external clients to query the storage rent
@@ -472,7 +473,7 @@ pub fn analyze_address_with_config(
             RentStatus::Warning | RentStatus::Critical | RentStatus::Expired
         ) {
             total_value_at_risk += b.value_nanoerg;
-            let fee = estimate_rent_fee(b.box_size_bytes, FEE_PER_BYTE_DEFAULT);
+            let _fee = estimate_rent_fee(b.box_size_bytes, FEE_PER_BYTE_DEFAULT);
             top_off_estimate += recommend_top_off(b.value_nanoerg, b.box_size_bytes, 4.0);
         }
     }
@@ -554,7 +555,7 @@ pub async fn scan_addresses(
     let mut total_boxes: u32 = 0;
     let mut boxes_at_risk: u32 = 0;
 
-    for addr in &req.addresses {
+    for _addr in &req.addresses {
         let summary = analyze_address_with_config(Vec::new(), height, &config);
         total_boxes += summary.total_boxes;
         boxes_at_risk += summary.by_status.iter().filter_map(|(s, c)| {
@@ -580,7 +581,7 @@ pub async fn scan_addresses(
 /// GET /v1/rent/status/:address — Get rent summary for one address.
 pub async fn get_address_status(
     State(state): State<Arc<AppState>>,
-    Path(address): Path<String>,
+    Path(_address): Path<String>,
 ) -> impl IntoResponse {
     let config = state.config.read().await;
     let height = state.get_height();
@@ -629,9 +630,9 @@ pub async fn get_summary(
     let mut total_at_risk: u64 = 0;
     let mut total_boxes_tracked: u32 = 0;
 
-    for mut entry in state.events.iter() {
+    for entry in state.events.iter() {
         let addr_events = entry.value();
-        let addr = entry.key().clone();
+        let _addr = entry.key().clone();
         // Count at-risk events as a proxy for at-risk boxes
         let at_risk_events: u32 = addr_events
             .iter()
@@ -1226,7 +1227,7 @@ mod tests {
         assert_eq!(info.age_blocks, 100_000);
         assert_eq!(info.rent_status, RentStatus::Fresh);
         assert_eq!(info.estimated_rent_fee, 250 * 360); // 90 000
-        assert_eq!(info.cycles_survivable, 10_000_000_000 / 90_000);
+        assert_eq!(info.cycles_survivable, (10_000_000_000u64 / 90_000) as u32);
     }
 
     // ================================================================

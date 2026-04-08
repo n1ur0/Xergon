@@ -4,7 +4,6 @@
 //! slippage protection, per-model pricing rules, and stable price quotes
 //! with TTL. Supports ErgoNative, SigmaUsd, and Hybrid pricing modes.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -226,6 +225,7 @@ pub struct SigmaUsdPricer {
     /// Current pricing mode.
     mode: Arc<std::sync::RwLock<PricingMode>>,
     /// Total quotes generated counter.
+    #[allow(dead_code)]
     total_quotes: Arc<AtomicBool>,
     /// Quotes counter (as u64).
     total_quotes_count: Arc<std::sync::atomic::AtomicU64>,
@@ -480,7 +480,7 @@ impl SigmaUsdPricer {
         let config = self.config.read().unwrap();
         let mode = *self.mode.read().unwrap();
         let rate = config.exchange_rate_nanoerg_per_usd;
-        let now = Utc::now().timestamp();
+        let _now = Utc::now().timestamp();
 
         let valid_quotes = self
             .quotes
@@ -575,7 +575,7 @@ impl SigmaUsdPricer {
 
 /// Build the SigmaUSD pricing router.
 pub fn build_sigma_usd_pricing_router(state: crate::api::AppState) -> axum::Router<()> {
-    use axum::routing::{get, post, put};
+    use axum::routing::{get, post};
 
     axum::Router::new()
         .route("/v1/pricing/quote", post(pricing_quote_handler))
@@ -603,6 +603,7 @@ struct SetModeBody {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SetExchangeRateBody {
     pub nanoerg_per_usd: i64,
 }

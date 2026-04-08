@@ -1,11 +1,11 @@
+#![allow(dead_code)]
 //! Provider capability negotiation protocol.
 //!
 //! Allows providers to register their capabilities (supported models, batch sizes,
 //! streaming, encryption, quantization, etc.) and for clients to negotiate the
 //! best provider match for a given set of required features.
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::collections::{HashSet};
 
 use axum::{
     extract::{Path, State},
@@ -17,7 +17,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::proxy::AppState;
 

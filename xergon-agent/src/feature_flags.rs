@@ -545,7 +545,7 @@ impl Default for FeatureFlagService {
 
 use axum::{
     extract::{Path, State},
-    response::{IntoResponse, Json},
+    response::IntoResponse,
     routing::{delete, get, post, put},
     Router,
 };
@@ -600,6 +600,7 @@ struct EvaluateFlagRequest {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct AddRuleRequest {
     condition: String,
     value: serde_json::Value,

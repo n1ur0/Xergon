@@ -6,7 +6,7 @@
 //! Configuration is read from `[rate_limit]` in the agent config TOML.
 
 use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use axum::{
     body::Body,

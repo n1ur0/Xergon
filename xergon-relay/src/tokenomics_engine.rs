@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Tokenomics Engine for the Xergon Network relay.
 //!
 //! Provides ERG emission simulation, staking yield calculations,
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{info};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -338,7 +339,7 @@ impl TokenomicsEngine {
     /// Get the current emission snapshot.
     pub fn get_emission_snapshot(&self) -> EmissionSnapshot {
         let height = self.current_height.load(Ordering::Relaxed);
-        let config = self.config.blocking_read();
+        let _config = self.config.blocking_read();
         let block_reward = self.block_reward_at_height(height);
         let total_emitted = self.total_emitted_at_height(height);
         let total_burned = self.total_burned.load(Ordering::Relaxed);
@@ -393,7 +394,7 @@ impl TokenomicsEngine {
         };
 
         let blocks_per_year: u64 = 365 * 24 * 60 / (BLOCK_TIME_SECS / 60);
-        let blocks_per_day = blocks_per_year / 365;
+        let _blocks_per_day = blocks_per_year / 365;
 
         let annual_yield = if pool > 0 && total_staked > 0 {
             ((staked_amount as u128 * effective_apy as u128) / 10000).min(pool as u128) as u64

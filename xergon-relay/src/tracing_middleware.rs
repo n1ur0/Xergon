@@ -6,7 +6,6 @@
 
 use axum::{
     extract::Request,
-    http::HeaderValue,
     middleware::Next,
     response::Response,
 };
@@ -31,7 +30,7 @@ pub async fn otel_http_middleware(req: Request, next: Next) -> Response {
     let start = Instant::now();
 
     // Build span name: "{method} {path}"
-    let span_name = format!("{} {}", method, path);
+    let _span_name = format!("{} {}", method, path);
 
     let span = info_span!(
         "http.request",
@@ -107,9 +106,10 @@ pub async fn otel_http_middleware(req: Request, next: Next) -> Response {
 /// `traceparent: 00-{trace_id}-{span_id}-{flags}`
 ///
 /// When the `telemetry` feature is not compiled, this is a no-op.
-fn inject_traceparent_header(response: &mut Response) {
+fn inject_traceparent_header(_response: &mut Response) {
     #[cfg(feature = "telemetry")]
     {
+        use axum::http::HeaderValue;
         use opentelemetry::trace::TraceContextExt as _;
         use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 

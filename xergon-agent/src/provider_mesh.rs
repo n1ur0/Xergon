@@ -239,7 +239,7 @@ impl ProviderMesh {
         let mut models_discovered = 0usize;
 
         // Build local sync message
-        let local_msg = self.build_sync_message().await;
+        let _local_msg = self.build_sync_message().await;
 
         // Collect peer endpoints
         let peers: Vec<(String, String)> = self

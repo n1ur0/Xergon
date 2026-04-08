@@ -9,7 +9,6 @@ use axum::{
     body::Body,
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    extract::State,
 };
 use crate::dynamic_pricing;
 use dashmap::DashMap;
@@ -19,7 +18,7 @@ use reqwest::Client;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{info, warn, info_span, Instrument};
+use tracing::{info, warn, info_span};
 
 use crate::auth::{AuthError, AuthVerifier};
 use crate::chain::ChainScanner;
@@ -168,6 +167,7 @@ pub struct AppState {
     /// Multi-oracle price aggregator with failover
     pub oracle_aggregator: Arc<oracle_aggregator::OracleAggregator>,
     /// Multi-chain adapter manager for cross-chain settlement
+    #[allow(non_snake_case)]
     pub chainAdapterManager: Arc<chain_adapters::ChainAdapterManager>,
     /// Encrypted inference engine for E2E encrypted routing
     pub encrypted_inference: Arc<encrypted_inference::EncryptedInferenceState>,

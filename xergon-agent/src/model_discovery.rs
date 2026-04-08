@@ -11,7 +11,7 @@
 //! - POST /api/discovery/scan
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -171,6 +171,7 @@ static COMMERCIAL_LICENSES: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct HfModelResponse {
     id: String,
     #[serde(default)]

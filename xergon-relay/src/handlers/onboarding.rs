@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Provider Onboarding API
 //!
 //! Endpoints:
@@ -307,7 +308,7 @@ pub async fn onboarding_status_handler(
             .into_response();
     }
 
-    let all_steps = vec![
+    let _all_steps = vec![
         "endpoint_reachable",
         "chain_registered",
         "models_synced",
@@ -759,6 +760,10 @@ mod tests {
             websocket_v2: Arc::new(crate::websocket_v2::WebSocketV2::new()),
             health_monitor_v2: Arc::new(crate::health_monitor_v2::HealthMonitorV2::default()),
             api_gateway: Arc::new(crate::api_gateway::ApiGateway::new()),
+            babel_fee_manager: Arc::new(crate::babel_fee_integration::BabelFeeManager::new()),
+            request_coalescer: Arc::new(crate::request_coalescing::RequestCoalescer::new()),
+            protocol_adapter: Arc::new(crate::protocol_adapter::ProtocolAdapter::new()),
+            ensemble_router: Arc::new(crate::ensemble_router::EnsembleRouter::new()),
         }
     }
 

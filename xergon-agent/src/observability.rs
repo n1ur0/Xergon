@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -463,6 +463,7 @@ impl ObservabilityManager {
     // -- Export --------------------------------------------------------------
 
     /// Export a finished span according to the configured exporter.
+    #[allow(dead_code)]
     async fn export_span(&self, span: &InferenceSpan) {
         let cfg = self.config.read().await;
         match &cfg.trace_exporter {

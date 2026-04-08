@@ -35,15 +35,13 @@ use crate::node_health::NodeHealthState;
 use crate::peer_discovery::PeerDiscoveryState;
 use crate::pown::PownStatus;
 use crate::settlement::SettlementEngine;
-use crate::artifact_storage::ArtifactStorage;
-use crate::content_safety::ContentSafetyFilter;
 use crate::content_safety::{
     safety_add_pattern_handler, safety_check_handler, safety_config_handler,
     safety_config_update_handler, safety_filter_handler, safety_patterns_handler,
     safety_remove_pattern_handler, safety_scan_handler, safety_stats_handler,
     safety_violations_handler,
 };
-use crate::download_progress::{DownloadProgressSnapshot, ProgressEvent, ProgressTracker};
+use crate::download_progress::ProgressTracker;
 use axum::response::sse::{Event, KeepAlive, Sse};
 
 /// Shared application state
@@ -189,6 +187,8 @@ pub struct AppState {
     pub inference_observability: Arc<crate::inference_observability::InferenceObservability>,
     /// Model lineage graph
     pub lineage_graph: Arc<crate::model_lineage_graph::LineageGraph>,
+    /// Model hash chain (immutable, append-only artifact ledger)
+    pub model_hash_chain: Arc<crate::model_hash_chain::ModelHashChain>,
     /// Prompt versioning manager
     pub prompt_versioning: Arc<crate::prompt_versioning::PromptVersionManager>,
     /// Inference sandbox manager
@@ -209,6 +209,14 @@ pub struct AppState {
     pub cost_accountant: Arc<crate::ergo_cost_accounting::ErgoCostAccountant>,
     /// SigmaUSD stablecoin pricing service
     pub sigma_usd_pricer: Arc<crate::sigma_usd_pricing::SigmaUsdPricer>,
+    /// Provider lifecycle manager (on-chain box registration, heartbeat, rent protection)
+    pub lifecycle_manager: Option<Arc<crate::provider_lifecycle::ProviderLifecycleState>>,
+    /// Chaos testing engine for resilience verification
+    pub chaos_engine: Arc<crate::chaos_testing::ChaosEngine>,
+    /// Sigma proof builder for ZK proof construction
+    pub sigma_proof_builder: Option<Arc<crate::sigma_proof_builder::SigmaProofBuilderState>>,
+    /// Token operations (EIP-4 mint/burn/transfer)
+    pub token_operations: Option<Arc<crate::token_operations::TokenOperationsState>>,
 }
 
 /// Build a CORS layer restricted to localhost origins only.
@@ -895,6 +903,7 @@ fn build_router_inner(
         .merge(crate::model_drift::build_drift_router(state.clone()))
         .merge(crate::inference_observability::build_inference_observability_router(state.clone()))
         .merge(crate::model_lineage_graph::build_lineage_router(state.clone()))
+        .merge(crate::model_hash_chain::build_hash_chain_router(state.model_hash_chain.clone()))
         .merge(crate::prompt_versioning::build_prompt_versioning_router(state.clone()))
         .merge(crate::inference_sandbox::build_inference_sandbox_router(state.clone()))
         .merge(crate::model_access_control::build_rbac_router(state.clone()))
@@ -904,7 +913,10 @@ fn build_router_inner(
         .merge(crate::inference_gateway::build_gateway_router(state.clone()))
         .merge(crate::ergo_oracle_feeds::build_oracle_feeds_router(state.clone()))
         .merge(crate::ergo_cost_accounting::build_cost_accounting_router(state.clone()))
-        .merge(crate::sigma_usd_pricing::build_sigma_usd_pricing_router(state.clone()));
+        .merge(crate::sigma_usd_pricing::build_sigma_usd_pricing_router(state.clone()))
+        .merge(crate::provider_lifecycle::build_lifecycle_router(state.clone()).with_state(state.clone()))
+        .merge(crate::sigma_proof_builder::build_router(state.clone()))
+        .merge(crate::token_operations::build_router(state.clone()));
 
     // Merge inference routes if provided
     if let Some(inf_routes) = inference_routes {

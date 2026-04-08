@@ -19,9 +19,8 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::{info, warn};
+use tracing::info;
 
 // ---------------------------------------------------------------------------
 // Core Types
@@ -407,7 +406,7 @@ impl SnapshotManager {
 
     /// Verify snapshot integrity.
     pub fn verify_snapshot(&self, id: &str) -> Result<SnapshotVerifyResult, String> {
-        let snapshot = self.get_snapshot(id).ok_or("Snapshot not found")?;
+        let _snapshot = self.get_snapshot(id).ok_or("Snapshot not found")?;
         // Simulated verification - checksum always matches in simulation
         Ok(SnapshotVerifyResult {
             snapshot_id: id.to_string(),

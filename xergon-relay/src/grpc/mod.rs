@@ -8,6 +8,7 @@
 pub mod proto;
 pub mod service;
 
+#[allow(unused_imports)]
 pub use proto::GrpcStatusCode;
 
 use axum::Router;

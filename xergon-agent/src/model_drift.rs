@@ -721,7 +721,7 @@ async fn update_thresholds_handler(
 
 /// Build the model drift detection router.
 pub fn build_drift_router(state: crate::api::AppState) -> axum::Router {
-    use axum::routing::{get, post, put};
+    use axum::routing::{get, post};
 
     let detector = state.model_drift_detector.clone();
 

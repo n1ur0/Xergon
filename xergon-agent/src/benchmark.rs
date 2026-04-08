@@ -281,7 +281,7 @@ impl BenchmarkSuite {
 
                 // Read streaming response to measure TTFT
                 let mut ttft_ms: Option<f64> = None;
-                let mut total_chars = 0u64;
+                let _total_chars = 0u64;
                 let mut token_count = 0u64;
                 let request_start = Instant::now();
 
@@ -300,7 +300,7 @@ impl BenchmarkSuite {
                                         ttft_ms = Some(request_start.elapsed().as_secs_f64() * 1000.0);
                                     }
                                     if let Some(content) = json.get("response").and_then(|r| r.as_str()) {
-                                        total_chars += content.len() as u64;
+                                        let _ = content.len();
                                     }
                                     // Check for done
                                     if json.get("done").and_then(|d| d.as_bool()).unwrap_or(false) {

@@ -30,12 +30,11 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
 
 use crate::api::AppState;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 // ---------------------------------------------------------------------------
 // Core types
@@ -377,6 +376,7 @@ impl AtomicSafetyStats {
 struct PiiDetector {
     pattern: Regex,
     pii_type: PiiType,
+    #[allow(dead_code)]
     replacement: String,
     label: String,
 }
@@ -886,7 +886,7 @@ impl ContentSafetyFilter {
         }
 
         // Determine action
-        let max_severity = all_violations.iter().map(|v| v.severity).fold(0.0_f64, f64::max);
+        let _max_severity = all_violations.iter().map(|v| v.severity).fold(0.0_f64, f64::max);
         let action = if all_violations.is_empty() {
             SafetyAction::Allow
         } else {
@@ -940,7 +940,7 @@ impl ContentSafetyFilter {
             };
         }
 
-        let config = self.config.read().await;
+        let _config = self.config.read().await;
         let action = check_result.action;
 
         match action {
@@ -1081,7 +1081,7 @@ impl ContentSafetyFilter {
         &self,
         content: &str,
         categories: &[SafetyCategory],
-        threshold: f64,
+        _threshold: f64,
     ) -> Vec<SafetyViolation> {
         let index = self.keyword_index.read().await;
         let cats = self.keyword_categories.read().await;
@@ -1124,7 +1124,7 @@ impl ContentSafetyFilter {
         &self,
         content: &str,
         categories: &[SafetyCategory],
-        threshold: f64,
+        _threshold: f64,
     ) -> Vec<SafetyViolation> {
         let patterns = self.regex_patterns.read().await;
         let mut violations = Vec::new();
@@ -1163,7 +1163,7 @@ impl ContentSafetyFilter {
         let mut violations = Vec::new();
 
         for detector in &self.pii_detectors {
-            for (matched, (start, end)) in detector.detect(content) {
+            for (_matched, (start, end)) in detector.detect(content) {
                 let original_text = content[start..end].to_string();
                 violations.push(SafetyViolation {
                     category: SafetyCategory::PII,

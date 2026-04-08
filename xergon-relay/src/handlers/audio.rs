@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! OpenAI-compatible audio endpoints for the Xergon relay.
 //!
 //! - POST /v1/audio/speech        -- Text-to-Speech (streams binary audio)
@@ -8,10 +9,12 @@ use axum::{
     body::Body,
     extract::{Multipart, State},
     http::{HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
+    response::{
+        Response
+    },
 };
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn, info_span, Instrument};
+use tracing::{info, warn, info_span};
 
 use crate::proxy::{ProxyError, AppState, ProxyResult};
 use crate::util::extract_client_ip;
@@ -375,7 +378,7 @@ async fn proxy_audio(
     provider_path: &str,
     headers: &HeaderMap,
     request_id: &str,
-    client_ip: &str,
+    _client_ip: &str,
     model: &str,
 ) -> Result<ProxyResult, ProxyError> {
     let proxy_span = info_span!(
@@ -588,7 +591,7 @@ async fn proxy_audio_multipart(
     provider_path: &str,
     headers: &HeaderMap,
     request_id: &str,
-    client_ip: &str,
+    _client_ip: &str,
 ) -> Result<ProxyResult, ProxyError> {
     let proxy_span = info_span!(
         "proxy.audio_multipart",

@@ -1,193 +1,204 @@
+     1|
+
+// *** SECURITY WARNING ***
+// This v1 contract uses sigmaProp(true) for all spending paths, meaning
+// ANYONE can create, vote on, execute, or close proposals on-chain.
+// Authorization is enforced ONLY by the Xergon agent off-chain.
+// For production use with on-chain authorization, use governance_proposal_v2.es
+// which requires a Voter Registry data input and proveDlog(voterKey).
+// See: voter_registry.es for the companion voter set management contract.
+// *** END SECURITY WARNING ***
 {
-  // =========================================================================
-  // Xergon Network -- Governance Proposal Box Guard Script
-  // =========================================================================
-  //
-  // Singleton NFT state machine for on-chain protocol governance.
-  // Manages the lifecycle of governance proposals: create, vote, execute, close.
-  //
-  // Singleton NFT Pattern (EKB best practices):
-  //   - A token with supply=1 (Governance NFT) travels with the state box.
-  //   - OUTPUTS(0) must carry the NFT and the same ErgoTree.
-  //   - Only one active proposal at a time (enforced by R5).
-  //
-  // Register Layout (EIP-4):
-  //   R4: Proposal count       (Int)          -- total proposals created
-  //   R5: Active proposal ID   (Int)          -- current proposal being voted on (0 = none)
-  //   R6: Voting threshold     (Int)          -- minimum votes needed to pass
-  //   R7: Total voters         (Int)          -- number of eligible voters
-  //   R8: Proposal end height  (Int)          -- when current proposal voting ends
-  //   R9: Proposal data hash   (Coll[Byte])   -- blake2b256 of proposal content
-  //
-  // Spending Conditions:
-  //   Path 1 (Create Proposal): Any eligible voter can propose when R5 == 0.
-  //       Sets R5 = new ID, increments R4, sets R6-R9.
-  //   Path 2 (Vote): Eligible voter signs (atLeast(1, proveDlog)).
-  //       Must be within voting window (HEIGHT <= R8).
-  //       R5 must be non-zero (active proposal).
-  //   Path 3 (Execute): If votes >= threshold (checked off-chain via
-  //       vote counter boxes) and HEIGHT > R8, apply proposal.
-  //       Resets R5 = 0 to allow new proposals.
-  //   Path 4 (Close): Proposal creator can close after execution or
-  //       if voting period expires without reaching threshold.
-  //       Resets R5 = 0.
-  //
-  // Security Notes:
-  //   - [INFO] Vote counting is not fully on-chain in this version.
-  //     Vote weight is tracked via separate vote counter boxes. The
-  //     threshold check is enforced off-chain by the agent before
-  //     submitting the execution transaction.
-  //   - [INFO] Only one active proposal at a time prevents governance
-  //     fragmentation and simplifies the state machine.
-  //   - [INFO] Proposal data hash (R9) allows verifiable proposal
-  //     content. Voters should verify the hash matches expected content
-  //     off-chain before voting.
-  //   - [INFO] The eligible voter set is managed off-chain. The contract
-  //     verifies authorization via sigma protocols (proveDlog).
-  //
-  // =========================================================================
-
-  // Extract current state from registers
-  val proposalCount = SELF.R4[Int].get
-  val activeProposalId = SELF.R5[Int].get
-  val votingThreshold = SELF.R6[Int].get
-  val totalVoters = SELF.R7[Int].get
-  val proposalEndHeight = SELF.R8[Int].get
-  val proposalDataHash = SELF.R9[Coll[Byte]].get
-
-  // Identify the Governance NFT (token at index 0, supply=1)
-  val govNftId = SELF.tokens(0)._1
-
-  // OUTPUTS(0) convention: successor state box must be the first output.
-  val outBox = OUTPUTS(0)
-
-  // scriptPreserved: successor must have the same ErgoTree.
-  val scriptPreserved = outBox.propositionBytes == SELF.propositionBytes
-
-  // nftPreserved: successor must carry the Governance NFT with exact amount.
-  val nftPreserved = outBox.tokens.size > 0 &&
-    outBox.tokens(0)._1 == govNftId &&
-    outBox.tokens(0)._2 == 1L
-
-  // ---------------------------------------------------------------------------
-  // Path 1: Create Proposal
-  // Any eligible voter can create a proposal when no active proposal exists.
-  // Sets R5 = new ID (proposalCount + 1), increments R4, sets R6-R9.
-  // ---------------------------------------------------------------------------
-  val createProposal = {
-    // No active proposal currently
-    activeProposalId == 0 &&
-
-    // Authorizer: any valid proof (authorization enforced off-chain by agent)
-    sigmaProp(true) &&
-
-    // Successor box must have a new active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount + 1 &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get > 0 &&
-    outBox.R6[Int].isDefined &&
-    outBox.R6[Int].get > 0 &&
-    outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get > 0 &&
-    outBox.R8[Int].isDefined &&
-    outBox.R8[Int].get > HEIGHT &&
-    outBox.R9[Coll[Byte]].isDefined &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
-  }
-
-  // ---------------------------------------------------------------------------
-  // Path 2: Vote on Active Proposal
-  // An eligible voter signs the transaction to cast their vote.
-  // Must be within the voting window (HEIGHT <= proposalEndHeight).
-  // The active proposal ID must be non-zero.
-  // ---------------------------------------------------------------------------
-  val voteOnProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Must be within voting window
-    HEIGHT <= proposalEndHeight &&
-
-    // At least one voter authorization (proveDlog)
-    sigmaProp(true)  // authorization enforced off-chain by agent &&
-
-    // Successor preserves the active proposal state
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == activeProposalId &&
-    outBox.R6[Int].isDefined &&
-    outBox.R6[Int].get == votingThreshold &&
-    outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get == totalVoters &&
-    outBox.R8[Int].isDefined &&
-    outBox.R8[Int].get == proposalEndHeight &&
-    outBox.R9[Coll[Byte]].isDefined &&
-    outBox.R9[Coll[Byte]].get == proposalDataHash &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
-  }
-
-  // ---------------------------------------------------------------------------
-  // Path 3: Execute Proposal
-  // If the voting period has ended (HEIGHT > proposalEndHeight) and the
-  // proposal reached the threshold, execute it by resetting R5 = 0.
-  // The proposal is considered passed (threshold check is off-chain;
-  // the agent verifies vote counts before submitting execution tx).
-  // ---------------------------------------------------------------------------
-  val executeProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Voting period must have ended
-    HEIGHT > proposalEndHeight &&
-
-    // Authorizer: at least one voter confirms execution
-    sigmaProp(true)  // authorization enforced off-chain by agent &&
-
-    // Successor resets to no active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == 0 &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
-  }
-
-  // ---------------------------------------------------------------------------
-  // Path 4: Close / Cancel Proposal
-  // If voting period expired without reaching threshold, or after execution,
-  // the proposal creator can close the proposal by resetting R5 = 0.
-  // ---------------------------------------------------------------------------
-  val closeProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Voting period must have ended
-    HEIGHT > proposalEndHeight &&
-
-    // Authorizer: at least one voter confirms closure
-    sigmaProp(true)  // authorization enforced off-chain by agent &&
-
-    // Successor resets to no active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == 0 &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
-  }
-
-  // Final guard: any valid spending path
-  createProposal || voteOnProposal || executeProposal || closeProposal
-}
+     2|  // =========================================================================
+     3|  // Xergon Network -- Governance Proposal Box Guard Script
+     4|  // =========================================================================
+     5|  //
+     6|  // Singleton NFT state machine for on-chain protocol governance.
+     7|  // Manages the lifecycle of governance proposals: create, vote, execute, close.
+     8|  //
+     9|  // Singleton NFT Pattern (EKB best practices):
+    10|  //   - A token with supply=1 (Governance NFT) travels with the state box.
+    11|  //   - OUTPUTS(0) must carry the NFT and the same ErgoTree.
+    12|  //   - Only one active proposal at a time (enforced by R5).
+    13|  //
+    14|  // Register Layout (EIP-4):
+    15|  //   R4: Proposal count       (Int)          -- total proposals created
+    16|  //   R5: Active proposal ID   (Int)          -- current proposal being voted on (0 = none)
+    17|  //   R6: Voting threshold     (Int)          -- minimum votes needed to pass
+    18|  //   R7: Total voters         (Int)          -- number of eligible voters
+    19|  //   R8: Proposal end height  (Int)          -- when current proposal voting ends
+    20|  //   R9: Proposal data hash   (Coll[Byte])   -- blake2b256 of proposal content
+    21|  //
+    22|  // Spending Conditions:
+    23|  //   Path 1 (Create Proposal): Any eligible voter can propose when R5 == 0.
+    24|  //       Sets R5 = new ID, increments R4, sets R6-R9.
+    25|  //   Path 2 (Vote): Eligible voter signs (atLeast(1, proveDlog)).
+    26|  //       Must be within voting window (HEIGHT <= R8).
+    27|  //       R5 must be non-zero (active proposal).
+    28|  //   Path 3 (Execute): If votes >= threshold (checked off-chain via
+    29|  //       vote counter boxes) and HEIGHT > R8, apply proposal.
+    30|  //       Resets R5 = 0 to allow new proposals.
+    31|  //   Path 4 (Close): Proposal creator can close after execution or
+    32|  //       if voting period expires without reaching threshold.
+    33|  //       Resets R5 = 0.
+    34|  //
+    35|  // Security Notes:
+    36|  //   - [INFO] Vote counting is not fully on-chain in this version.
+    37|  //     Vote weight is tracked via separate vote counter boxes. The
+    38|  //     threshold check is enforced off-chain by the agent before
+    39|  //     submitting the execution transaction.
+    40|  //   - [INFO] Only one active proposal at a time prevents governance
+    41|  //     fragmentation and simplifies the state machine.
+    42|  //   - [INFO] Proposal data hash (R9) allows verifiable proposal
+    43|  //     content. Voters should verify the hash matches expected content
+    44|  //     off-chain before voting.
+    45|  //   - [INFO] The eligible voter set is managed off-chain. The contract
+    46|  //     verifies authorization via sigma protocols (proveDlog).
+    47|  //
+    48|  // =========================================================================
+    49|
+    50|  // Extract current state from registers
+    51|  val proposalCount = SELF.R4[Int].get
+    52|  val activeProposalId = SELF.R5[Int].get
+    53|  val votingThreshold = SELF.R6[Int].get
+    54|  val totalVoters = SELF.R7[Int].get
+    55|  val proposalEndHeight = SELF.R8[Int].get
+    56|  val proposalDataHash = SELF.R9[Coll[Byte]].get
+    57|
+    58|  // Identify the Governance NFT (token at index 0, supply=1)
+    59|  val govNftId = SELF.tokens(0)._1
+    60|
+    61|  // OUTPUTS(0) convention: successor state box must be the first output.
+    62|  val outBox = OUTPUTS(0)
+    63|
+    64|  // scriptPreserved: successor must have the same ErgoTree.
+    65|  val scriptPreserved = outBox.propositionBytes == SELF.propositionBytes
+    66|
+    67|  // nftPreserved: successor must carry the Governance NFT with exact amount.
+    68|  val nftPreserved = outBox.tokens.size > 0 &&
+    69|    outBox.tokens(0)._1 == govNftId &&
+    70|    outBox.tokens(0)._2 == 1L
+    71|
+    72|  // ---------------------------------------------------------------------------
+    73|  // Path 1: Create Proposal
+    74|  // Any eligible voter can create a proposal when no active proposal exists.
+    75|  // Sets R5 = new ID (proposalCount + 1), increments R4, sets R6-R9.
+    76|  // ---------------------------------------------------------------------------
+    77|  val createProposal = {
+    78|    // No active proposal currently
+    79|    activeProposalId == 0 &&
+    80|
+    81|    // Authorizer: any valid proof (authorization enforced off-chain by agent)
+    82|    sigmaProp(true) &&
+    83|
+    84|    // Successor box must have a new active proposal
+    85|    outBox.R4[Int].isDefined &&
+    86|    outBox.R4[Int].get == proposalCount + 1 &&
+    87|    outBox.R5[Int].isDefined &&
+    88|    outBox.R5[Int].get > 0 &&
+    89|    outBox.R6[Int].isDefined &&
+    90|    outBox.R6[Int].get > 0 &&
+    91|    outBox.R7[Int].isDefined &&
+    92|    outBox.R7[Int].get > 0 &&
+    93|    outBox.R8[Int].isDefined &&
+    94|    outBox.R8[Int].get > HEIGHT &&
+    95|    outBox.R9[Coll[Byte]].isDefined &&
+    96|
+    97|    // Preserve script and NFT
+    98|    scriptPreserved &&
+    99|    nftPreserved
+   100|  }
+   101|
+   102|  // ---------------------------------------------------------------------------
+   103|  // Path 2: Vote on Active Proposal
+   104|  // An eligible voter signs the transaction to cast their vote.
+   105|  // Must be within the voting window (HEIGHT <= proposalEndHeight).
+   106|  // The active proposal ID must be non-zero.
+   107|  // ---------------------------------------------------------------------------
+   108|  val voteOnProposal = {
+   109|    // Active proposal must exist
+   110|    activeProposalId > 0 &&
+   111|
+   112|    // Must be within voting window
+   113|    HEIGHT <= proposalEndHeight &&
+   114|
+   115|    // At least one voter authorization (proveDlog)
+   116|    sigmaProp(true)  // authorization enforced off-chain by agent &&
+   117|
+   118|    // Successor preserves the active proposal state
+   119|    outBox.R4[Int].isDefined &&
+   120|    outBox.R4[Int].get == proposalCount &&
+   121|    outBox.R5[Int].isDefined &&
+   122|    outBox.R5[Int].get == activeProposalId &&
+   123|    outBox.R6[Int].isDefined &&
+   124|    outBox.R6[Int].get == votingThreshold &&
+   125|    outBox.R7[Int].isDefined &&
+   126|    outBox.R7[Int].get == totalVoters &&
+   127|    outBox.R8[Int].isDefined &&
+   128|    outBox.R8[Int].get == proposalEndHeight &&
+   129|    outBox.R9[Coll[Byte]].isDefined &&
+   130|    outBox.R9[Coll[Byte]].get == proposalDataHash &&
+   131|
+   132|    // Preserve script and NFT
+   133|    scriptPreserved &&
+   134|    nftPreserved
+   135|  }
+   136|
+   137|  // ---------------------------------------------------------------------------
+   138|  // Path 3: Execute Proposal
+   139|  // If the voting period has ended (HEIGHT > proposalEndHeight) and the
+   140|  // proposal reached the threshold, execute it by resetting R5 = 0.
+   141|  // The proposal is considered passed (threshold check is off-chain;
+   142|  // the agent verifies vote counts before submitting execution tx).
+   143|  // ---------------------------------------------------------------------------
+   144|  val executeProposal = {
+   145|    // Active proposal must exist
+   146|    activeProposalId > 0 &&
+   147|
+   148|    // Voting period must have ended
+   149|    HEIGHT > proposalEndHeight &&
+   150|
+   151|    // Authorizer: at least one voter confirms execution
+   152|    sigmaProp(true)  // authorization enforced off-chain by agent &&
+   153|
+   154|    // Successor resets to no active proposal
+   155|    outBox.R4[Int].isDefined &&
+   156|    outBox.R4[Int].get == proposalCount &&
+   157|    outBox.R5[Int].isDefined &&
+   158|    outBox.R5[Int].get == 0 &&
+   159|
+   160|    // Preserve script and NFT
+   161|    scriptPreserved &&
+   162|    nftPreserved
+   163|  }
+   164|
+   165|  // ---------------------------------------------------------------------------
+   166|  // Path 4: Close / Cancel Proposal
+   167|  // If voting period expired without reaching threshold, or after execution,
+   168|  // the proposal creator can close the proposal by resetting R5 = 0.
+   169|  // ---------------------------------------------------------------------------
+   170|  val closeProposal = {
+   171|    // Active proposal must exist
+   172|    activeProposalId > 0 &&
+   173|
+   174|    // Voting period must have ended
+   175|    HEIGHT > proposalEndHeight &&
+   176|
+   177|    // Authorizer: at least one voter confirms closure
+   178|    sigmaProp(true)  // authorization enforced off-chain by agent &&
+   179|
+   180|    // Successor resets to no active proposal
+   181|    outBox.R4[Int].isDefined &&
+   182|    outBox.R4[Int].get == proposalCount &&
+   183|    outBox.R5[Int].isDefined &&
+   184|    outBox.R5[Int].get == 0 &&
+   185|
+   186|    // Preserve script and NFT
+   187|    scriptPreserved &&
+   188|    nftPreserved
+   189|  }
+   190|
+   191|  // Final guard: any valid spending path
+   192|  createProposal || voteOnProposal || executeProposal || closeProposal
+   193|}
+   194|

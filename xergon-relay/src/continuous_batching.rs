@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{RwLock};
 use uuid::Uuid;
 
 use crate::proxy::AppState;
@@ -240,7 +240,7 @@ pub struct ContinuousBatchingEngine {
 impl ContinuousBatchingEngine {
     /// Create a new engine with the given configuration.
     pub fn new(config: BatchConfig) -> Self {
-        let mut queues = DashMap::new();
+        let queues = DashMap::new();
         for p in BatchPriority::all_priorities() {
             queues.insert(p.queue_key(), VecDeque::new());
         }
@@ -697,6 +697,7 @@ async fn get_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     use std::thread;
     use std::time::Duration;
 

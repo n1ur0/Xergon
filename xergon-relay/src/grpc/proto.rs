@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Protobuf message definitions for the gRPC-like transport layer.
 //!
 //! These types mirror the protobuf wire format for inference and embedding

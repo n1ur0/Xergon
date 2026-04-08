@@ -246,7 +246,7 @@ impl Default for MarketplaceState {
 
 impl MarketplaceState {
     /// Generate a new auth challenge.
-    pub fn generate_challenge(&self, address: &str) -> String {
+    pub fn generate_challenge(&self, _address: &str) -> String {
         let challenge = format!("xergon-auth-{}", self.session_counter.fetch_add(1, Ordering::Relaxed));
         self.challenges.insert(challenge.clone(), now_secs());
         self.metrics.entry("challenges_generated".to_string()).and_modify(|v| *v += 1).or_insert(1);

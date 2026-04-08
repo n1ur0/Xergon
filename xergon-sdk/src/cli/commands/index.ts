@@ -38,3 +38,6 @@ export { monitorCommand } from './monitor';
 export { bridgeCommand } from './bridge';
 export { stakeCommand } from './stake';
 export { payCommand } from './pay';
+export { auditCommand } from './audit';
+export { contractCommand } from './contract';
+export { deployCommand } from './deploy';

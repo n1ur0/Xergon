@@ -9,7 +9,7 @@
 //!   - `pay budget`    — show user budget status
 //!   - `pay budget set` — set user budget
 
-import { Command } from '@cliffy/command';
+import type { Command } from '../mod';
 import { Table } from '@cliffy/table';
 import { colors } from '@cliffy/colors';
 import type { ParsedArgs } from '../mod';

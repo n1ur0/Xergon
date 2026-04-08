@@ -457,7 +457,7 @@ impl ArtifactStorage {
     }
 
     fn empty_checksum() -> String {
-        let mut hasher = Sha256::new();
+        let hasher = Sha256::new();
         hex::encode(hasher.finalize())
     }
 }

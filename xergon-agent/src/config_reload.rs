@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{watch, RwLock};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// Result of the most recent reload attempt.
 #[derive(Debug, Clone, Serialize)]

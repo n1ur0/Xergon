@@ -16,9 +16,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::hardware::detect_hardware;
 use crate::reputation::ReputationStore;
@@ -242,6 +241,7 @@ impl ModelUsageTracker {
     }
 
     /// Reset all counters.
+    #[allow(dead_code)]
     async fn reset(&self) {
         self.usage.write().await.clear();
     }

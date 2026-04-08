@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Request Coalescing — Batch similar requests for efficiency
 //!
 //! Coalesces requests that share the same model, prompt hash, and parameter
@@ -18,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use crate::proxy::AppState;
 

@@ -1,16 +1,33 @@
+# OS
 .DS_Store
 *.swp
 *.swo
+
+# Environment
 .env
 .env.*
 .claude
 .gitnexus
 
-# Build artifacts
+# Node
+node_modules/
 dist/
+.next/
+
+# Rust
+target/
+**/target/
+Cargo.lock
 
 # Docker
 *.db
 *.db-shm
 *.db-wal
-node_modules
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Config with secrets
+config.toml

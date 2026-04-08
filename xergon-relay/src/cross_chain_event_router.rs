@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Cross-chain event router for the Xergon Network relay.
 //!
 //! Extends the cross-chain bridge (Phase 74) with:

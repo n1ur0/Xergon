@@ -42,6 +42,7 @@ use crate::{
     search_v2::{SearchEngineV2, SearchV2Query},
     usage_analytics_pipeline::{AnalyticsBucket, IngestRequest, UsagePipeline},
     treasury_governance::TreasuryGovernanceManager,
+    provider_chain_verify::{ProviderChainVerifyState, chain_verify_routes},
 };
 
 // ---------------------------------------------------------------------------
@@ -300,6 +301,10 @@ pub fn build_router(state: AppState) -> Router<AppState> {
         .route("/v1/treasury/quorum/:id", get(treasury_quorum_handler))
         .route("/v1/treasury/summary", get(treasury_summary_handler));
 
+    let chain_verify_state = Arc::new(ProviderChainVerifyState::new());
+    let chain_verify_routes = chain_verify_routes()
+        .with_state(chain_verify_state);
+
     Router::new()
         .merge(og_routes)
         .merge(search_routes)
@@ -319,6 +324,7 @@ pub fn build_router(state: AppState) -> Router<AppState> {
         .merge(health_routes)
         .merge(ergopay_routes)
         .merge(treasury_routes)
+        .merge(chain_verify_routes)
         .with_state(state)
 }
 
@@ -1220,6 +1226,7 @@ async fn moderation_queue_handler(
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct ModerationActionParams {
     id: String,
     moderator_id: Option<String>,

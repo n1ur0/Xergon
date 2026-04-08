@@ -3,7 +3,6 @@
 //! Bridges the on-chain governance transaction builder (OnChainGovernance)
 //! with actual execution logic, vote delegation, and auto-execution.
 
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -11,11 +10,11 @@ use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use tracing::{debug, error, info, warn};
+use tracing::{info, warn};
 
 use crate::governance::{
-    GovernanceConfig, GovernanceError, GovernanceTxResult, OnChainGovernance, OnChainProposal,
-    ProposalCategory, ProposalStage, ProposalStore, TallyResult, VoteRecord,
+    GovernanceError, OnChainGovernance, OnChainProposal,
+    ProposalCategory, ProposalStage, ProposalStore, TallyResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -107,6 +106,7 @@ pub struct GovernanceExecutor {
     proposals: DashMap<String, ProposalSummary>,
     delegations: DashMap<String, Delegation>,
     receipts: DashMap<String, ExecutionReceipt>,
+    #[allow(dead_code)]
     receipt_counter: AtomicU64,
     current_height: AtomicU64,
 }
@@ -538,6 +538,7 @@ impl GovernanceExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::governance::GovernanceConfig;
 
     fn make_executor() -> GovernanceExecutor {
         let store = Arc::new(ProposalStore::new(GovernanceConfig::default()));

@@ -18,13 +18,11 @@
 //! - POST   /api/migration/jobs/{id}/cancel  -- cancel
 //! - POST   /api/migration/validate      -- validate migration prerequisites
 
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 // ---------------------------------------------------------------------------

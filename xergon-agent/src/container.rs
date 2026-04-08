@@ -17,8 +17,6 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU16, Ordering};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -537,7 +535,7 @@ impl ContainerManager {
 
         let (status, health) = match result {
             Ok(resp) if resp.status().is_success() => ("healthy", Some(response_time)),
-            Ok(resp) => ("unhealthy", Some(response_time)),
+            Ok(_resp) => ("unhealthy", Some(response_time)),
             Err(_) => ("unreachable", None),
         };
 

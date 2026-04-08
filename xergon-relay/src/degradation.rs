@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU8, Ordering};
-use tracing::{info, warn};
+use tracing::{info};
 
 // ---------------------------------------------------------------------------
 // Degradation Level

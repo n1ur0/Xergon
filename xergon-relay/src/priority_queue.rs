@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Priority Queue for request scheduling.
 //!
 //! When providers are at capacity, requests are queued by priority level.
@@ -12,11 +13,11 @@
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Notify;
-use tracing::{debug, warn};
+use tracing::{debug};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -210,7 +211,7 @@ pub struct DequeuedRequest {
 impl PriorityQueue {
     /// Create a new priority queue.
     pub fn new(config: PriorityQueueConfig) -> Self {
-        let mut queues = DashMap::new();
+        let queues = DashMap::new();
         queues.insert(RequestPriority::Critical, VecDeque::new());
         queues.insert(RequestPriority::High, VecDeque::new());
         queues.insert(RequestPriority::Normal, VecDeque::new());

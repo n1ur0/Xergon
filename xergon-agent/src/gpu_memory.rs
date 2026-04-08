@@ -17,7 +17,6 @@
 //! - POST   /api/gpu-memory/defrag             -- suggest defragmentation plan
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;

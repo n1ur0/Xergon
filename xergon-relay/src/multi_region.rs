@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Multi-Region Routing
 //!
 //! Routes inference requests across geographic regions using configurable
@@ -11,7 +12,7 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::proxy::AppState;
 
@@ -746,12 +747,14 @@ fn haversine_km(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
 // ---------------------------------------------------------------------------
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{
+        Path,
+        State
+    },
     response::IntoResponse,
     routing::{get, patch, post},
     Json, Router,
 };
-use std::sync::Arc;
 
 /// Build the multi-region router.
 pub fn build_region_router(state: AppState) -> Router<AppState> {

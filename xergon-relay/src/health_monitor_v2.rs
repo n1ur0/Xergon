@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Health Monitor V2 — Deep health monitoring with dependency tracking,
 //! consecutive failure detection, recovery detection, and check history.
 //!

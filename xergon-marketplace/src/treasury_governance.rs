@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use dashmap::DashMap;
@@ -372,7 +371,7 @@ impl TreasuryGovernanceManager {
 
     /// Compute a snapshot of the treasury state from cached data.
     pub fn get_snapshot(&self) -> TreasurySnapshot {
-        let mut total_deposits_nanoerg: u64 = 0;
+        let total_deposits_nanoerg: u64 = 0;
         let mut total_spent_nanoerg: u64 = 0;
         let mut locked_balance: u64 = 0;
         let mut pending_spends: u64 = 0;

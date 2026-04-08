@@ -7,9 +7,8 @@ use axum::{
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{RwLock};
 use uuid::Uuid;
 
 use crate::proxy::AppState;
@@ -460,7 +459,7 @@ async fn create_stream_handler(
     let mux = &state.token_streaming;
     match mux.create_session(&body.request_id, &body.model, &body.client_id, &body.priority) {
         Ok(session) => (StatusCode::CREATED, Json(session)),
-        Err(msg) => (
+        Err(_msg) => (
             StatusCode::CONFLICT,
             Json(StreamSession {
                 id: String::new(),

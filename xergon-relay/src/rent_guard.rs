@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Rent Guard — Middleware that deprioritizes providers whose Ergo boxes
 //! are approaching storage rent expiry.
 //!

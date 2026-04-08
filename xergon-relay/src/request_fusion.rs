@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::{RwLock};
 use uuid::Uuid;
 use crate::proxy::AppState;
 
@@ -104,7 +104,7 @@ pub struct FusedRequest {
 }
 
 impl FusedRequest {
-    pub fn new(model: String, ttl_secs: u64) -> Self {
+    pub fn new(model: String, _ttl_secs: u64) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),

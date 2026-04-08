@@ -27,12 +27,10 @@ use tracing::warn;
 
 use crate::chain::client::ErgoNodeClient;
 use crate::governance::{
-    get_template, built_in_templates, OnChainGovernance, OnChainProposal,
-    GovernanceConfig, ProposalCategory, ProposalStage,
+    get_template, built_in_templates, OnChainGovernance, OnChainProposal, ProposalCategory, ProposalStage,
 };
 use crate::protocol::actions::{
-    plan_close_proposal, plan_create_proposal, plan_execute_proposal, plan_vote,
-    GovernanceOutputRegisters, GovernanceTxPlan,
+    plan_close_proposal, plan_create_proposal, plan_execute_proposal, plan_vote, GovernanceTxPlan,
 };
 use crate::protocol::specs::validate_governance_box;
 
@@ -897,6 +895,7 @@ pub fn build_governance_router() -> Router<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::protocol::actions::GovernanceOutputRegisters;
 
     #[test]
     fn test_governance_state_response_serialization() {

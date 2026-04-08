@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Babel Box Discovery — EIP-0031 Babel fee box discovery and token fee swap
 //!
 //! Enables users to pay inference fees in tokens (not ERG) using Babel boxes on Ergo.

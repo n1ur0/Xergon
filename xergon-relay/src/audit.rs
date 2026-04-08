@@ -3,11 +3,10 @@
 //! Provides an in-memory ring buffer of audit events with querying and
 //! aggregation capabilities. All admin/privileged actions are logged.
 
-use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex as StdMutex};
-use tracing::{debug, info};
+use tracing::{debug};
 
 // ---------------------------------------------------------------------------
 // Core types

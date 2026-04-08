@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { CLIContext } from '../mod';
 import {
   nanoErgToErg,
   formatErg,
@@ -55,7 +56,7 @@ function createMockContext(overrides?: Record<string, any>) {
       color: false,
       timeout: 30000,
     },
-    output: createMockOutput(),
+    output: createMockOutput() as any,
     ...overrides,
   };
 }

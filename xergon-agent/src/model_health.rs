@@ -14,7 +14,7 @@
 //! - POST /api/models/health/{model}/check -- trigger manual check
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

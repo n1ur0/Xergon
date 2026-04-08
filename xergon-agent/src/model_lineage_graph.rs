@@ -771,7 +771,7 @@ fn parse_edge_type(s: &str) -> Result<EdgeType, String> {
 
 /// Build the model lineage graph router.
 pub fn build_lineage_router(state: crate::api::AppState) -> axum::Router {
-    use axum::routing::{delete, get, post};
+    use axum::routing::{get, post};
 
     axum::Router::new()
         .route("/v1/lineage/nodes", post(create_node_handler).get(get_node_handler))
