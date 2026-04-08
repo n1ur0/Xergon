@@ -114,13 +114,13 @@ jobs:
 
       # ── Upload ──
       - name: Upload agent artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: xergon-agent-${{ matrix.artifact_suffix }}
           path: staging/xergon-agent-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}.tar.gz*
 
       - name: Upload relay artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: xergon-relay-${{ matrix.artifact_suffix }}
           path: staging/xergon-relay-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}.tar.gz*
