@@ -57,7 +57,7 @@ aes-gcm = "0.10"
 # HMAC for webhook signatures
 hmac = "0.12"
 # SHA-3 (SHAKE256) for post-quantum KEM
-sha3 = "0.10"
+sha3 = "0.11"
 # BLAKE3 for ZK commitments
 blake3 = "1"
 # gRPC-like protobuf encoding (lightweight, no tonic runtime)
