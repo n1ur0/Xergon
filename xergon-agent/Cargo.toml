@@ -45,7 +45,7 @@ hkdf = "0.12"
 hmac = "0.12"
 rand = "0.8"
 rpassword = "7"
-dirs = "5"
+dirs = "6"
 libc = "0.2"
 # CLI args
 clap = { version = "4", features = ["derive", "env"] }
