@@ -103,7 +103,7 @@ export async function fetchGpuListings(
   if (filters?.gpu_type) params.set("gpu_type", filters.gpu_type);
 
   const qs = params.toString();
-  const url = `${sdk.getBaseUrl()}/gpu/listings${qs ? `?${qs}` : ""}`;
+  const url = `${sdk.getBaseUrl()}/v1/gpu/listings${qs ? `?${qs}` : ""}`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch GPU listings: ${res.statusText}`);
@@ -111,7 +111,7 @@ export async function fetchGpuListings(
 }
 
 export async function fetchGpuListing(listingId: string): Promise<GpuListing> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/listings/${listingId}`);
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/listings/${listingId}`);
   if (!res.ok) throw new Error(`Failed to fetch listing: ${res.statusText}`);
   return res.json();
 }
@@ -121,7 +121,7 @@ export async function rentGpu(
   hours: number,
   renterPublicKey: string,
 ): Promise<RentGpuResponse> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/rent`, {
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/rent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -138,13 +138,13 @@ export async function rentGpu(
 }
 
 export async function fetchMyRentals(renterPk: string): Promise<GpuRental[]> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/rentals/${renterPk}`);
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/rentals/${renterPk}`);
   if (!res.ok) throw new Error(`Failed to fetch rentals: ${res.statusText}`);
   return res.json();
 }
 
 export async function fetchGpuPricing(): Promise<GpuPricing[]> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/pricing`);
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/pricing`);
   if (!res.ok) throw new Error(`Failed to fetch pricing: ${res.statusText}`);
   return res.json();
 }
@@ -155,7 +155,7 @@ export async function rateGpu(
   rating: number,
   comment?: string,
 ): Promise<{ message: string }> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/rate`, {
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/rate`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -172,7 +172,7 @@ export async function rateGpu(
 export async function fetchGpuReputation(
   publicKey: string,
 ): Promise<GpuReputation> {
-  const res = await fetch(`${sdk.getBaseUrl()}/gpu/reputation/${publicKey}`);
+  const res = await fetch(`${sdk.getBaseUrl()}/v1/gpu/reputation/${publicKey}`);
   if (!res.ok) throw new Error(`Failed to fetch reputation: ${res.statusText}`);
   return res.json();
 }

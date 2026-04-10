@@ -186,7 +186,7 @@ function buildWidgetHTML(config: {
     });
 
     var headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
-    if (CONFIG.publicKey) headers['X-Wallet-PK'] = CONFIG.publicKey;
+    if (CONFIG.publicKey) headers['x-user-pk'] = CONFIG.publicKey;
 
     fetch(CONFIG.apiBase + '/chat/completions', {
       method: 'POST',

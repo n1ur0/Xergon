@@ -107,12 +107,12 @@ export const endpoints = {
   /** Stream inference (SSE) -- returns raw Response for manual streaming */
   inferStream: (req: InferenceRequest, signal?: AbortSignal) => {
     const walletPk = getWalletPk();
-    return fetch(`${API_BASE}/chat/completions`, {
+    return fetch(`${API_BASE}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Accept": "text/event-stream",
-        ...(walletPk ? { "X-Wallet-PK": walletPk } : {}),
+        ...(walletPk ? { "x-user-pk": walletPk } : {}),
       },
       body: JSON.stringify({
         model: req.model,
