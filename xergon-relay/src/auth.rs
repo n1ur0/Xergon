@@ -5,6 +5,7 @@ use std::error::Error;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ApiKey {
     pub key: String,
     pub secret: String,
@@ -13,6 +14,7 @@ pub struct ApiKey {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum ApiTier {
     Free,
     Premium,
@@ -90,6 +92,7 @@ impl AuthManager {
         self.api_keys.get(key)
     }
 
+    #[allow(dead_code)]
     pub fn add_api_key(&mut self, api_key: ApiKey) {
         self.api_keys.insert(api_key.key.clone(), api_key);
     }
@@ -134,6 +137,7 @@ impl RateLimiter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_remaining(&self, api_key: &str, limit: usize) -> usize {
         let now = Instant::now();
         if let Some(requests) = self.requests.get(api_key) {

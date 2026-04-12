@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use crate::types::{UsageProof, get_current_timestamp};
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserBalance {
     pub api_key: String,
     pub ergo_address: String,
@@ -15,6 +16,7 @@ pub struct UserBalance {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PendingUsage {
     pub id: Option<i64>,
     pub api_key: String,
@@ -80,6 +82,7 @@ impl SettlementManager {
     }
 
     // Initialize or get user balance
+    #[allow(dead_code)]
     pub async fn get_or_create_balance(&self, api_key: &str, ergo_address: &str) -> Result<UserBalance, Box<dyn Error>> {
         let conn = self.conn.lock().await;
         
@@ -121,6 +124,7 @@ impl SettlementManager {
     }
 
     // Check if user has sufficient balance
+    #[allow(dead_code)]
     pub async fn check_balance(&self, api_key: &str, required_erg: f64) -> Result<bool, Box<dyn Error>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(
@@ -132,6 +136,7 @@ impl SettlementManager {
     }
 
     // Deduct balance (called after successful inference)
+    #[allow(dead_code)]
     pub async fn deduct_balance(&self, api_key: &str, amount_erg: f64) -> Result<(), Box<dyn Error>> {
         let conn = self.conn.lock().await;
         let now = get_current_timestamp();
@@ -170,6 +175,7 @@ impl SettlementManager {
     }
 
     // Get pending usage proofs for a provider
+    #[allow(dead_code)]
     pub async fn get_pending_proofs(&self, api_key: &str, limit: usize) -> Result<Vec<UsageProof>, Box<dyn Error>> {
         let conn = self.conn.lock().await;
         let mut stmt = conn.prepare(

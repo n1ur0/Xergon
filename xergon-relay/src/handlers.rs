@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{State},
     http::{HeaderMap, StatusCode},
     response::Json,
     routing::{get, post},
@@ -14,10 +14,11 @@ use crate::config::Config;
 use crate::heartbeat::{HeartbeatRequest, HeartbeatResponse, ProviderStatus};
 use crate::provider::{build_providers, ProviderMap};
 use crate::registration::{ProviderRegistry, ProviderRegistration};
-use crate::settlement::{SettlementManager, UserBalance};
-use crate::types::{ChatCompletionRequest, ChatCompletionResponse, SettlementRequest, SettlementResponse, UsageProof};
+use crate::settlement::SettlementManager;
+use crate::types::{ChatCompletionRequest, ChatCompletionResponse, SettlementRequest, SettlementResponse};
 
 pub struct AppState {
+    #[allow(dead_code)]
     pub config: Config,
     pub providers: ProviderMap,
     pub registry: Arc<RwLock<ProviderRegistry>>,
@@ -226,7 +227,7 @@ async fn submit_settlement_batch(
         }
     }
 
-    let mut settlement = state.settlement.write().await;
+    let settlement = state.settlement.write().await;
     
     // Process each proof
     let mut processed_count = 0;

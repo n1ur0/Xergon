@@ -34,6 +34,7 @@ pub struct Choice {
 
 // Provider registration types
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct ProviderRegistration {
     pub provider_id: String,
     pub ergo_address: String,
@@ -46,6 +47,7 @@ pub struct ProviderRegistration {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ProviderRegistrationResponse {
     pub success: bool,
     pub provider_id: Option<String>,
@@ -54,6 +56,7 @@ pub struct ProviderRegistrationResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct RegisteredProvider {
     pub provider_id: String,
     pub ergo_address: String,
@@ -68,6 +71,7 @@ pub struct RegisteredProvider {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum HealthStatus {
     Healthy,
     Degraded,
@@ -77,6 +81,7 @@ pub enum HealthStatus {
 
 // Heartbeat types
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct HeartbeatRequest {
     pub provider_id: String,
     pub pown_score: Option<f32>,
@@ -85,6 +90,7 @@ pub struct HeartbeatRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct NodeHealthStatus {
     pub is_healthy: bool,
     pub current_height: Option<u32>,
@@ -93,6 +99,7 @@ pub struct NodeHealthStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct HeartbeatResponse {
     pub status: String,
     pub received_at: Option<u64>,
@@ -100,6 +107,7 @@ pub struct HeartbeatResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct ProviderStatus {
     pub provider_id: String,
     pub health_status: String,
@@ -140,10 +148,12 @@ pub fn get_current_timestamp() -> u64 {
         .as_secs()
 }
 
+#[allow(dead_code)]
 pub fn calculate_heartbeat_timeout() -> Duration {
     Duration::from_secs(300) // 5 minutes
 }
 
+#[allow(dead_code)]
 pub fn is_heartbeat_stale(last_seen: u64, timeout_secs: u64) -> bool {
     let now = get_current_timestamp();
     now - last_seen > timeout_secs

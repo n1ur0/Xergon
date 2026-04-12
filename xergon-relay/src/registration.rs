@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProviderRegistration {
@@ -137,6 +137,7 @@ impl ProviderRegistry {
         }
     }
 
+    #[allow(dead_code)]
     pub fn mark_unhealthy(&mut self, provider_id: &str) -> bool {
         if let Some(provider) = self.providers.get_mut(provider_id) {
             provider.health_status = HealthStatus::Unhealthy;
