@@ -17,7 +17,7 @@
   "dependencies": {
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
-    "@xergon/sdk": "file:../xergon-sdk",
+    "@xergon/sdk": "file:../xergon-sdk/xergon-sdk-0.1.0.tgz",
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.0",
     "lucide-react": "^0.474.0",

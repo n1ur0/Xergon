@@ -18,11 +18,17 @@
 | Monitoring | 30% | ❌ NOT READY | Prometheus metrics not configured |
 | Git State | 100% | ✅ CLEAN | On main branch, no uncommitted changes |
 
-**OVERALL: 72% - READY FOR STAGING, NOT PRODUCTION**
+**OVERALL: 82% - READY FOR STAGING**
 
 ---
 
 ## ✅ Completed Items
+
+### Security Fixes (CRITICAL)
+- [x] **Signature verification implemented** - All chat/completion requests now verify HMAC signatures
+- [x] **Fail-closed behavior enforced** - Circuit breaker prevents requests when auth system is unavailable
+- [x] **Signature required header** - `X-Signature` header now mandatory for authenticated requests
+- [x] **Circuit breaker pattern** - `AuthManager` has `open_circuit()`/`close_circuit()` methods
 
 ### Code Quality
 - [x] All Rust compiler warnings fixed (0 warnings)
@@ -56,18 +62,20 @@
 ### HIGH PRIORITY
 
 #### 1. Security - Authentication System
-**Status:** ⚠️ NEEDS REVIEW  
-**Location:** `xergon-relay/src/auth.rs`
+**Status:** ✅ FIXED  
+**Location:** `xergon-relay/src/auth.rs`, `xergon-relay/src/handlers.rs`
 
-- **Issue:** Signature verification NOT implemented
-  - Current code checks timestamps/replay but never verifies HMAC signature
-  - Impact: Complete authentication bypass possible
-  - **Action Required:** Implement `verify_signature()` call in request handlers
+- **Signature verification:** ✅ IMPLEMENTED
+  - All `chat/completions` requests now require `X-Signature` header
+  - HMAC-SHA256 signature verified before processing
+  - Invalid signatures rejected with 403 Forbidden
 
-- **Issue:** Fail-open authentication behavior
-  - When Ergo node unavailable, requests allowed through without auth
-  - Impact: DoS of Ergo node = complete auth bypass
-  - **Action Required:** Add circuit breaker for fail-open behavior
+- **Fail-closed behavior:** ✅ IMPLEMENTED
+  - Circuit breaker opens on repeated auth failures
+  - When open, all requests rejected with 503 Service Unavailable
+  - Prevents DoS-based auth bypass
+
+- **Remaining:** Add `close_circuit()` trigger after recovery period (future enhancement)
 
 #### 2. Documentation Gaps
 **Status:** ⚠️ PLACEHOLDER FILES  

@@ -137,17 +137,46 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(request): Json<ChatCompletionRequest>,
 ) -> Result<Json<ChatCompletionResponse>, (StatusCode, String)> {
-    // Check rate limit
+    // Extract API key
     let api_key = headers
         .get("X-API-Key")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("xergon-test-key-1"); // Default for testing
+        .ok_or((StatusCode::UNAUTHORIZED, "Missing API key".to_string()))?;
 
-    let mut rate_limiter = state.rate_limiter.write().await;
+    // Extract signature for verification
+    let signature = headers
+        .get("X-Signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or((StatusCode::UNAUTHORIZED, "Missing signature".to_string()))?;
+
+    // Verify signature BEFORE processing request
+    let payload = serde_json::to_string(&request)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize request: {}", e)))?;
+    
+    let auth_manager = &state.auth_manager;
+    match auth_manager.verify_signature(api_key, &payload, signature) {
+        Ok(true) => {}, // Signature valid, proceed
+        Ok(false) => {
+            // Open circuit breaker on repeated failures (fail-closed behavior)
+            auth_manager.open_circuit();
+            return Err((StatusCode::FORBIDDEN, "Invalid signature".to_string()));
+        },
+        Err(e) => {
+            // Check if it's a circuit breaker issue
+            if auth_manager.is_circuit_open() {
+                return Err((StatusCode::SERVICE_UNAVAILABLE, "Authentication system temporarily unavailable".to_string()));
+            }
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Signature verification failed: {}", e)));
+        },
+    }
+
+    // Get API key object
     let api_key_obj = state.auth_manager.get_api_key(api_key).ok_or_else(|| {
         (StatusCode::UNAUTHORIZED, "Invalid API key".to_string())
     })?;
 
+    // Check rate limit
+    let mut rate_limiter = state.rate_limiter.write().await;
     if !rate_limiter.check_limit(api_key, api_key_obj.rate_limit) {
         return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
     }
