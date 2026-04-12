@@ -3,6 +3,7 @@
  *
  * Shows model list with descriptions, supports search/filter.
  */
+"use client";
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { Model } from '../types';

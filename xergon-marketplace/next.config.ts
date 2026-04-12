@@ -15,6 +15,27 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Provide empty polyfills for Node.js modules that shouldn't be in browser
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        os: false,
+        path: false,
+        http: false,
+        https: false,
+        crypto: false,
+        stream: false,
+        buffer: false,
+        net: false,
+        tls: false,
+        child_process: false,
+        worker_threads: false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;

@@ -4,6 +4,7 @@
  * Renders user/assistant messages with basic markdown support,
  * code block copy, timestamps, and token usage badges.
  */
+"use client";
 
 import React, { useState, useCallback } from 'react';
 import type { ChatMessage as ChatMessageType } from '../hooks/use-chat';

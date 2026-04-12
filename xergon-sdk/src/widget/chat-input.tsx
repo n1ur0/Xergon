@@ -4,6 +4,7 @@
  * Features: auto-resize textarea, send/stop buttons,
  * keyboard shortcuts (Enter to send, Shift+Enter for newline).
  */
+"use client";
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 

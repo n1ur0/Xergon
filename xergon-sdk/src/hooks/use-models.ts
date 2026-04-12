@@ -1,6 +1,7 @@
 /**
  * useModels -- React hook for fetching available models.
  */
+"use client";
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Model } from '../types';

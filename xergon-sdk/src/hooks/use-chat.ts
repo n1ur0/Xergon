@@ -4,6 +4,7 @@
  * Manages conversation state, streaming responses, abort, retry,
  * and integrates with the Xergon SDK chat API.
  */
+"use client";
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { RetryConfig } from '../retry';

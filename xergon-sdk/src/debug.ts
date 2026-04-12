@@ -10,8 +10,12 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import * as http from 'node:http';
-import * as https from 'node:https';
+
+// Debug module - only used in Node.js environment, not bundled for browser
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const httpModule = typeof require !== 'undefined' ? require('node:http') : null;
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const httpsModule = typeof require !== 'undefined' ? require('node:https') : null;
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -70,9 +74,19 @@ async function measure<T>(fn: () => Promise<T>): Promise<{ value: T; duration: n
 function safeFetch(url: string, timeoutMs: number = 10000): Promise<{ ok: boolean; status: number; body: string; latencyMs: number }> {
   return new Promise((resolve) => {
     const start = Date.now();
-    const mod = url.startsWith('https') ? https : http;
+    const mod = url.startsWith('https') ? httpsModule : httpModule;
+    
+    if (!mod) {
+      resolve({
+        ok: false,
+        status: 0,
+        body: 'HTTP module not available (browser environment)',
+        latencyMs: Date.now() - start,
+      });
+      return;
+    }
 
-    const req = mod.get(url, { timeout: timeoutMs }, (res: http.IncomingMessage) => {
+    const req = mod.get(url, { timeout: timeoutMs }, (res: any) => {
       let body = '';
       res.on('data', (chunk: Buffer | string) => { body += chunk; });
       res.on('end', () => {

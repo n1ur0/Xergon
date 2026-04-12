@@ -13,6 +13,7 @@
  * - Customizable colors
  * - Responsive design
  */
+"use client";
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useChat } from '../hooks/use-chat';

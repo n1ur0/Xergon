@@ -138,12 +138,11 @@ describe("Navbar", () => {
     expect(screen.getByLabelText("Open menu")).toBeInTheDocument();
   });
 
-  it("has the correct number of main nav links", () => {
+  it("has the correct number of main nav links (21)", () => {
     render(<Navbar />);
     const nav = screen.getByLabelText("Main navigation");
     const links = nav.querySelectorAll("a");
-    // NAV_LINKS has 22 links (Health system status indicator is not a link)
-    // Test expects at least the base navigation links
-    expect(links.length).toBeGreaterThanOrEqual(21);
+    // NAV_LINKS has 20 items + 1 Provider Dashboard link when authenticated
+    expect(links.length).toBe(21);
   });
 });

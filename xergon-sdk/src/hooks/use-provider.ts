@@ -1,6 +1,7 @@
 /**
  * useProvider -- React hook for checking relay provider status and latency.
  */
+"use client";
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 
