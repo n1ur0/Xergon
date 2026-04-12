@@ -32,7 +32,13 @@ pub fn create_router(config: Config) -> Router {
     let auth_manager = Arc::new(AuthManager::new());
     let rate_limiter = Arc::new(RwLock::new(RateLimiter::new(60))); // 60 second window
     let db_path = std::env::var("SETTLEMENT_DB_PATH").unwrap_or_else(|_| "data/settlement.db".to_string());
-    let settlement = Arc::new(RwLock::new(SettlementManager::new(&db_path).expect("Failed to initialize settlement manager")));
+    let settlement = match SettlementManager::new(&db_path) {
+        Ok(manager) => Arc::new(RwLock::new(manager)),
+        Err(e) => {
+            tracing::error!("Failed to initialize settlement manager: {}", e);
+            panic!("Failed to initialize settlement manager");
+        }
+    };
 
     let state = Arc::new(AppState {
         config,
@@ -90,7 +96,12 @@ async fn heartbeat(
         return Err((StatusCode::NOT_FOUND, "Provider not found. Please register first.".to_string()));
     }
 
-    let provider = registry.get_provider(&req.provider_id).unwrap();
+    let provider = registry
+        .get_provider(&req.provider_id)
+        .ok_or_else(|| {
+            tracing::error!("Provider not found: {}", req.provider_id);
+            (StatusCode::NOT_FOUND, "Provider not found. Please register first.".to_string())
+        })?;
     
     Ok(Json(HeartbeatResponse {
         status: "ok".to_string(),
@@ -163,7 +174,13 @@ async fn chat_completions(
         }
     };
 
-    let provider = state.providers.get(&provider_id).unwrap();
+    let provider = state
+        .providers
+        .get(&provider_id)
+        .ok_or_else(|| {
+            tracing::error!("Provider not found: {}", provider_id);
+            (StatusCode::SERVICE_UNAVAILABLE, "No providers available".to_string())
+        })?;
 
     match provider.chat_completions(request).await {
         Ok(response) => {

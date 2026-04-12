@@ -54,6 +54,8 @@ async fn main() {
     info!("  POST /v1/chat/completions - Chat completions (requires API key)");
     info!("  GET /health - Health check");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr)
+        .await
+        .expect("Failed to bind to address");
+    serve(listener, app).await.expect("Server failed");
 }

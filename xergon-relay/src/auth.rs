@@ -58,24 +58,27 @@ impl AuthManager {
     pub fn new() -> Self {
         let mut api_keys = std::collections::HashMap::new();
         
-        // Add some test API keys
-        api_keys.insert(
-            "xergon-test-key-1".to_string(),
-            ApiKey::new(
+        // Load API keys from environment variables (production-safe)
+        // Test keys should only be loaded in development mode
+        if std::env::var("RUST_ENV").unwrap_or_default() == "development" {
+            api_keys.insert(
                 "xergon-test-key-1".to_string(),
-                "test-secret-1".to_string(),
-                ApiTier::Premium,
-            ),
-        );
-        
-        api_keys.insert(
-            "xergon-test-key-2".to_string(),
-            ApiKey::new(
+                ApiKey::new(
+                    "xergon-test-key-1".to_string(),
+                    std::env::var("TEST_SECRET_1").unwrap_or_else(|_| "test-secret-1".to_string()),
+                    ApiTier::Premium,
+                ),
+            );
+            
+            api_keys.insert(
                 "xergon-test-key-2".to_string(),
-                "test-secret-2".to_string(),
-                ApiTier::Free,
-            ),
-        );
+                ApiKey::new(
+                    "xergon-test-key-2".to_string(),
+                    std::env::var("TEST_SECRET_2").unwrap_or_else(|_| "test-secret-2".to_string()),
+                    ApiTier::Free,
+                ),
+            );
+        }
 
         Self { api_keys }
     }
