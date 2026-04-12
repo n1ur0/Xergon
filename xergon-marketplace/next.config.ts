@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import * as path from 'path';
 
 const nextConfig: NextConfig = {
   output: "standalone",
@@ -33,6 +34,12 @@ const nextConfig: NextConfig = {
         child_process: false,
         worker_threads: false,
       };
+      
+      // Force @xergon/sdk to use browser version
+      config.resolve.alias['@xergon/sdk'] = path.resolve(
+        __dirname,
+        '../xergon-sdk/dist/browser.js'
+      );
     }
     return config;
   },

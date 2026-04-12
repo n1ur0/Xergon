@@ -5,11 +5,13 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "browser": "./dist/browser.js",
   "bin": {
     "xergon": "./dist/cli/index.js"
   },
   "exports": {
     ".": {
+      "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
@@ -26,7 +28,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && cp src/browser.ts dist/browser.js && sed -i 's/\\.\\/client-browser/\\.\\/client-browser/g' dist/browser.js",
+    "build:browser": "tsc && cat src/browser.ts > dist/browser.js",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
