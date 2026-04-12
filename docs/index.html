@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xergon Network - Documentation</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #10b981;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.7;
+            color: var(--dark);
+            background: var(--light);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+            border-radius: 0 0 1rem 1rem;
+            margin-bottom: 3rem;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        header .subtitle {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            margin-bottom: 2rem;
+        }
+
+        .search-box {
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: 2rem;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            border-color: var(--primary);
+        }
+
+        .card h3 {
+            color: var(--primary);
+            font-size: 1.4rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card p {
+            color: var(--gray);
+            margin-bottom: 1rem;
+        }
+
+        .card .link {
+            display: inline-block;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
+        .card .link:hover {
+            text-decoration: underline;
+        }
+
+        .section {
+            margin: 3rem 0;
+        }
+
+        .section h2 {
+            color: var(--dark);
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .doc-list {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .doc-list li {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1rem 1.5rem;
+            transition: all 0.2s;
+        }
+
+        .doc-list li:hover {
+            border-color: var(--primary);
+            background: var(--light);
+        }
+
+        .doc-list a {
+            color: var(--dark);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .doc-list a:hover {
+            color: var(--primary);
+        }
+
+        .icon {
+            font-size: 1.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .badge.new {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge.updated {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--gray);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--border);
+            margin-top: 4rem;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2rem;
+            }
+
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>📚 Xergon Network Documentation</h1>
+        <div class="subtitle">Decentralized AI Inference Marketplace on Ergo Blockchain</div>
+        <div class="search-box">
+            <input type="text" placeholder="Search documentation..." id="search">
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Quick Links -->
+        <div class="section">
+            <h2>🚀 Quick Access</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3><span class="icon">📖</span> Getting Started</h3>
+                    <p>New to Xergon? Start here with our quick start guide.</p>
+                    <a href="QUICK-START.md" class="link">Read Guide →</a>
+                </div>
+
+                <div class="card">
+                    <h3><span class="icon">🏗️</span> Architecture</h3>
+                    <p>Understand the system design and components.</p>
+                    <a href="docs/architecture.md" class="link">View Architecture →</a>
+                </div>
+
+                <div class="card">
+                    <h3><span class="icon">🔌</span> API Reference</h3>
+                    <p>Complete API documentation for developers.</p>
+                    <a href="docs/API_REFERENCE.md" class="link">View API →</a>
+                </div>
+
+                <div class="card">
+                    <h3><span class="icon">🔧</span> Setup Guide</h3>
+                    <p>Detailed instructions for local development.</p>
+                    <a href="LOCAL-SETUP-GUIDE.md" class="link">Setup Guide →</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Core Documentation -->
+        <div class="section">
+            <h2>📚 Core Documentation</h2>
+            <ul class="doc-list">
+                <li><a href="INTRODUCTION.md"><span class="icon">📖</span> Introduction</a></li>
+                <li><a href="QUICK-START.md"><span class="icon">🚀</span> Quick Start</a></li>
+                <li><a href="LOCAL-SETUP-GUIDE.md"><span class="icon">🔧</span> Local Setup</a></li>
+                <li><a href="docs/architecture.md"><span class="icon">🏗️</span> Architecture</a></li>
+                <li><a href="docs/API_REFERENCE.md"><span class="icon">🔌</span> API Reference</a></li>
+                <li><a href="docs/TESTING.md"><span class="icon">🧪</span> Testing</a></li>
+                <li><a href="docs/CODE_STYLE.md"><span class="icon">💻</span> Code Style</a></li>
+                <li><a href="CONTRIBUTING.md"><span class="icon">🤝</span> Contributing</a></li>
+            </ul>
+        </div>
+
+        <!-- Operations -->
+        <div class="section">
+            <h2>⚙️ Operations & Deployment</h2>
+            <ul class="doc-list">
+                <li><a href="docs/DEPLOYMENT.md"><span class="icon">🚀</span> Deployment</a></li>
+                <li><a href="docs/MAINNET_DEPLOYMENT.md"><span class="icon">🌐</span> Mainnet</a></li>
+                <li><a href="docs/TESTNET_DEPLOYMENT.md"><span class="icon">🧪</span> Testnet</a></li>
+                <li><a href="docs/MONITORING.md"><span class="icon">📊</span> Monitoring</a></li>
+                <li><a href="docs/RUNBOOK.md"><span class="icon">📋</span> Runbook</a></li>
+                <li><a href="docs/TROUBLESHOOTING.md"><span class="icon">🐛</span> Troubleshooting</a></li>
+                <li><a href="docs/SECURITY_AUDIT.md"><span class="icon">🔒</span> Security Audit</a></li>
+                <li><a href="docs/PERFORMANCE.md"><span class="icon">⚡</span> Performance</a></li>
+            </ul>
+        </div>
+
+        <!-- Ergo Integration -->
+        <div class="section">
+            <h2>🔗 Ergo Blockchain Integration</h2>
+            <ul class="doc-list">
+                <li><a href="docs/ERGO_NODE_SETUP.md"><span class="icon">🏛️</span> Ergo Node Setup</a></li>
+                <li><a href="docs/SMART_CONTRACTS.md"><span class="icon">📜</span> Smart Contracts</a></li>
+                <li><a href="docs/UTXO_GUIDE.md"><span class="icon">💰</span> UTXO Management</a></li>
+                <li><a href="docs/TRANSACTION_BUILDER.md"><span class="icon">🔨</span> Transaction Builder</a></li>
+                <li><a href="docs/PROVIDER_ONBOARDING.md"><span class="icon">👤</span> Provider Onboarding</a></li>
+                <li><a href="docs/PoNW.md"><span class="icon">🔐</span> Proof-of-Neural-Work</a></li>
+                <li><a href="docs/contract-audits/"><span class="icon">🔍</span> Contract Audits</a></li>
+            </ul>
+        </div>
+
+        <!-- Advanced Topics -->
+        <div class="section">
+            <h2>🎓 Advanced Topics</h2>
+            <ul class="doc-list">
+                <li><a href="docs/PROVIDER_ECONOMICS.md"><span class="icon">💵</span> Provider Economics</a></li>
+                <li><a href="docs/RATE_LIMITING.md"><span class="icon">🚦</span> Rate Limiting</a></li>
+                <li><a href="docs/SCALING.md"><span class="icon">📈</span> Scaling Strategies</a></li>
+                <li><a href="docs/THREAT_MODEL.md"><span class="icon">⚠️</span> Threat Model</a></li>
+                <li><a href="docs/RESEARCH.md"><span class="icon">🔬</span> Research Notes</a></li>
+                <li><a href="docs/BENCHMARKS.md"><span class="icon">📊</span> Benchmarks</a></li>
+                <li><a href="docs/RFCs/"><span class="icon">📝</span> RFCs</a></li>
+            </ul>
+        </div>
+
+        <!-- Project Status -->
+        <div class="section">
+            <h2>📊 Project Status</h2>
+            <ul class="doc-list">
+                <li><a href="IMPLEMENTATION-STATUS.md"><span class="icon">✅</span> Implementation Status</a></li>
+                <li><a href="ROADMAP.md"><span class="icon">🗺️</span> Roadmap</a></li>
+                <li><a href="Xergon LitePaper.md"><span class="icon">📄</span> LitePaper</a></li>
+                <li><a href="docs/wiring-diagrams.md"><span class="icon">🔌</span> Wiring Diagrams</a></li>
+                <li><a href="docs/USER_GUIDE.md"><span class="icon">👥</span> User Guide</a></li>
+                <li><a href="docs/HOW-IT-WORKS.md"><span class="icon">⚙️</span> How It Works</a></li>
+            </ul>
+        </div>
+
+        <!-- SDK & Tools -->
+        <div class="section">
+            <h2>🛠️ SDK & Tools</h2>
+            <ul class="doc-list">
+                <li><a href="xergon-sdk/README.md"><span class="icon">📦</span> TypeScript SDK</a></li>
+                <li><a href="xergon-marketplace/README.md"><span class="icon">⚛️</span> Marketplace UI</a></li>
+                <li><a href="xergon-relay/README.md"><span class="icon">🦀</span> Rust Relay</a></li>
+                <li><a href="xergon-agent/README.md"><span class="icon">🤖</span> Agent Sidecar</a></li>
+                <li><a href="docs/marketplace-ux-design.md"><span class="icon">🎨</span> UX Design</a></li>
+            </ul>
+        </div>
+
+        <!-- Quick Links Footer -->
+        <div class="section">
+            <h2>🔗 Quick Links</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3><span class="icon">📚</span> Documentation Index</h3>
+                    <a href="docs/INDEX.md" class="link">View Full Index →</a>
+                </div>
+                <div class="card">
+                    <h3><span class="icon">🔥</span> Local Setup Guide</h3>
+                    <a href="LOCAL-SETUP-GUIDE.html" class="link">Open HTML Guide →</a>
+                </div>
+                <div class="card">
+                    <h3><span class="icon">🐙</span> GitHub Repository</h3>
+                    <a href="https://github.com/n1ur0/Xergon-Network" class="link">View on GitHub →</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>📚 Xergon Network Documentation | Last Updated: April 11, 2026</p>
+        <p>License: <a href="LICENSE" style="color: var(--primary);">MIT</a> | Docs: <a href="#" style="color: var(--primary);">CC BY 4.0</a></p>
+        <p style="margin-top: 1rem;">Built with ❤️ on the Ergo Blockchain</p>
+    </footer>
+
+    <script>
+        // Simple search functionality
+        document.getElementById('search').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            const links = document.querySelectorAll('.doc-list a');
+            
+            links.forEach(link => {
+                const text = link.textContent.toLowerCase();
+                const parent = link.parentElement;
+                
+                if (text.includes(query)) {
+                    parent.style.display = 'block';
+                } else {
+                    parent.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
