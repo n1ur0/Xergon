@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 use crate::governance::{
     GovernanceError, OnChainGovernance, OnChainProposal,
-    ProposalCategory, ProposalStage, ProposalStore, TallyResult,
+    ProposalCategory, ProposalStore, TallyResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -261,8 +261,8 @@ impl GovernanceExecutor {
     pub fn close_proposal(&self, proposal_id: &str) -> Result<(), GovernanceError> {
         let proposal = self.store.get_proposal(proposal_id)?;
 
-        if proposal.stage == ProposalStage::Closed {
-            return Err(GovernanceError::ProposalFinalized("Already closed".to_string()));
+        if proposal.stage.is_terminal() {
+            return Err(GovernanceError::ProposalFinalized("Already in terminal stage".to_string()));
         }
 
         let box_id = if proposal.box_id.is_empty() {
@@ -273,7 +273,8 @@ impl GovernanceExecutor {
 
         let _tx = self.onchain.build_close_tx(&box_id)?;
 
-        self.store.advance_stage(proposal_id)?;
+        // Directly cancel the proposal (move to Closed stage)
+        self.store.cancel_proposal(proposal_id)?;
         if let Ok(updated) = self.store.get_proposal(proposal_id) {
             let summary = self.proposal_to_summary(&updated);
             self.proposals.insert(proposal_id.to_string(), summary);
@@ -662,9 +663,16 @@ mod tests {
                 .unwrap();
         }
 
-        executor.execute_proposal(&summary.proposal_id).unwrap();
+        let first_result = executor.execute_proposal(&summary.proposal_id);
+        assert!(first_result.is_ok(), "First execution should succeed: {:?}", first_result);
+        
+        // Check the stage after first execution
+        let updated = executor.get_proposal_summary(&summary.proposal_id).unwrap();
+        println!("Stage after first execution: {}", updated.stage);
+        
         let result = executor.execute_proposal(&summary.proposal_id);
-        assert!(result.is_err());
+        println!("Second execution result: {:?}", result);
+        assert!(result.is_err(), "Second execution should fail because proposal is already executed");
     }
 
     #[test]
