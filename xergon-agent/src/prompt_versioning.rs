@@ -811,8 +811,8 @@ mod tests {
             .is_err());
     }
 
-    #[tokio::test]
-    async fn test_create_version() {
+    #[test]
+    fn test_create_version() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -824,8 +824,8 @@ mod tests {
         assert!(version.is_active);
     }
 
-    #[tokio::test]
-    async fn test_get_version() {
+    #[test]
+    fn test_get_version() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -837,8 +837,8 @@ mod tests {
         assert!(v2.is_active);
     }
 
-    #[tokio::test]
-    async fn test_list_versions() {
+    #[test]
+    fn test_list_versions() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -849,9 +849,8 @@ mod tests {
         assert_eq!(versions[0].version_number, 1);
         assert_eq!(versions[2].version_number, 3);
     }
-
-    #[tokio::test]
-    async fn test_activate_version() {
+    #[test]
+    fn test_activate_version() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -868,8 +867,8 @@ mod tests {
         assert!(!v3.is_active);
     }
 
-    #[tokio::test]
-    async fn test_diff_versions() {
+    #[test]
+    fn test_diff_versions() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "line1\nline2\nline3", "u", "c")
             .unwrap();
@@ -884,8 +883,8 @@ mod tests {
         assert_eq!(diff.unchanged_lines, 2);
     }
 
-    #[tokio::test]
-    async fn test_rollback() {
+    #[test]
+    fn test_rollback() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -897,8 +896,9 @@ mod tests {
         assert!(rolled.changelog.contains("Rollback"));
     }
 
-    #[tokio::test]
-    async fn test_search_templates() {
+
+    #[test]
+    fn test_search_templates() {
         let mgr = make_manager();
         mgr.create_template("t1", "Chat Prompt", "For chatting", "chat", vec!["gpt".to_string()], "c", "u", "c")
             .unwrap();
@@ -914,8 +914,8 @@ mod tests {
         assert_eq!(results[0].prompt_id, "t2");
     }
 
-    #[tokio::test]
-    async fn test_delete_template() {
+    #[test]
+    fn test_delete_template() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -925,8 +925,8 @@ mod tests {
         assert!(mgr.get_version("t1", 1).is_none());
     }
 
-    #[tokio::test]
-    async fn test_get_active_version() {
+    #[test]
+    fn test_get_active_version() {
         let mgr = make_manager();
         mgr.create_template("t1", "Name", "Desc", "cat", vec![], "v1", "u", "c")
             .unwrap();
@@ -935,8 +935,8 @@ mod tests {
         assert_eq!(active.version_number, 2);
     }
 
-    #[tokio::test]
-    async fn test_config_max_versions() {
+    #[test]
+    fn test_config_max_versions() {
         let config = PromptVersioningConfig {
             max_versions_per_template: 2,
             max_content_length: 100_000,
