@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Running Xergon Network Locally - Complete Setup Guide</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #10b981;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --gray: #64748b;
+            --border: #e2e8f0;
+            --code-bg: #1e293b;
+            --code-text: #e2e8f0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.7;
+            color: var(--dark);
+            background: var(--light);
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Header */
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 3rem 2rem;
+            text-align: center;
+            border-radius: 0 0 1rem 1rem;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        header .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            margin-bottom: 1.5rem;
+        }
+
+        .meta {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+            font-size: 0.9rem;
+        }
+
+        .meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Table of Contents */
+        .toc {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .toc h3 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        .toc ul {
+            list-style: none;
+        }
+
+        .toc li {
+            margin-bottom: 0.5rem;
+        }
+
+        .toc a {
+            color: var(--dark);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .toc a:hover {
+            color: var(--primary);
+        }
+
+        /* Content Sections */
+        section {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            color: var(--primary);
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border);
+        }
+
+        h3 {
+            color: var(--dark);
+            font-size: 1.4rem;
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        h4 {
+            color: var(--dark);
+            font-size: 1.2rem;
+            margin: 1.2rem 0 0.8rem 0;
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        ul, ol {
+            margin: 1rem 0 1rem 1.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Code Blocks */
+        pre {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        code {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9em;
+        }
+
+        p code, li code {
+            background: var(--border);
+            padding: 0.2rem 0.5rem;
+            border-radius: 0.25rem;
+            color: var(--primary-dark);
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            background: white;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) {
+            background: var(--light);
+        }
+
+        /* Callouts */
+        .callout {
+            padding: 1rem 1.5rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+            border-left: 4px solid;
+        }
+
+        .callout.success {
+            background: #d1fae5;
+            border-color: var(--secondary);
+            color: #065f46;
+        }
+
+        .callout.warning {
+            background: #fef3c7;
+            border-color: #f59e0b;
+            color: #92400e;
+        }
+
+        .callout.error {
+            background: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .callout.info {
+            background: #dbeafe;
+            border-color: var(--primary);
+            color: #1e40af;
+        }
+
+        /* Checkmarks and Icons */
+        .checklist {
+            list-style: none;
+            margin: 0;
+        }
+
+        .checklist li {
+            padding: 0.5rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .checklist li::before {
+            content: "✅";
+            font-size: 1.2rem;
+        }
+
+        /* Quick Start Box */
+        .quick-start {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 2rem;
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+        }
+
+        .quick-start h2 {
+            color: white;
+            border-bottom-color: rgba(255,255,255,0.3);
+        }
+
+        .quick-start pre {
+            background: rgba(0,0,0,0.3);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .quick-start p {
+            color: rgba(255,255,255,0.9);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            text-decoration: none;
+            border-radius: 0.5rem;
+            font-weight: 600;
+            transition: background 0.2s;
+            margin: 0.5rem 0.5rem 0.5rem 0;
+        }
+
+        .btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background: var(--dark);
+        }
+
+        .btn-secondary:hover {
+            background: #334155;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--gray);
+            font-size: 0.9rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 2rem;
+            }
+
+            section {
+                padding: 1.5rem;
+            }
+
+            pre {
+                padding: 1rem;
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .container {
+                max-width: 100%;
+                padding: 0;
+            }
+
+            section {
+                break-inside: avoid;
+            }
+
+            pre {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🚀 Running Xergon Network Locally</h1>
+        <div class="subtitle">A Complete Setup Guide for Development & Testing</div>
+        <div class="meta">
+            <span>📅 Last Updated: April 11, 2026</span>
+            <span>👤 Author: Xergon Team</span>
+            <span>📊 Difficulty: Intermediate</span>
+            <span>⏱️ Time: 30-45 minutes</span>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Table of Contents -->
+        <div class="toc">
+            <h3>📑 Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">🎯 Overview</a></li>
+                <li><a href="#prerequisites">📋 Prerequisites</a></li>
+                <li><a href="#setup">🚀 Step-by-Step Setup</a></li>
+                <li><a href="#verification">✅ Verification</a></li>
+                <li><a href="#troubleshooting">🐛 Troubleshooting</a></li>
+                <li><a href="#performance">📊 Performance Tuning</a></li>
+                <li><a href="#security">🔐 Security Best Practices</a></li>
+                <li><a href="#next-steps">📚 Next Steps</a></li>
+                <li><a href="#quick-start">✅ Quick Start (TL;DR)</a></li>
+            </ul>
+        </div>
+
+        <!-- Overview -->
+        <section id="overview">
+            <h2>🎯 Overview</h2>
+            <p>Xergon Network is a decentralized AI inference marketplace built on the Ergo blockchain. This guide will walk you through setting up the entire stack locally for development and testing.</p>
+
+            <h3>What You'll Build</h3>
+            <ul class="checklist">
+                <li><strong>xergon-relay</strong>: Rust backend API (Axum + Tokio)</li>
+                <li><strong>xergon-agent</strong>: Rust sidecar for Proof-of-Neural-Work (PoNW)</li>
+                <li><strong>xergon-marketplace</strong>: Next.js 15 frontend UI</li>
+                <li><strong>xergon-sdk</strong>: TypeScript SDK for integration</li>
+            </ul>
+
+            <div class="callout info">
+                <strong>Prerequisites:</strong> Linux (Ubuntu/Debian recommended), macOS, or Windows WSL2 | 8GB RAM minimum (16GB recommended) | 5GB free disk space | Stable internet connection
+            </div>
+        </section>
+
+        <!-- Prerequisites -->
+        <section id="prerequisites">
+            <h2>📋 Prerequisites Installation</h2>
+
+            <h3>1. Rust Toolchain</h3>
+            <pre><code># Install Rust (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Source the environment
+source $HOME/.cargo/env
+
+# Verify installation
+rustc --version  # Should be 1.70+
+cargo --version</code></pre>
+
+            <h3>2. Node.js & npm</h3>
+            <pre><code># Install Node.js 18+ (using nvm recommended)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+source $HOME/.bashrc
+nvm install --lts
+nvm use --lts
+
+# Verify installation
+node --version  # Should be 18+
+npm --version   # Should be 9+</code></pre>
+
+            <h3>3. Ergo Node (Optional but Recommended)</h3>
+            <div class="callout info">
+                <strong>Option A: Use Public Testnet Node</strong> (Easiest)<br>
+                Already configured: <code>http://192.168.1.75:9052</code><br>
+                Replace with your own testnet node URL if needed
+            </div>
+            <div class="callout info">
+                <strong>Option B: Run Local Ergo Node</strong> (Advanced)<br>
+                Follow Ergo node setup guide: https://docs.ergoplatform.com/node/full-node-setup/
+            </div>
+
+            <h3>4. Git</h3>
+            <pre><code># Verify installation
+git --version
+
+# Configure (if not already)
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"</code></pre>
+        </section>
+
+        <!-- Setup -->
+        <section id="setup">
+            <h2>🚀 Step-by-Step Setup</h2>
+
+            <h3>Step 1: Clone the Repository</h3>
+            <pre><code># Clone the Xergon Network repository
+git clone https://github.com/n1ur0/Xergon-Network.git
+cd Xergon-Network
+
+# Verify structure
+ls -la
+# Should show: xergon-relay/, xergon-agent/, xergon-marketplace/, xergon-sdk/</code></pre>
+
+            <h3>Step 2: Configure Environment Variables</h3>
+            <pre><code># Create environment file in project root
+cat > .env << EOF
+# Xergon Network Environment Variables
+
+# Ergo Node Configuration
+ERGO_NODE_API_KEY="hello"
+ERGO_NODE_REST_URL="http://192.168.1.75:9052"
+
+# Provider Identity
+XERGON_PROVIDER_ID="Xergon_Local_Test"
+XERGON_PROVIDER_NAME="Local Test Node"
+XERGON_REGION="local"
+
+# Development Mode
+XERGON_DEBUG=true
+EOF</code></pre>
+
+            <h4>Configure xergon-relay</h4>
+            <pre><code>cd xergon-relay
+
+# Copy example config
+cp config.toml.example config.toml
+
+# Edit config.toml
+nano config.toml</code></pre>
+
+            <div class="callout warning">
+                <strong>Update config.toml:</strong><br>
+                <pre><code>[server]
+host = "0.0.0.0"
+port = 9090
+
+[ergo_node]
+rest_url = "http://192.168.1.75:9052"
+api_key = "hello"
+
+[[providers]]
+id = "local-provider"
+name = "Local Test Provider"
+base_url = "http://localhost:8080"
+api_key = "test-api-key"</code></pre>
+            </div>
+
+            <h4>Configure xergon-marketplace</h4>
+            <pre><code>cd xergon-marketplace
+
+# Create environment file
+cat > .env.local << EOF
+NEXT_PUBLIC_ERGO_NODE_URL=http://192.168.1.75:9052
+NEXT_PUBLIC_RELAY_URL=http://localhost:9090
+NEXT_PUBLIC_PROVIDER_ID=Xergon_Local_Test
+EOF</code></pre>
+
+            <h3>Step 3: Install Dependencies</h3>
+            <pre><code># Rust components
+cd xergon-relay
+cargo build --release
+
+cd ../xergon-agent
+cargo build --release
+
+# Frontend
+cd ../xergon-marketplace
+npm install
+
+# SDK
+cd ../xergon-sdk
+npm install
+npm run build</code></pre>
+
+            <h3>Step 4: Start Services</h3>
+            <pre><code># Start xergon-relay
+cd xergon-relay
+cargo run --release
+
+# Start xergon-agent
+cd ../xergon-agent
+cargo run --release
+
+# Start xergon-marketplace
+cd ../xergon-marketplace
+npm run dev
+
+# Access at: http://localhost:3000</code></pre>
+        </section>
+
+        <!-- Verification -->
+        <section id="verification">
+            <h2>✅ Verification Checklist</h2>
+
+            <h3>1. Check Services Are Running</h3>
+            <pre><code># Check relay (port 9090)
+curl http://localhost:9090/info
+
+# Expected response:
+# {
+#   "name": "xergon-relay",
+#   "version": "1.0.0",
+#   "status": "running"
+# }
+
+# Check agent
+ps aux | grep xergon-agent
+
+# Check marketplace
+curl http://localhost:3000</code></pre>
+
+            <h3>2. Check Ergo Node Connectivity</h3>
+            <pre><code># Query Ergo node
+curl http://192.168.1.75:9052/info
+
+# Expected: Height > 100000, network: testnet</code></pre>
+
+            <h3>3. Verify Builds</h3>
+            <pre><code># Rust components
+cd xergon-relay && cargo build --release
+cd ../xergon-agent && cargo build --release
+
+# Frontend
+cd ../xergon-marketplace && npm run build
+
+# SDK
+cd ../xergon-sdk && npm run build</code></pre>
+
+            <h3>4. Run Tests</h3>
+            <pre><code># Rust tests
+cd xergon-relay && cargo test
+cd ../xergon-agent && cargo test
+
+# Frontend tests
+cd ../xergon-marketplace && npm test</code></pre>
+        </section>
+
+        <!-- Troubleshooting -->
+        <section id="troubleshooting">
+            <h2>🐛 Common Issues & Troubleshooting</h2>
+
+            <h3>Issue 1: "Cargo not found"</h3>
+            <div class="callout error">
+                <strong>Symptom:</strong> <code>command not found: cargo</code>
+            </div>
+            <pre><code>source $HOME/.cargo/env
+# Or add to ~/.bashrc
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc</code></pre>
+
+            <h3>Issue 2: "Port already in use"</h3>
+            <div class="callout error">
+                <strong>Symptom:</strong> <code>Error: Address already in use</code>
+            </div>
+            <pre><code># Find process using port 9090
+lsof -i :9090
+
+# Kill the process
+kill -9 <PID>
+
+# Or change port in config.toml</code></pre>
+
+            <h3>Issue 3: "Module not found" (Next.js)</h3>
+            <div class="callout error">
+                <strong>Symptom:</strong> <code>Module not found: Can't resolve '...'</code>
+            </div>
+            <pre><code># Clear cache and reinstall
+cd xergon-marketplace
+rm -rf node_modules .next
+npm install</code></pre>
+
+            <h3>Issue 4: Ergo Node Connection Failed</h3>
+            <div class="callout error">
+                <strong>Symptom:</strong> <code>Connection refused to Ergo node</code>
+            </div>
+            <pre><code># Check if Ergo node is running
+curl http://192.168.1.75:9052/info
+
+# If using public node, verify URL
+# If using local node, start it first</code></pre>
+
+            <h3>Issue 5: Permission Denied</h3>
+            <div class="callout error">
+                <strong>Symptom:</strong> <code>Permission denied: config.toml</code>
+            </div>
+            <pre><code># Fix permissions
+chmod 644 config.toml
+chmod 755 *.sh
+
+# Or run with sudo (not recommended)
+sudo cargo run --release</code></pre>
+        </section>
+
+        <!-- Performance -->
+        <section id="performance">
+            <h2>📊 Performance Tuning</h2>
+
+            <h3>Increase Rust Build Speed</h3>
+            <pre><code># Use parallel builds
+export CARGO_BUILD_JOBS=4
+
+# Use release profile
+cargo build --release</code></pre>
+
+            <h3>Optimize Node.js</h3>
+            <pre><code># Increase Node.js memory
+export NODE_OPTIONS="--max-old-space-size=4096"
+
+# Use npm cache
+npm cache clean --force</code></pre>
+
+            <h3>Database Optimization</h3>
+            <pre><code># In config.toml for xergon-relay
+[database]
+pool_size = 10
+max_connections = 50</code></pre>
+        </section>
+
+        <!-- Security -->
+        <section id="security">
+            <h2>🔐 Security Best Practices</h2>
+
+            <h3>1. Never Commit Secrets</h3>
+            <pre><code># Add to .gitignore
+.env
+config.toml
+*.key
+*.pem</code></pre>
+
+            <h3>2. Use Environment Variables</h3>
+            <pre><code># Never hardcode API keys
+export ERGO_NODE_API_KEY="your-key-here"</code></pre>
+
+            <h3>3. Production vs Development</h3>
+            <pre><code># Use different configs
+cp config.toml.example config.production.toml
+cp config.toml.example config.development.toml</code></pre>
+        </section>
+
+        <!-- Next Steps -->
+        <section id="next-steps">
+            <h2>📚 Next Steps</h2>
+
+            <h3>1. Explore the Codebase</h3>
+            <pre><code># Read documentation
+cat README.md
+cat IMPLEMENTATION-STATUS.md
+cat PRODUCTION-BEST-PRACTICES.md</code></pre>
+
+            <h3>2. Run Integration Tests</h3>
+            <pre><code># Test full workflow
+cd tests
+./run-integration-tests.sh</code></pre>
+
+            <h3>3. Monitor Logs</h3>
+            <pre><code># View relay logs
+tail -f xergon-relay/relay.log
+
+# View agent logs
+tail -f xergon-agent/agent.log</code></pre>
+
+            <h3>4. Join the Community</h3>
+            <ul>
+                <li><strong>GitHub:</strong> <a href="https://github.com/n1ur0/Xergon-Network">https://github.com/n1ur0/Xergon-Network</a></li>
+                <li><strong>Documentation:</strong> <code>docs/</code> directory</li>
+                <li><strong>Email:</strong> support@xergon.network</li>
+            </ul>
+        </section>
+
+        <!-- Quick Start -->
+        <section id="quick-start" class="quick-start">
+            <h2>✅ Quick Start (TL;DR)</h2>
+            <p>For those who just want to get started fast:</p>
+            <pre><code># 1. Clone
+git clone https://github.com/n1ur0/Xergon-Network.git
+cd Xergon-Network
+
+# 2. Setup
+cp .env.example .env
+cp xergon-relay/config.toml.example xergon-relay/config.toml
+cp xergon-agent/config.toml.example xergon-agent/config.toml
+
+# 3. Install
+cd xergon-relay && cargo build --release
+cd ../xergon-agent && cargo build --release
+cd ../xergon-marketplace && npm install
+
+# 4. Run
+cd xergon-relay && cargo run --release &
+cd ../xergon-agent && cargo run --release &
+cd ../xergon-marketplace && npm run dev
+
+# 5. Access
+open http://localhost:3000</code></pre>
+        </section>
+
+        <!-- Action Buttons -->
+        <div style="text-align: center; margin: 2rem 0;">
+            <a href="#overview" class="btn">📖 Read Full Guide</a>
+            <a href="https://github.com/n1ur0/Xergon-Network" class="btn btn-secondary">🔗 View on GitHub</a>
+            <a href="mailto:support@xergon.network" class="btn btn-secondary">📧 Get Help</a>
+        </div>
+
+        <!-- Changelog -->
+        <section>
+            <h2>📝 Changelog</h2>
+            <ul>
+                <li><strong>2026-04-11:</strong> Initial guide published</li>
+                <li><strong>2026-04-11:</strong> Updated Ergo node URL to testnet</li>
+                <li><strong>2026-04-11:</strong> Added troubleshooting section</li>
+            </ul>
+        </section>
+    </div>
+
+    <footer>
+        <p>🚀 <strong>Happy Coding!</strong></p>
+        <p>If you encounter issues, check the <a href="#troubleshooting">Troubleshooting</a> section or open a GitHub issue.</p>
+        <p style="margin-top: 1rem; color: var(--gray);">© 2026 Xergon Team | Built with ❤️ on the Ergo Blockchain</p>
+    </footer>
+</body>
+</html>
