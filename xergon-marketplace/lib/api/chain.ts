@@ -115,7 +115,7 @@ async function safeFetch<T>(
 /** Fetch list of active providers from the relay. */
 export async function fetchProviders(): Promise<ProviderInfo[]> {
   const data = await safeFetch<ProvidersResponse>(
-    `${sdk.getBaseUrl()}/providers`,
+    `${sdk.getBaseUrl()}/v1/providers`,
     { providers: [] },
     "fetchProviders",
   );
@@ -125,7 +125,7 @@ export async function fetchProviders(): Promise<ProviderInfo[]> {
 /** Fetch available models from the relay. */
 export async function fetchModels(): Promise<ChainModelInfo[]> {
   return safeFetch<ChainModelInfo[]>(
-    `${sdk.getBaseUrl()}/models`,
+    `${sdk.getBaseUrl()}/v1/models`,
     [],
     "fetchModels",
   );
@@ -137,7 +137,7 @@ export async function fetchBalance(
 ): Promise<BalanceResponse | null> {
   if (!userPk) return null;
   return safeFetch<BalanceResponse | null>(
-    `${sdk.getBaseUrl()}/balance/${encodeURIComponent(userPk)}`,
+    `${sdk.getBaseUrl()}/v1/balance/${encodeURIComponent(userPk)}`,
     null,
     "fetchBalance",
   );
@@ -146,7 +146,7 @@ export async function fetchBalance(
 /** Fetch provider leaderboard from the relay. */
 export async function fetchLeaderboard(): Promise<ChainLeaderboardEntry[]> {
   return safeFetch<ChainLeaderboardEntry[]>(
-    `${sdk.getBaseUrl()}/leaderboard`,
+    `${sdk.getBaseUrl()}/v1/leaderboard`,
     [],
     "fetchLeaderboard",
   );
@@ -155,7 +155,7 @@ export async function fetchLeaderboard(): Promise<ChainLeaderboardEntry[]> {
 /** Fetch relay health / node status. */
 export async function fetchNodeStatus(): Promise<HealthResponse | null> {
   return safeFetch<HealthResponse | null>(
-    `${sdk.getBaseUrl()}/health`,
+    `${sdk.getBaseUrl()}/v1/health`,
     null,
     "fetchNodeStatus",
   );

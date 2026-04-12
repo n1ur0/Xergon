@@ -131,7 +131,7 @@ export function useWidgetChat({
           Accept: "text/event-stream",
         };
         if (publicKey) {
-          headers["X-Wallet-PK"] = publicKey;
+          headers["x-user-pk"] = publicKey;
         }
 
         const res = await fetch(`${apiBase}/chat/completions`, {

@@ -599,7 +599,7 @@ async fn count_gguf_files(path: &Path) -> Result<usize> {
 /// Get available disk space for the filesystem containing the given path.
 #[cfg(target_os = "linux")]
 async fn available_disk_space(path: &Path) -> Result<u64> {
-    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
     let path_cstr = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap_or_default();
     let mut statvfs: libc::statvfs = unsafe { std::mem::zeroed() };
 

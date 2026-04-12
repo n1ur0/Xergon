@@ -94,12 +94,12 @@ export function ModelComparison({ models }: ModelComparisonProps) {
       (async () => {
         const walletPk = getWalletPk();
         try {
-          const res = await fetch(`${API_BASE}/chat/completions`, {
+          const res = await fetch(`${API_BASE}/v1/chat/completions`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Accept: "text/event-stream",
-              ...(walletPk ? { "X-Wallet-PK": walletPk } : {}),
+              ...(walletPk ? { "x-user-pk": walletPk } : {}),
             },
             body: JSON.stringify({
               model,

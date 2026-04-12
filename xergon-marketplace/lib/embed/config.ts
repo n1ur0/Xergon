@@ -15,7 +15,7 @@ export interface WidgetConfig {
   position?: "bottom-right" | "bottom-left";
   /** Title shown in the chat header */
   title?: string;
-  /** Public key for X-Wallet-PK auth */
+  /** Public key for x-user-pk auth */
   publicKey?: string;
 }
 

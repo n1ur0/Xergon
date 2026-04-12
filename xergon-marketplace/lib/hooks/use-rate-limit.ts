@@ -128,10 +128,10 @@ export function useRateLimit() {
   const pollHeaders = useCallback(async () => {
     try {
       const walletPk = getWalletPk();
-      const res = await fetch(`${API_BASE}/models`, {
+      const res = await fetch(`${API_BASE}/v1/models`, {
         method: "HEAD",
         headers: {
-          ...(walletPk ? { "X-Wallet-PK": walletPk } : {}),
+          ...(walletPk ? { "x-user-pk": walletPk } : {}),
         },
       });
       const info = parseRateLimitHeaders(res.headers);
