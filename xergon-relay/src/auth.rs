@@ -1,6 +1,8 @@
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::error::Error;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -19,6 +21,7 @@ fn const_time_eq(a: &str, b: &str) -> bool {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ApiKey {
     pub key: String,
     pub secret: String,
@@ -27,6 +30,7 @@ pub struct ApiKey {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum ApiTier {
     Free,
     Premium,
@@ -52,6 +56,7 @@ impl ApiKey {
 
 pub struct AuthManager {
     api_keys: std::collections::HashMap<String, ApiKey>,
+    circuit_breaker: Arc<AtomicBool>, // true = open (fail-closed), false = closed (normal)
 }
 
 impl AuthManager {
@@ -80,7 +85,24 @@ impl AuthManager {
             );
         }
 
-        Self { api_keys }
+        Self { 
+            api_keys,
+            circuit_breaker: Arc::new(AtomicBool::new(false)), // Start closed (normal operation)
+        }
+    }
+
+    // Circuit breaker methods
+    pub fn is_circuit_open(&self) -> bool {
+        self.circuit_breaker.load(Ordering::SeqCst)
+    }
+
+    pub fn open_circuit(&self) {
+        self.circuit_breaker.store(true, Ordering::SeqCst);
+    }
+
+    #[allow(dead_code)]
+    pub fn close_circuit(&self) {
+        self.circuit_breaker.store(false, Ordering::SeqCst);
     }
 
     pub fn verify_signature(
@@ -89,6 +111,11 @@ impl AuthManager {
         payload: &str,
         signature: &str,
     ) -> Result<bool, Box<dyn Error>> {
+        // Check circuit breaker FIRST - if open, fail-closed (reject all requests)
+        if self.is_circuit_open() {
+            return Err("Authentication system unavailable - circuit breaker open".into());
+        }
+
         // Get the API key
         let key = self.api_keys.get(api_key).ok_or("Invalid API key")?;
 
@@ -107,6 +134,7 @@ impl AuthManager {
         self.api_keys.get(key)
     }
 
+    #[allow(dead_code)]
     pub fn add_api_key(&mut self, api_key: ApiKey) {
         self.api_keys.insert(api_key.key.clone(), api_key);
     }
@@ -151,6 +179,7 @@ impl RateLimiter {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_remaining(&self, api_key: &str, limit: usize) -> usize {
         let now = Instant::now();
         if let Some(requests) = self.requests.get(api_key) {

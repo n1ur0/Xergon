@@ -33,6 +33,7 @@ pub struct ProviderStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct UsageProof {
     pub provider_id: String,
     pub tokens_input: u32,
@@ -43,12 +44,14 @@ pub struct UsageProof {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct SettlementRequest {
     pub proofs: Vec<UsageProof>,
     pub provider_signature: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct SettlementResponse {
     pub success: bool,
     pub transaction_id: Option<String>,
@@ -56,6 +59,7 @@ pub struct SettlementResponse {
     pub batch_size: usize,
 }
 
+#[allow(dead_code)]
 pub fn get_current_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -63,10 +67,12 @@ pub fn get_current_timestamp() -> u64 {
         .as_secs()
 }
 
+#[allow(dead_code)]
 pub fn calculate_heartbeat_timeout() -> Duration {
     Duration::from_secs(300) // 5 minutes
 }
 
+#[allow(dead_code)]
 pub fn is_heartbeat_stale(last_seen: u64, timeout_secs: u64) -> bool {
     let now = get_current_timestamp();
     now - last_seen > timeout_secs

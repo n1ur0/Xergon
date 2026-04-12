@@ -14,6 +14,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct ProviderConfig {
     pub id: String,
     pub name: String,

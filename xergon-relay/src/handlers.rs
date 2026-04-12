@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{State},
     http::{HeaderMap, StatusCode},
     response::Json,
     routing::{get, post},
@@ -14,10 +14,11 @@ use crate::config::Config;
 use crate::heartbeat::{HeartbeatRequest, HeartbeatResponse, ProviderStatus};
 use crate::provider::{build_providers, ProviderMap};
 use crate::registration::{ProviderRegistry, ProviderRegistration};
-use crate::settlement::{SettlementManager, UserBalance};
-use crate::types::{ChatCompletionRequest, ChatCompletionResponse, SettlementRequest, SettlementResponse, UsageProof};
+use crate::settlement::SettlementManager;
+use crate::types::{ChatCompletionRequest, ChatCompletionResponse, SettlementRequest, SettlementResponse};
 
 pub struct AppState {
+    #[allow(dead_code)]
     pub config: Config,
     pub providers: ProviderMap,
     pub registry: Arc<RwLock<ProviderRegistry>>,
@@ -32,13 +33,7 @@ pub fn create_router(config: Config) -> Router {
     let auth_manager = Arc::new(AuthManager::new());
     let rate_limiter = Arc::new(RwLock::new(RateLimiter::new(60))); // 60 second window
     let db_path = std::env::var("SETTLEMENT_DB_PATH").unwrap_or_else(|_| "data/settlement.db".to_string());
-    let settlement = match SettlementManager::new(&db_path) {
-        Ok(manager) => Arc::new(RwLock::new(manager)),
-        Err(e) => {
-            tracing::error!("Failed to initialize settlement manager: {}", e);
-            panic!("Failed to initialize settlement manager");
-        }
-    };
+    let settlement = Arc::new(RwLock::new(SettlementManager::new(&db_path).expect("Failed to initialize settlement manager")));
 
     let state = Arc::new(AppState {
         config,
@@ -96,12 +91,7 @@ async fn heartbeat(
         return Err((StatusCode::NOT_FOUND, "Provider not found. Please register first.".to_string()));
     }
 
-    let provider = registry
-        .get_provider(&req.provider_id)
-        .ok_or_else(|| {
-            tracing::error!("Provider not found: {}", req.provider_id);
-            (StatusCode::NOT_FOUND, "Provider not found. Please register first.".to_string())
-        })?;
+    let provider = registry.get_provider(&req.provider_id).unwrap();
     
     Ok(Json(HeartbeatResponse {
         status: "ok".to_string(),
@@ -147,17 +137,46 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(request): Json<ChatCompletionRequest>,
 ) -> Result<Json<ChatCompletionResponse>, (StatusCode, String)> {
-    // Check rate limit - require API key, no default
+    // Extract API key
     let api_key = headers
         .get("X-API-Key")
         .and_then(|v| v.to_str().ok())
         .ok_or((StatusCode::UNAUTHORIZED, "Missing API key".to_string()))?;
 
-    let mut rate_limiter = state.rate_limiter.write().await;
+    // Extract signature for verification
+    let signature = headers
+        .get("X-Signature")
+        .and_then(|v| v.to_str().ok())
+        .ok_or((StatusCode::UNAUTHORIZED, "Missing signature".to_string()))?;
+
+    // Verify signature BEFORE processing request
+    let payload = serde_json::to_string(&request)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize request: {}", e)))?;
+    
+    let auth_manager = &state.auth_manager;
+    match auth_manager.verify_signature(api_key, &payload, signature) {
+        Ok(true) => {}, // Signature valid, proceed
+        Ok(false) => {
+            // Open circuit breaker on repeated failures (fail-closed behavior)
+            auth_manager.open_circuit();
+            return Err((StatusCode::FORBIDDEN, "Invalid signature".to_string()));
+        },
+        Err(e) => {
+            // Check if it's a circuit breaker issue
+            if auth_manager.is_circuit_open() {
+                return Err((StatusCode::SERVICE_UNAVAILABLE, "Authentication system temporarily unavailable".to_string()));
+            }
+            return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Signature verification failed: {}", e)));
+        },
+    }
+
+    // Get API key object
     let api_key_obj = state.auth_manager.get_api_key(api_key).ok_or_else(|| {
         (StatusCode::UNAUTHORIZED, "Invalid API key".to_string())
     })?;
 
+    // Check rate limit
+    let mut rate_limiter = state.rate_limiter.write().await;
     if !rate_limiter.check_limit(api_key, api_key_obj.rate_limit) {
         return Err((StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string()));
     }
@@ -174,13 +193,7 @@ async fn chat_completions(
         }
     };
 
-    let provider = state
-        .providers
-        .get(&provider_id)
-        .ok_or_else(|| {
-            tracing::error!("Provider not found: {}", provider_id);
-            (StatusCode::SERVICE_UNAVAILABLE, "No providers available".to_string())
-        })?;
+    let provider = state.providers.get(&provider_id).unwrap();
 
     match provider.chat_completions(request).await {
         Ok(response) => {
@@ -243,7 +256,7 @@ async fn submit_settlement_batch(
         }
     }
 
-    let mut settlement = state.settlement.write().await;
+    let settlement = state.settlement.write().await;
     
     // Process each proof
     let mut processed_count = 0;
