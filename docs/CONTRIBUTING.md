@@ -1,30 +1,18 @@
-# Contributing Guide
+# Contributing to Xergon
 
-> **Documentation Placeholder**
+## How to Contribute
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `cargo test && npm test`
+5. Submit a PR
 
-This document is under construction. Please check back later for updates.
+## Code Style
+- Rust: `cargo fmt && cargo clippy`
+- TypeScript: `npm run lint`
 
-## 📝 Status
-
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
-
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Contributing Guide
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Pull Request Process
+1. Ensure all tests pass
+2. Update documentation
+3. Add tests for new features
+4. Request review from maintainers

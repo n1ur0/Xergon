@@ -1,30 +1,39 @@
-# API Reference
+# Xergon API Reference
 
-> **Documentation Placeholder**
+## Base URL
+```
+https://relay.xergon.network
+```
 
-This document is under construction. Please check back later for updates.
+## Authentication
+All endpoints require `X-API-Key` header.
 
-## 📝 Status
+## Endpoints
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+### POST /v1/chat/completions
+Inference request endpoint.
 
-## 🎯 Purpose
+**Request:**
+```json
+{
+  "model": "qwen-3.5-122b",
+  "messages": [{"role": "user", "content": "Hello"}]
+}
+```
 
-This document will cover:
-- [ ] Detailed explanation of API Reference
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
+**Response:**
+```json
+{
+  "id": "chat-123",
+  "choices": [{"message": {"content": "Hi!"}}]
+}
+```
 
-## 🔗 Related Documents
+### GET /providers
+List available providers.
 
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
+### POST /register
+Register as a provider.
 
----
-
-*This is a placeholder. Content will be added soon.*
+### POST /heartbeat
+Provider health check.

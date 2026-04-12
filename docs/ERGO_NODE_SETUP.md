@@ -1,30 +1,46 @@
-# Ergo Node Setup
+# Ergo Node Setup Guide
 
-> **Documentation Placeholder**
+## Prerequisites
+- Ubuntu 20.04+ or Debian 10+
+- 8GB+ RAM
+- 100GB+ SSD storage
+- Stable internet connection
 
-This document is under construction. Please check back later for updates.
+## Installation Steps
 
-## 📝 Status
+### 1. Install Dependencies
+```bash
+sudo apt update
+sudo apt install -y openjdk-11-jre curl
+```
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+### 2. Download Ergo Node
+```bash
+curl -L https://github.com/ergoplatform/ergo/releases/download/v6.0.3/ergo.jar -o ergo.jar
+```
 
-## 🎯 Purpose
+### 3. Configuration
+Create `ergo.conf`:
+```hocon
+ergo {
+  node {
+    mining = true
+    stateType = "Digest32"
+  }
+  network {
+    bind = "0.0.0.0:9030"
+  }
+}
+```
 
-This document will cover:
-- [ ] Detailed explanation of Ergo Node Setup
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
+### 4. Run Node
+```bash
+java -jar ergo.jar --config ergo.conf
+```
 
-## 🔗 Related Documents
+## Testnet Configuration
+Use `--network testnet` flag for testnet operation.
 
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Monitoring
+- Health endpoint: `http://localhost:9052/info`
+- Explorer: `http://localhost:9052`

@@ -1,30 +1,24 @@
-# Proof-of-Neural-Work
+# Proof of Work (PoNW) - Xergon Network
 
-> **Documentation Placeholder**
+## Overview
+Proof of Work (PoNW) is Xergon's consensus mechanism for validating AI inference providers.
 
-This document is under construction. Please check back later for updates.
+## How It Works
+1. **Provider Registration**: Providers register their GPU capacity on-chain
+2. **Inference Requests**: Users submit inference requests with ERG payment
+3. **Proof Generation**: Providers generate cryptographic proof of completed work
+4. **Verification**: Network verifies proofs and distributes rewards
 
-## 📝 Status
+## Scoring Mechanism
+- **Base Score**: Based on GPU capacity and uptime
+- **Performance Bonus**: Faster inference times = higher scores
+- **Reliability Factor**: Uptime and successful completions
+- **Penalty System**: Failed verifications reduce score
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+## Implementation
+See `xergon-agent/src/pown.rs` for the scoring algorithm.
 
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Proof-of-Neural-Work
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Security
+- All proofs are cryptographically verified
+- No double-spending possible
+- Sybil attack resistant via bond requirements

@@ -1,30 +1,19 @@
-# Rate Limiting
+# Rate Limiting Implementation
 
-> **Documentation Placeholder**
+## Overview
+Xergon implements tiered rate limiting to prevent DoS attacks and ensure fair resource usage.
 
-This document is under construction. Please check back later for updates.
+## Tiers
+1. **Free Tier**: 100 requests/minute
+2. **Premium Tier**: 1,000 requests/minute
+3. **Enterprise Tier**: 10,000 requests/minute
 
-## 📝 Status
+## Implementation
+- Per-API-key tracking
+- Sliding window algorithm
+- Persistent state in settlement DB
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
-
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Rate Limiting
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Future Improvements
+- [ ] Per-IP rate limiting
+- [ ] Distributed rate limiting across nodes
+- [ ] Dynamic rate adjustment based on load

@@ -1,30 +1,23 @@
-# Transaction Building
+# Transaction Builder
 
-> **Documentation Placeholder**
+## Overview
+Xergon's transaction builder constructs Ergo transactions for:
+- Provider registration
+- Inference requests
+- Settlement payments
 
-This document is under construction. Please check back later for updates.
+## Usage
+```rust
+use xergon_sdk::transaction_builder::TransactionBuilder;
 
-## 📝 Status
+let builder = TransactionBuilder::new();
+let tx = builder
+    .add_registration_box(provider_id, gpu_capacity, bond)
+    .add_fee(0.1) // ERG
+    .build()?;
+```
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
-
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Transaction Building
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Features
+- Automatic fee calculation
+- Box selection optimization
+- ErgoTree compilation

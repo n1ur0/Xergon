@@ -1,30 +1,18 @@
 # Code Style Guide
 
-> **Documentation Placeholder**
+## Rust
+- Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+- Use `cargo fmt` for formatting
+- Run `cargo clippy` before committing
+- Prefer `Result` over `unwrap`
 
-This document is under construction. Please check back later for updates.
+## TypeScript
+- Use TypeScript strict mode
+- Follow ESLint rules
+- Use Prettier for formatting
+- Write JSDoc comments
 
-## 📝 Status
-
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
-
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Code Style Guide
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## General
+- Write descriptive commit messages
+- Add tests for new features
+- Update documentation

@@ -1,30 +1,28 @@
-# Smart Contracts Guide
+# Smart Contracts
 
-> **Documentation Placeholder**
+## Overview
+Xergon uses ErgoScript smart contracts for:
+- Provider registration
+- Inference requests
+- Settlement logic
 
-This document is under construction. Please check back later for updates.
+## Key Contracts
 
-## 📝 Status
+### Provider Contract
+```ergo
+{
+  val pk = INPUTS(0).R4[GroupElement]
+  pk == OUTPUTS(0).id
+}
+```
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+### Inference Contract
+```ergo
+{
+  val proof = OUTPUTS(0).R4[GroupElement]
+  verifyProof(proof)
+}
+```
 
-## 🎯 Purpose
-
-This document will cover:
-- [ ] Detailed explanation of Smart Contracts Guide
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Testing
+All contracts tested in `contracts/tests/`.

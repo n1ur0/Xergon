@@ -1,30 +1,36 @@
-# Threat Model
+# Xergon Network Threat Model
 
-> **Documentation Placeholder**
+## Assets to Protect
+1. User ERG balances
+2. Provider GPU resources
+3. Inference request privacy
+4. Network consensus integrity
 
-This document is under construction. Please check back later for updates.
+## Threats
 
-## 📝 Status
+### High Priority
+1. **Double Spending**: Attacker tries to spend same ERG twice
+   - Mitigation: On-chain verification, UTXO model
+   
+2. **Sybil Attacks**: Fake providers flooding network
+   - Mitigation: Bond requirements, PoNW scoring
+   
+3. **DoS Attacks**: Overwhelming providers
+   - Mitigation: Rate limiting, rate tiers
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+### Medium Priority
+1. **Man-in-the-Middle**: Intercepting requests
+   - Mitigation: TLS/HTTPS enforcement
+   
+2. **Replay Attacks**: Resubmitting old requests
+   - Mitigation: Nonce-based request deduplication
 
-## 🎯 Purpose
+### Low Priority
+1. **Eclipse Attacks**: Isolating nodes
+   - Mitigation: Peer diversity requirements
 
-This document will cover:
-- [ ] Detailed explanation of Threat Model
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
-
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Current Status
+- ✅ Rate limiting implemented
+- ⚠️ TLS/HTTPS pending
+- ✅ UTXO model prevents double-spending
+- ⚠️ PoNW scoring needs refinement

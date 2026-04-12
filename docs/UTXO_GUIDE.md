@@ -1,30 +1,26 @@
-# UTXO Management
+# UTXO Guide for Xergon
 
-> **Documentation Placeholder**
+## What is UTXO?
+Unspent Transaction Output (UTXO) is the transaction model used by Ergo and Xergon.
 
-This document is under construction. Please check back later for updates.
+## Key Concepts
+1. **Boxes**: UTXOs on Ergo blockchain
+2. **Spending Conditions**: ErgoTree scripts
+3. **Tokens**: Custom assets on Ergo
 
-## 📝 Status
+## Xergon UTXOs
 
-- **Status**: 🚧 In Progress
-- **Last Updated**: Not yet
-- **Author**: Xergon Team
+### Provider Registration Box
+- Contains: Provider ID, GPU capacity, bond
+- Spending: Provider can update or withdraw
 
-## 🎯 Purpose
+### Inference Request Box
+- Contains: Request details, payment amount
+- Spending: Provider can claim after completion
 
-This document will cover:
-- [ ] Detailed explanation of UTXO Management
-- [ ] Step-by-step instructions
-- [ ] Examples and use cases
-- [ ] Best practices
-- [ ] Troubleshooting tips
+### Settlement Box
+- Contains: Completed proofs, rewards
+- Spending: Provider can withdraw rewards
 
-## 🔗 Related Documents
-
-- [Index](./INDEX.md)
-- [Introduction](./INTRODUCTION.md)
-- [Quick Start](./QUICK-START.md)
-
----
-
-*This is a placeholder. Content will be added soon.*
+## Implementation
+See `xergon-relay/src/utxo_builder.rs` for box construction.
