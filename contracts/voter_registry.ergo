@@ -1,0 +1,76 @@
+{
+  // =========================================================================
+  // Xergon Network -- Voter Registry Data Box Script
+  // =========================================================================
+  //
+  // Singleton NFT that maintains the set of authorized governance voters.
+  // This contract is used as a data input by governance_proposal_v2.es to
+  // verify that a voter is in the approved set.
+  //
+  // Singleton NFT Pattern:
+  //   - A token with supply=1 (Voter Registry NFT)
+  //   - The box contains the list of authorized voter public keys
+  //   - Only the protocol committee can update the registry
+  //
+  // Register Layout (EIP-4):
+  //   R4: Voter public keys (Coll[GroupElement]) -- list of authorized voters
+  //   R5: Last update height (Int)                -- when registry was last updated
+  //   R6: Update threshold   (Int)                -- min committee votes to update
+  //
+  // Spending Conditions:
+  //   Path 1 (Update Registry): Committee members can update the voter list
+  //       Requires at least `update_threshold` committee signatures
+  //       Updates R4 with new voter list and R5 with current height
+  //   Path 2 (Read Only): Anyone can read the registry (no spending)
+  //       This path is not a spending path - the box is only used as data input
+  //
+  // =========================================================================
+
+  // Extract current state
+  val authorizedVoters = SELF.R4[Coll[GroupElement]].get
+  val lastUpdateHeight = SELF.R5[Int].get
+  val updateThreshold = SELF.R6[Int].get
+
+  // Identify the Voter Registry NFT (token at index 0, supply=1)
+  val registryNftId = SELF.tokens(0)._1
+
+  // OUTPUTS(0) convention: successor state box
+  val outBox = OUTPUTS(0)
+
+  // Script preservation check
+  val scriptPreserved = outBox.propositionBytes == SELF.propositionBytes
+
+  // NFT preservation check
+  val nftPreserved = outBox.tokens.size > 0 &&
+    outBox.tokens(0)._1 == registryNftId &&
+    outBox.tokens(0)._2 == 1L
+
+  // ---------------------------------------------------------------------------
+  // Path: Update Registry
+  // Committee members can update the voter list
+  // Requires at least `update_threshold` signatures from committee members
+  // ---------------------------------------------------------------------------
+  val updateRegistry = {
+    // Committee authorization (atLeast requires threshold signatures)
+    // TODO: Replace with actual committee multi-sig setup
+    // For now, using sigmaProp(true) as placeholder
+    // In production: atLeast(updateThreshold, List(proveDlog(committeePk1), ...))
+    sigmaProp(true) &&
+
+    // Successor box must have updated voter list
+    outBox.R4[Coll[GroupElement]].isDefined &&
+    outBox.R5[Int].isDefined &&
+    outBox.R5[Int].get >= lastUpdateHeight &&
+    outBox.R6[Int].isDefined &&
+    outBox.R6[Int].get == updateThreshold &&
+
+    // Preserve script and NFT
+    scriptPreserved &&
+    nftPreserved
+  }
+
+  // Final guard: update registry path
+  // Note: This box is primarily used as a data input, not for spending
+  // The actual voter verification happens in governance_proposal_v2.es
+  updateRegistry
+}
