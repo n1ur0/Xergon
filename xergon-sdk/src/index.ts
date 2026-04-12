@@ -666,6 +666,12 @@ export type {
 
 // ── Debug Diagnostics ─────────────────────────────────────────
 
+// Note: Debug module uses Node.js APIs (http, https, fs, os)
+// and is only available in Node.js environments. Browser imports
+// of these exports will fail at runtime, not build time.
+// For browser-compatible diagnostics, use the SDK's built-in
+// network health checks via XergonClient.health.check()
+
 export {
   runDiagnostics,
   runDiagnostic,
