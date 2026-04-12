@@ -136,11 +136,11 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(request): Json<ChatCompletionRequest>,
 ) -> Result<Json<ChatCompletionResponse>, (StatusCode, String)> {
-    // Check rate limit
+    // Check rate limit - require API key, no default
     let api_key = headers
         .get("X-API-Key")
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("xergon-test-key-1"); // Default for testing
+        .ok_or((StatusCode::UNAUTHORIZED, "Missing API key".to_string()))?;
 
     let mut rate_limiter = state.rate_limiter.write().await;
     let api_key_obj = state.auth_manager.get_api_key(api_key).ok_or_else(|| {

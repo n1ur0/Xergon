@@ -4,6 +4,20 @@ use std::error::Error;
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// Constant-time string comparison to prevent timing attacks
+fn const_time_eq(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    let mut result = 0u8;
+    for (x, y) in a_bytes.iter().zip(b_bytes.iter()) {
+        result |= x.wrapping_sub(*y);
+    }
+    result == 0
+}
+
 #[derive(Debug, Clone)]
 pub struct ApiKey {
     pub key: String,
@@ -82,8 +96,8 @@ impl AuthManager {
         let result = mac.finalize();
         let computed_signature = hex::encode(result.into_bytes());
 
-        // Constant-time comparison
-        Ok(computed_signature == signature)
+        // Constant-time comparison to prevent timing attacks
+        Ok(const_time_eq(&computed_signature, signature))
     }
 
     pub fn get_api_key(&self, key: &str) -> Option<&ApiKey> {

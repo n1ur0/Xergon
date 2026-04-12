@@ -38,7 +38,7 @@ interface AuthState {
 }
 
 const WALLET_TYPE_KEY = "xergon_wallet_type";
-const AUTH_COOKIE = "xergon-auth-token";
+const AUTH_COOKIE = "xergon_auth";
 
 /** Cookie helpers (client-side only) */
 function setAuthCookie(publicKey: string, walletType: WalletType) {
