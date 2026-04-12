@@ -46,7 +46,7 @@
 
   // Treasury public key -- REPLACE WITH ACTUAL TREASURY ADDRESS BEFORE DEPLOYMENT
   // >>> DEPLOYMENT WILL FAIL WITH PLACEHOLDER -- MUST SET REAL ADDRESS <<<
-  val treasuryPk = PK("TREASURY_ADDRESS_HERE")
+  val treasuryPk = PK("3WzAsN3gvwuQNyKG8cSKvTEvyU6pvDqJGx87BYqF7EWmpxntgrc1")
 
   // Slash penalty: 20% of staked ERG goes to treasury when slashed
   val slashPenaltyRate = 20

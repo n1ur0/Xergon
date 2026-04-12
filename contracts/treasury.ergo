@@ -57,7 +57,7 @@
   // Deployer public key.
   // Set via DEPLOYER_ADDRESS env var (automated deploy) or replace manually.
   // >>> DEPLOYMENT WILL FAIL WITH PLACEHOLDER — MUST SET REAL ADDRESS <<<
-  val deployerPk = PK("DEPLOYER_ADDRESS_HERE")
+  val deployerPk = PK("3Wvjqkyee4VDXqSVAsx29ohaomS8HgUabvZ8yoasVaQQwsYBThqj")
 
   // Identify the Xergon Network NFT (token at index 0)
   val nftId = SELF.tokens(0)._1
