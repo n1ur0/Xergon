@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 use crate::governance::{
     GovernanceError, OnChainGovernance, OnChainProposal,
-    ProposalCategory, ProposalStore, TallyResult,
+    ProposalCategory, ProposalStage, ProposalStore, TallyResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -212,9 +212,10 @@ impl GovernanceExecutor {
     pub fn execute_proposal(&self, proposal_id: &str) -> Result<ExecutionReceipt, GovernanceError> {
         let proposal = self.store.get_proposal(proposal_id)?;
 
-        if proposal.stage.is_terminal() {
+        // Can only execute proposals in Voting stage that have passed
+        if proposal.stage != ProposalStage::Voting {
             return Err(GovernanceError::ProposalFinalized(format!(
-                "Proposal {} is already in stage {:?}",
+                "Proposal {} is in stage {:?}, must be in Voting stage to execute",
                 proposal_id, proposal.stage
             )));
         }
@@ -236,6 +237,7 @@ impl GovernanceExecutor {
 
         let tx_result = self.onchain.build_execute_tx(&box_id, vec![])?;
 
+        // Advance stage to Executed
         self.store.advance_stage(proposal_id)?;
 
         let elapsed = start.elapsed().as_millis() as u64;
@@ -640,6 +642,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let receipt = executor.execute_proposal(&summary.proposal_id).unwrap();
         assert_eq!(receipt.result, "success");
         assert!(receipt.tx_id.starts_with("tx_exec"));
@@ -663,6 +668,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let first_result = executor.execute_proposal(&summary.proposal_id);
         assert!(first_result.is_ok(), "First execution should succeed: {:?}", first_result);
         
@@ -805,6 +813,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let vote_end = summary.expires_at + 100;
         executor.set_height(vote_end);
 
