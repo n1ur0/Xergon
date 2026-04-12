@@ -238,7 +238,10 @@ impl ProofVerifier {
         // Validate proof type is enabled
         let cfg = self.config.read().unwrap();
         let type_str = serde_json::to_string(&proof.proof_type).unwrap_or_default();
-        if !cfg.proof_types_enabled.contains(&type_str) {
+        // serde_json::to_string returns JSON string with quotes, e.g., "\"compute\""
+        // We need to strip the quotes to match the config vector
+        let type_str_clean = type_str.trim_matches('"').to_string();
+        if !cfg.proof_types_enabled.contains(&type_str_clean) {
             return Err(format!("Proof type not enabled: {}", type_str));
         }
         drop(cfg);
@@ -999,13 +1002,13 @@ mod tests {
     #[test]
     fn test_concurrent_proof_submission() {
         use std::thread;
+        use std::sync::Arc;
 
-        let verifier = ProofVerifier::with_config(ProofConfig { auto_verify: false, ..Default::default() });
+        let verifier = Arc::new(ProofVerifier::new());
         let handles: Vec<_> = (0..10)
             .map(|i| {
-                let v = &verifier as *const ProofVerifier as usize;
+                let v = Arc::clone(&verifier);
                 thread::spawn(move || {
-                    let v = unsafe { &*(v as *const ProofVerifier) };
                     let proof = make_proof(&format!("p{}", i), ProofType::Compute, &format!("user-{}", i), "prov-a");
                     v.submit_proof(proof).unwrap();
                 })
