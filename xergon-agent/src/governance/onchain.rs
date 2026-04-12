@@ -162,7 +162,7 @@ impl OnChainGovernance {
     ///
     /// Spends the proposal box (quorum and approval met) and optionally
     /// a treasury box for fund movements.
-    pub async fn build_execute_tx(
+    pub fn build_execute_tx(
         &self,
         proposal_box_id: &str,
         execution_boxes: Vec<String>,
@@ -207,7 +207,7 @@ impl OnChainGovernance {
     /// Build a close-proposal transaction.
     ///
     /// Finalizes the proposal (sets stage to Closed or Expired).
-    pub async fn build_close_tx(
+    pub fn build_close_tx(
         &self,
         proposal_box_id: &str,
     ) -> Result<GovernanceTxResult, GovernanceError> {
@@ -740,12 +740,11 @@ mod tests {
 
     // ---- Execute/Close tx building ----
 
-    #[tokio::test]
-    async fn test_build_execute_tx() {
+    #[test]
+    fn test_build_execute_tx() {
         let gov = make_governance();
         let result = gov
             .build_execute_tx("box_test_001", vec!["treasury_box".to_string()])
-            .await
             .unwrap();
         assert!(result.tx_id.starts_with("tx_exec_"));
         assert!(result.tx_json.contains("execute"));
@@ -756,10 +755,10 @@ mod tests {
             .contains(&"treasury_box".to_string()));
     }
 
-    #[tokio::test]
-    async fn test_build_close_tx() {
+    #[test]
+    fn test_build_close_tx() {
         let gov = make_governance();
-        let result = gov.build_close_tx("box_test_001").await.unwrap();
+        let result = gov.build_close_tx("box_test_001").unwrap();
         assert!(result.tx_id.starts_with("tx_close_"));
         assert!(result.tx_json.contains("close"));
         assert!(result.tx_json.contains("3")); // Closed stage R4=3

@@ -592,7 +592,7 @@ async fn onchain_execute_handler(
     let box_id = format!("box_onchain_{}", proposal_id);
     let exec_boxes = req.execution_boxes.unwrap_or_default();
 
-    match gov.build_execute_tx(&box_id, exec_boxes).await {
+    match gov.build_execute_tx(&box_id, exec_boxes) {
         Ok(tx_result) => (StatusCode::OK, Json(tx_result)).into_response(),
         Err(e) => governance_error(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -609,7 +609,7 @@ async fn onchain_close_handler(
     let gov = OnChainGovernance::with_defaults();
     let box_id = format!("box_onchain_{}", proposal_id);
 
-    match gov.build_close_tx(&box_id).await {
+    match gov.build_close_tx(&box_id) {
         Ok(tx_result) => (StatusCode::OK, Json(tx_result)).into_response(),
         Err(e) => governance_error(
             StatusCode::INTERNAL_SERVER_ERROR,

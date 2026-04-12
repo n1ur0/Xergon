@@ -234,10 +234,7 @@ impl GovernanceExecutor {
             proposal.box_id.clone()
         };
 
-        let tx_result = tokio::task::block_in_place(|| {
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(async { self.onchain.build_execute_tx(&box_id, vec![]).await })
-        })?;
+        let tx_result = self.onchain.build_execute_tx(&box_id, vec![])?;
 
         self.store.advance_stage(proposal_id)?;
 
@@ -274,10 +271,7 @@ impl GovernanceExecutor {
             proposal.box_id.clone()
         };
 
-        let _tx = tokio::task::block_in_place(|| {
-            let rt = tokio::runtime::Handle::current();
-            rt.block_on(async { self.onchain.build_close_tx(&box_id).await })
-        })?;
+        let _tx = self.onchain.build_close_tx(&box_id)?;
 
         self.store.advance_stage(proposal_id)?;
         if let Ok(updated) = self.store.get_proposal(proposal_id) {
@@ -627,8 +621,8 @@ mod tests {
         assert!(tally.passes);
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_execute_proposal() {
+    #[test]
+    fn test_execute_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -650,8 +644,8 @@ mod tests {
         assert!(receipt.tx_id.starts_with("tx_exec"));
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_execute_already_executed() {
+    #[test]
+    fn test_execute_already_executed() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -673,8 +667,8 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_close_proposal() {
+    #[test]
+    fn test_close_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -685,6 +679,14 @@ mod tests {
             )
             .unwrap();
 
+        // First, vote to move proposal to Voting stage
+        for i in 0..15 {
+            executor
+                .cast_vote(&summary.proposal_id, &format!("v{}", i), true, 100)
+                .unwrap();
+        }
+
+        // Now close the proposal
         executor.close_proposal(&summary.proposal_id).unwrap();
         let updated = executor.get_proposal_summary(&summary.proposal_id).unwrap();
         assert_eq!(updated.stage, "closed");
@@ -739,8 +741,8 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_vote_on_closed_proposal() {
+    #[test]
+    fn test_vote_on_closed_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -777,8 +779,8 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_auto_execute_passing_ready() {
+    #[test]
+    fn test_auto_execute_passing_ready() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
