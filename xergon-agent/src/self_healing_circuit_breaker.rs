@@ -777,8 +777,8 @@ mod tests {
         cb.record_failure("test-provider"); // Reopens, backoff_mult = 3
         let stats2 = cb.get_stats("test-provider").unwrap();
         assert_eq!(stats2.backoff_multiplier, 3);
-        // Next backoff should be 60 * 2^(3-1) = 240s
-        assert_eq!(stats2.next_backoff_ms, 240_000);
+        // Next backoff = base * 2^((current_mult + 1) - 1) = 60 * 2^3 = 480s
+        assert_eq!(stats2.next_backoff_ms, 480_000);
     }
 
     #[test]

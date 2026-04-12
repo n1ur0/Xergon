@@ -207,10 +207,18 @@ impl ModelWarmCache {
     ///
     /// Returns `None` if the model is not in the cache.
     pub fn access_model(&self, model_id: &str) -> Option<CacheEntry> {
-        let mut entry_ref = self.entries.get_mut(model_id)?;
-        entry_ref.record_access();
-        self.total_hits.fetch_add(1, Ordering::Relaxed);
-        Some(entry_ref.value().clone())
+        let mut entry_ref = self.entries.get_mut(model_id);
+        match entry_ref {
+            Some(ref mut entry_ref) => {
+                entry_ref.record_access();
+                self.total_hits.fetch_add(1, Ordering::Relaxed);
+                Some(entry_ref.value().clone())
+            }
+            None => {
+                self.total_misses.fetch_add(1, Ordering::Relaxed);
+                None
+            }
+        }
     }
 
     /// Remove a specific model from the cache.
