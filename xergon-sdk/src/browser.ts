@@ -2,7 +2,7 @@
  * Xergon SDK - Browser Entry Point
  * 
  * This is a browser-compatible version of the SDK that excludes
- * Node.js-only modules (debug, gateway, docs-generator, etc.)
+ * Node.js-only modules (fs, crypto, path, child_process, etc.)
  * 
  * For Node.js environments, use the main index.ts export.
  */
@@ -74,14 +74,24 @@ export type { ModelSelectorProps } from './widget/model-selector';
 
 export { initWidget, destroyWidget, updateWidgetConfig } from './widget/loader';
 
-export { listTemplates, getTemplate, renderTemplate, renderTemplateRaw, addTemplate, removeTemplate } from './prompt-templates';
+export { listTemplates, getTemplate, renderTemplate, renderTemplateRaw, addTemplate, removeTemplate } from './prompt-templates-browser';
 export type { PromptTemplate, RenderedPrompt } from './prompt-templates';
 
-export { pipeOutput, formatOutput, copyToClipboard, appendToFile, pipeToCommand, parsePipeString } from './output-pipe';
-export type { OutputFormat, PipeDestination, PipeConfig } from './output-pipe';
+export { pipeOutput, formatOutput, copyToClipboard, downloadFile, parsePipeString } from './output-pipe-browser';
+export type { OutputFormat, PipeDestination, PipeConfig } from './output-pipe-browser';
 
-export { resolveAlias, resolveModelName, listAliases, addAlias, removeAlias, getAlias } from './model-alias';
-export type { ModelAlias } from './model-alias';
+// Browser-safe alias system (in-memory only, no file persistence)
+const _browserAliases: Map<string, string> = new Map([
+  ['code', 'deepseek-coder/DeepSeek-Coder-V2-Instruct'],
+  ['fast', 'meta-llama/Meta-Llama-3.1-8B-Instruct'],
+]);
+export function resolveAlias(alias: string): string { return _browserAliases.get(alias) || alias; }
+export function resolveModelName(name: string): string { return name; }
+export function listAliases(): string[] { return Array.from(_browserAliases.keys()); }
+export function addAlias(alias: string, model: string): void { _browserAliases.set(alias, model); }
+export function removeAlias(alias: string): void { _browserAliases.delete(alias); }
+export function getAlias(alias: string): string | undefined { return _browserAliases.get(alias); }
+export type ModelAlias = { alias: string; model: string };
 
 export { deriveAddress, derivePublicKey, generateKeypair, signMessage as signMessageOffline, verifySignature } from './wallet/offline';
 
@@ -93,37 +103,15 @@ export { buildProviderRegistrationTx, buildStakingTx, buildSettlementTx, decodeS
 export { getOracleRate } from './oracle-client';
 export type { OracleResult, ProviderRegistrationParams, StakingParams, SettlementParams } from './types/contracts';
 
-export { createConversation, addMessage, getConversation, listConversations, deleteConversation, setActive, getActive, getMessagesForContext, searchConversations, exportConversation, importConversation } from './conversation';
-export type { Message, Conversation, ConversationStore } from './conversation';
-
-export { createFlow, runFlow, runFlowParallel, listBuiltInFlows, getBuiltInFlow } from './flow';
-export type { FlowStep, Flow, FlowResult, FlowExecutor } from './flow';
-
-export { runBenchmark, listBenchmarks, compareBenchmarks, exportResults as exportEvalResults, saveToHistory as saveEvalToHistory, loadHistory as loadEvalHistory } from './eval';
-export type { EvalBenchmark, EvalResult, RunBenchmarkOptions, CompareResult } from './eval';
-
-export { startCanary, checkCanary, promoteCanary, rollbackCanary, listCanaries, recordCanaryRequest, loadCanaryHistory, saveCanaryToHistory } from './canary';
-export type { CanaryConfig, CanaryMetrics, CanaryDeployment, CanaryCheckResult, CanaryHistoryEntry } from './canary';
-
-export { exportData, importData, validateExport, listExportScopes, getExportSize } from './export';
-export { ExportFormat } from './export';
-export type { ExportConfig, ExportManifest, ExportResult, ScopeInfo } from './export';
-
-export { TeamClient } from './team';
-export { createTeam, getTeam, listTeams, updateTeam, deleteTeam, inviteMember, acceptInvite, removeMember, updateRole, getTeamActivity, getTeamUsage, transferOwnership } from './team';
-export type { Team, TeamMember, TeamSettings, TeamInvite, TeamActivity, TeamUsage, TeamRole, NotificationLevel, CreateTeamParams, UpdateTeamParams } from './team';
-
-export { WebhookClient, SUPPORTED_WEBHOOK_EVENTS } from './webhook';
-export { createWebhook, listWebhooks, getWebhook, updateWebhook, deleteWebhook, testWebhook, getDeliveries, replayDelivery, getSupportedEvents } from './webhook';
-export type { Webhook, WebhookEvent, WebhookDelivery, CreateWebhookParams, UpdateWebhookParams } from './webhook';
-
-export { setLevel, getLevel, debug, info, warn, error, getHistory, exportLogs, clearHistory } from './log';
-export { LogLevel } from './log';
-export type { LogEntry, LogConfig } from './log';
-
-export { listModels as registryListModels, getModel, searchModels, getModelVersions, compareModels, getRecommended, getPopularModels, subscribeModel, getDeprecationNotice, getModelLineage, notifyModelChange, setPopularityScore, registerVersion, registerLineage, clearRegistryCache } from './model-registry';
-export type { ModelInfo, ModelVersion, ModelFilter, SortOption, PaginationOptions, ModelComparison, ModelRecommendation, LineageNode } from './model-registry';
-
-export { PluginMarketplace } from './plugins/plugin-marketplace';
-export { searchPlugins, getPlugin, installPlugin, uninstallPlugin, updatePlugin, publishPlugin, listInstalledPlugins, getPluginReviews, ratePlugin, getCategories, getPopularPlugins, getFeaturedPlugins } from './plugins/plugin-marketplace';
-export type { MarketplacePluginManifest, MarketplacePlugin, PluginReview, PluginSortField, SearchOptions } from './plugins/plugin-marketplace';
+// NOTE: The following modules require Node.js and are NOT available in browser:
+// - conversation (uses fs, crypto)
+// - flow (uses fs)
+// - eval (uses fs)
+// - canary (uses fs)
+// - export (uses fs)
+// - team (uses fs)
+// - webhook (uses fs)
+// - log (uses fs)
+// - model-registry (uses fs)
+// - plugins/plugin-marketplace (uses fs)
+// These are available in the Node.js SDK (index.ts) but not here.

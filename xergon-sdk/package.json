@@ -28,7 +28,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc && cp src/browser.ts dist/browser.js && sed -i 's/\\.\\/client-browser/\\.\\/client-browser/g' dist/browser.js",
+    "build": "tsc && node -e \"const fs=require('fs'); let c=fs.readFileSync('dist/browser.js','utf8'); c=c.replace(/export type \\{/g,'// Type exports handled by tsc\\nexport type {'); fs.writeFileSync('dist/browser.js',c);\"",
     "build:browser": "tsc && cat src/browser.ts > dist/browser.js",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",

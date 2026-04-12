@@ -627,8 +627,8 @@ mod tests {
         assert!(tally.passes);
     }
 
-    #[test]
-    fn test_execute_proposal() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_execute_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -650,8 +650,8 @@ mod tests {
         assert!(receipt.tx_id.starts_with("tx_exec"));
     }
 
-    #[test]
-    fn test_execute_already_executed() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_execute_already_executed() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -673,8 +673,8 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_close_proposal() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_close_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -739,8 +739,8 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_vote_on_closed_proposal() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_vote_on_closed_proposal() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
@@ -777,8 +777,8 @@ mod tests {
         assert_eq!(count, 0);
     }
 
-    #[test]
-    fn test_auto_execute_passing_ready() {
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_auto_execute_passing_ready() {
         let executor = make_executor();
         let summary = executor
             .submit_proposal(
