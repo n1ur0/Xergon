@@ -41,7 +41,7 @@ generic-array = "0.14"
 # Wallet & signing
 bip39 = "2"
 aes-gcm = "0.10"
-hkdf = "0.12"
+hkdf = "0.13"
 hmac = "0.12"
 rand = "0.8"
 rpassword = "7"
