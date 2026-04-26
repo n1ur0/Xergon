@@ -394,7 +394,8 @@ export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("30d");
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [overview, setOverview] = useState<OverviewResponse | null>(null);
-  const [relayStats, setRelayStats] = useState<NetworkStatsResponse | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_relayStats, setRelayStats] = useState<NetworkStatsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
