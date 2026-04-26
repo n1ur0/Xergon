@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Mark node modules as external to avoid bundling issues
+  transpilePackages: ["@xergon/sdk"],
   // Proxy /api/v1/* and /ws/* to xergon-relay
   async rewrites() {
     return [

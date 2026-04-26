@@ -5,7 +5,8 @@
  * while delegating HTTP requests to the SDK's XergonClient.
  */
 
-import { getWalletPk, API_BASE, sdk } from "./config";
+import { getWalletPk, API_BASE } from "./config";
+import { sdk } from "./server-sdk";
 
 // ── Legacy types (marketplace-specific, kept for compatibility) ──
 

@@ -125,6 +125,8 @@ function IconZap() {
     </svg>
   );
 }
+// Unused icon components - kept for potential future use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function IconClock() {
   return (
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -133,6 +135,7 @@ function IconClock() {
     </svg>
   );
 }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function IconCube() {
   return (
     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -226,7 +229,8 @@ export default function AdminDashboardPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const [tab, setTab] = useState<Tab>("overview");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_sidebarOpen, _setSidebarOpen] = useState(false);
 
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [providers, setProviders] = useState<AdminProvider[]>([]);

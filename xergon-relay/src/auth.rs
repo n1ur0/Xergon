@@ -56,26 +56,32 @@ pub struct AuthManager {
 
 impl AuthManager {
     pub fn new() -> Self {
+        Self::new_with_keys(false)
+    }
+
+    pub fn new_with_keys(include_test_keys: bool) -> Self {
         let mut api_keys = std::collections::HashMap::new();
         
-        // Add some test API keys
-        api_keys.insert(
-            "xergon-test-key-1".to_string(),
-            ApiKey::new(
+        // Add test API keys only when explicitly requested (e.g., for testing)
+        if include_test_keys {
+            api_keys.insert(
                 "xergon-test-key-1".to_string(),
-                "test-secret-1".to_string(),
-                ApiTier::Premium,
-            ),
-        );
-        
-        api_keys.insert(
-            "xergon-test-key-2".to_string(),
-            ApiKey::new(
+                ApiKey::new(
+                    "xergon-test-key-1".to_string(),
+                    "test-secret-1".to_string(),
+                    ApiTier::Premium,
+                ),
+            );
+            
+            api_keys.insert(
                 "xergon-test-key-2".to_string(),
-                "test-secret-2".to_string(),
-                ApiTier::Free,
-            ),
-        );
+                ApiKey::new(
+                    "xergon-test-key-2".to_string(),
+                    "test-secret-2".to_string(),
+                    ApiTier::Free,
+                ),
+            );
+        }
 
         Self { api_keys }
     }

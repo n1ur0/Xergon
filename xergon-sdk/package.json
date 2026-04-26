@@ -10,16 +10,13 @@
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
-    "./wallet": {
-      "import": "./dist/wallet/index.js",
-      "types": "./dist/wallet/index.d.ts"
-    },
-    "./cli": {
-      "import": "./dist/cli/index.js",
-      "types": "./dist/cli/index.d.ts"
+    "./package.json": "./package.json",
+    "./server": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
     }
   },
   "files": [
