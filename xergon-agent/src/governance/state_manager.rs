@@ -311,9 +311,12 @@ impl ProposalStore {
     ///
     /// Transitions:
     /// - `Created` -> `Voting`
-    /// - `Voting` -> `Executed` (quorum met + approval met)
-    /// - `Voting` -> `Closed` (quorum met + approval NOT met)
-    /// - `Voting` -> `Expired` (quorum NOT met)
+    /// - `Voting` -> `Voting` (no-op; use `execute_proposal` to transition to Executed)
+    /// - `Voting` -> `Closed` / `Expired` - only via `cancel_proposal` or when vote period ends
+    ///
+    /// Note: The `Voting` -> `Executed` transition is handled by `execute_proposal`
+    /// after verifying the tally passes, not by this method. This ensures that
+    /// `execute_proposal` always sees the correct stage when called.
     pub fn advance_stage(&self, proposal_id: &str) -> Result<ProposalStage, GovernanceError> {
         let mut proposal = self
             .proposals
@@ -326,35 +329,11 @@ impl ProposalStore {
                 Ok(ProposalStage::Voting)
             }
             ProposalStage::Voting => {
-                let tally = TallyResult {
-                    votes_for: proposal.votes_for,
-                    votes_against: proposal.votes_against,
-                    total_voters: proposal.voters.len() as u32,
-                    quorum_met: proposal.meets_quorum(),
-                    approval_met: proposal.meets_approval(),
-                    passes: proposal.meets_quorum() && proposal.meets_approval(),
-                    approval_percentage: if proposal.total_votes() > 0 {
-                        (proposal.votes_for as f64 / proposal.total_votes() as f64) * 100.0
-                    } else {
-                        0.0
-                    },
-                    quorum_percentage: if proposal.quorum_threshold > 0 {
-                        (proposal.total_votes() as f64 / proposal.quorum_threshold as f64) * 100.0
-                    } else {
-                        0.0
-                    },
-                };
-
-                if tally.passes {
-                    proposal.stage = ProposalStage::Executed;
-                    Ok(ProposalStage::Executed)
-                } else if tally.quorum_met {
-                    proposal.stage = ProposalStage::Closed;
-                    Ok(ProposalStage::Closed)
-                } else {
-                    proposal.stage = ProposalStage::Expired;
-                    Ok(ProposalStage::Expired)
-                }
+                // Don't auto-transition Voting to terminal stages based on tally here.
+                // That transition is handled by execute_proposal after building the tx.
+                // This preserves the invariant that execute_proposal is called while
+                // the proposal is still in Voting stage.
+                Ok(ProposalStage::Voting)
             }
             ProposalStage::Executed | ProposalStage::Closed | ProposalStage::Expired => {
                 Err(GovernanceError::ProposalFinalized(format!(
@@ -922,47 +901,41 @@ mod tests {
     }
 
     #[test]
-    fn test_advance_voting_to_executed() {
+    fn test_advance_voting_to_voting() {
+        // advance_stage in Voting stage is now a no-op ( Voting -> Executed transition
+        // is handled by execute_proposal instead)
         let store = test_store();
         let pid = create_test_proposal(&store);
         store.advance_stage(&pid).unwrap(); // -> Voting
 
-        // Cast enough votes to pass
-        for i in 0..15 {
+        // Cast some votes
+        for i in 0..5 {
             store.cast_vote(&pid, &format!("9v{}", i), true, 10, 1050, &format!("tx{}", i)).unwrap();
         }
 
         let new_stage = store.advance_stage(&pid).unwrap();
-        assert_eq!(new_stage, ProposalStage::Executed);
+        // advance_stage in Voting is now a no-op - proposal stays in Voting
+        assert_eq!(new_stage, ProposalStage::Voting);
+        let p = store.get_proposal(&pid).unwrap();
+        assert_eq!(p.stage, ProposalStage::Voting);
     }
 
     #[test]
-    fn test_advance_voting_to_expired() {
+    fn test_cancel_voting_proposal() {
+        // Use cancel_proposal to move a Voting proposal to Closed
         let store = test_store();
         let pid = create_test_proposal(&store);
         store.advance_stage(&pid).unwrap(); // -> Voting
 
-        // Don't cast enough votes to meet quorum (quorum=10)
-        // Cast 0 votes -> quorum not met -> Expired
-        let new_stage = store.advance_stage(&pid).unwrap();
-        assert_eq!(new_stage, ProposalStage::Expired);
-    }
-
-    #[test]
-    fn test_advance_voting_to_closed() {
-        let store = test_store();
-        let pid = create_test_proposal(&store);
-        store.advance_stage(&pid).unwrap(); // -> Voting
-
-        // Meet quorum but NOT approval: all against
-        // quorum=10, approval=60
-        // Cast 15 votes against -> quorum met (15>=10) but approval 0% < 60%
-        for i in 0..15 {
-            store.cast_vote(&pid, &format!("9v{}", i), false, 1, 1050, &format!("tx{}", i)).unwrap();
+        // Cast some votes
+        for i in 0..5 {
+            store.cast_vote(&pid, &format!("9v{}", i), true, 10, 1050, &format!("tx{}", i)).unwrap();
         }
 
-        let new_stage = store.advance_stage(&pid).unwrap();
+        let new_stage = store.cancel_proposal(&pid).unwrap();
         assert_eq!(new_stage, ProposalStage::Closed);
+        let p = store.get_proposal(&pid).unwrap();
+        assert_eq!(p.stage, ProposalStage::Closed);
     }
 
     #[test]
