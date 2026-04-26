@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
-const RELAY_BASE =
-  process.env.XERGON_RELAY_BASE ?? "http://127.0.0.1:9090";
+import { RELAY_BASE } from "@/lib/api/server-sdk";
 
 // ---------------------------------------------------------------------------
 // Mock portfolio data (used when relay is unreachable or for demo)
