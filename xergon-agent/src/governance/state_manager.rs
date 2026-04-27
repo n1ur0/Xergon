@@ -973,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cancel_voting_proposal() {
+    fn test_cancel_voting_proposal_no_votes() {
         let store = test_store();
         let pid = create_test_proposal(&store);
         store.advance_stage(&pid).unwrap(); // -> Voting
