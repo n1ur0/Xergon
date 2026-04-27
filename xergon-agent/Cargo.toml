@@ -70,6 +70,9 @@ k256 = { version = "0.13", features = ["ecdsa", "schnorr", "serde"] }
 jsonwebtoken = "9"
 # UUID generation for request IDs
 uuid = { version = "1", features = ["v4"] }
+# OpenSSL (vendored static) — used by ssh2/libssh2-sys for musl static builds
+# The 'vendored' feature forces openssl-sys to build OpenSSL from source, eliminating system OpenSSL deps
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3"
