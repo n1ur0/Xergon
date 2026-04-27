@@ -105,10 +105,7 @@ pub struct GovernanceExecutor {
     onchain: Arc<OnChainGovernance>,
     proposals: DashMap<String, ProposalSummary>,
     delegations: DashMap<String, Delegation>,
-    receipts: DashMap<String, ExecutionReceipt>,
-    #[allow(dead_code)]
-    receipt_counter: AtomicU64,
-    current_height: AtomicU64,
+    receipts: DashMap<String, ExecutionReceipt>,    current_height: AtomicU64,
 }
 
 impl GovernanceExecutor {
@@ -124,7 +121,6 @@ impl GovernanceExecutor {
             proposals: DashMap::new(),
             delegations: DashMap::new(),
             receipts: DashMap::new(),
-            receipt_counter: AtomicU64::new(0),
             current_height: AtomicU64::new(0),
         }
     }

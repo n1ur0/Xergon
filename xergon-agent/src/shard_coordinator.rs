@@ -317,10 +317,7 @@ pub struct ShardCoordinator {
     config: Arc<StdRwLock<ShardConfig>>,
     /// Monotonic counters.
     shard_counter: AtomicU64,
-    pipeline_counter: AtomicU64,
-    #[allow(dead_code)]
-    request_counter: AtomicU64,
-    total_requests_routed: AtomicU64,
+    pipeline_counter: AtomicU64,    total_requests_routed: AtomicU64,
     cumulative_latency_ms: AtomicU64,
 }
 
@@ -334,7 +331,6 @@ impl ShardCoordinator {
             config: Arc::new(StdRwLock::new(config)),
             shard_counter: AtomicU64::new(0),
             pipeline_counter: AtomicU64::new(0),
-            request_counter: AtomicU64::new(0),
             total_requests_routed: AtomicU64::new(0),
             cumulative_latency_ms: AtomicU64::new(0),
         }

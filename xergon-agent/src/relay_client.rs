@@ -76,14 +76,9 @@ struct HeartbeatPayload {
 #[derive(Debug, Deserialize)]
 struct RegistrationResponse {
     status: String,
-    #[allow(dead_code)] // Deserialized from relay; will be consumed for provider tracking
-    provider_id: String,
     heartbeat_interval_secs: u64,
     ttl_secs: u64,
-    #[allow(dead_code)] // Deserialized from relay; will be consumed for error display
-    message: String,
 }
-
 /// The relay client
 pub struct RelayClient {
     config: RelayClientConfig,

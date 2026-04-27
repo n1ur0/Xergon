@@ -39,19 +39,11 @@ use crate::api::AppState;
 // Constants
 // ---------------------------------------------------------------------------
 
-/// Storage rent threshold in blocks (~4 years at 2-min blocks).
-#[allow(dead_code)]
-const STORAGE_RENT_THRESHOLD_BLOCKS: u64 = 1_051_200;
-
 /// Default heartbeat interval in blocks (~10 days at 2-min blocks).
 const DEFAULT_HEARTBEAT_INTERVAL_BLOCKS: u64 = 7_200;
 
 /// Rent protection threshold — act before this many blocks pass.
 const DEFAULT_RENT_PROTECTION_THRESHOLD_BLOCKS: u64 = 900_000;
-
-/// Maximum consecutive missed heartbeats before marking inactive.
-#[allow(dead_code)]
-const MAX_MISSED_HEARTBEATS: u32 = 3;
 
 // ---------------------------------------------------------------------------
 // Enums & Structs
