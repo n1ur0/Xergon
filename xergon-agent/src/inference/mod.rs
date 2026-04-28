@@ -24,13 +24,15 @@ use std::task::{Context, Poll};
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 
-use crate::config::InferenceConfig;
+use crate::config::{InferenceConfig, LlamaServerConfig};
 use crate::pown::PownCalculator;
 
 /// Inference proxy state
 #[derive(Clone)]
 pub struct InferenceState {
     pub config: InferenceConfig,
+    /// llama.cpp-specific configuration (used when backend_type is LlamaCpp)
+    pub llama_config: Option<LlamaServerConfig>,
     pub http_client: Client,
     pub pown: Arc<PownCalculator>,
     /// Cached model name from last successful probe
@@ -105,9 +107,21 @@ async fn chat_completions_handler(
         );
     }
 
+    // Determine the backend URL based on backend type
+    // When using llama.cpp backend, prefer llama_server.url from llama_config
+    let backend_base_url = if let Some(ref llama_cfg) = state.llama_config {
+        if !llama_cfg.url.is_empty() {
+            &llama_cfg.url
+        } else {
+            &state.config.url
+        }
+    } else {
+        &state.config.url
+    };
+
     let backend_url = format!(
         "{}/v1/chat/completions",
-        state.config.url.trim_end_matches('/')
+        backend_base_url.trim_end_matches('/')
     );
 
     let is_stream = serde_json::from_slice::<serde_json::Value>(&body)
@@ -346,7 +360,18 @@ async fn chat_completions_handler(
 
 /// GET /v1/models — proxy to backend
 async fn models_handler(State(state): State<InferenceState>) -> impl IntoResponse {
-    let backend_url = format!("{}/v1/models", state.config.url.trim_end_matches('/'));
+    // Determine the backend URL based on backend type
+    let backend_base_url = if let Some(ref llama_cfg) = state.llama_config {
+        if !llama_cfg.url.is_empty() {
+            &llama_cfg.url
+        } else {
+            &state.config.url
+        }
+    } else {
+        &state.config.url
+    };
+
+    let backend_url = format!("{}/v1/models", backend_base_url.trim_end_matches('/'));
 
     match state
         .http_client

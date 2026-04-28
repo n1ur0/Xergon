@@ -119,7 +119,10 @@ impl Default for ChainTxConfig {
     }
 }
 
-/// llama-server (llama.cpp) configuration for AI inference backend detection.
+/// llama-server (llama.cpp) configuration for AI inference backend.
+///
+/// Controls GGUF model serving parameters when using llama.cpp server
+/// as the inference backend instead of Ollama.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LlamaServerConfig {
     /// Base URL of the llama-server instance (default: http://127.0.0.1:8080)
@@ -128,6 +131,35 @@ pub struct LlamaServerConfig {
     /// How often to probe llama-server health (seconds, default: 60)
     #[serde(default = "default_llama_health_interval")]
     pub health_check_interval_secs: u64,
+
+    // ─── llama.cpp-specific parameters ─────────────────────────────────────
+    /// Context size (tokens) - max tokens in prompt + completion (default: 4096)
+    #[serde(default = "default_ctx_size")]
+    pub ctx_size: u32,
+    /// Number of CPU threads to use (0 = auto detect, default: 0)
+    #[serde(default)]
+    pub threads: u32,
+    /// Number of GPU layers to offload (0 = CPU only, default: 0)
+    #[serde(default)]
+    pub gpu_layers: u32,
+    /// Batch size for prompt processing (default: 512)
+    #[serde(default = "default_n_batch")]
+    pub n_batch: u32,
+    /// Use FP16 (default: false - use FP32 for safety)
+    #[serde(default)]
+    pub use_fp16: bool,
+    /// Use GPU flash attention (default: false)
+    #[serde(default)]
+    pub use_flash_attn: bool,
+    /// Lock GPU to memory (default: false - prevent VRAM swap)
+    #[serde(default)]
+    pub lock_gpu: bool,
+    /// String to identify this model in logs (default: "default")
+    #[serde(default = "default_model_name")]
+    pub model_name: String,
+    /// Contiguous context for prompt processing (default: true)
+    #[serde(default = "default_contiguous_ctx")]
+    pub contiguous_ctx: bool,
 }
 
 fn default_llama_server_url() -> String {
@@ -138,11 +170,36 @@ fn default_llama_health_interval() -> u64 {
     60
 }
 
+fn default_ctx_size() -> u32 {
+    4096
+}
+
+fn default_n_batch() -> u32 {
+    512
+}
+
+fn default_model_name() -> String {
+    "default".into()
+}
+
+fn default_contiguous_ctx() -> bool {
+    true
+}
+
 impl Default for LlamaServerConfig {
     fn default() -> Self {
         Self {
             url: default_llama_server_url(),
             health_check_interval_secs: default_llama_health_interval(),
+            ctx_size: default_ctx_size(),
+            threads: 0,
+            gpu_layers: 0,
+            n_batch: default_n_batch(),
+            use_fp16: false,
+            use_flash_attn: false,
+            lock_gpu: false,
+            model_name: default_model_name(),
+            contiguous_ctx: default_contiguous_ctx(),
         }
     }
 }
@@ -286,6 +343,26 @@ fn default_min_confirmations() -> u32 {
     30
 }
 
+/// Backend type for inference routing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum InferenceBackendType {
+    /// Ollama backend (default on port 11434)
+    Ollama,
+    /// llama.cpp server (default on port 8080)
+    LlamaCpp,
+    /// vLLM backend
+    Vllm,
+    /// Generic OpenAI-compatible backend
+    OpenAi,
+}
+
+impl Default for InferenceBackendType {
+    fn default() -> Self {
+        Self::Ollama
+    }
+}
+
 /// Inference proxy configuration.
 ///
 /// Controls the OpenAI-compatible inference endpoint that xergon-agent
@@ -296,6 +373,9 @@ pub struct InferenceConfig {
     /// Enable the inference proxy endpoint (default: true)
     #[serde(default = "default_inference_enabled")]
     pub enabled: bool,
+    /// Backend type for routing and backend-specific handling (default: Ollama)
+    #[serde(default)]
+    pub backend_type: InferenceBackendType,
     /// Base URL of the LLM backend (default: http://127.0.0.1:11434 for Ollama)
     #[serde(default = "default_inference_url")]
     pub url: String,
@@ -304,7 +384,7 @@ pub struct InferenceConfig {
     pub timeout_secs: u64,
     /// Optional API key required to access inference endpoints.
     /// If empty, inference endpoints are open (suitable for local/trusted networks).
-    /// If set, requests must include `Authorization: Bearer ***` header.
+    /// If set, requests must include `Authorization: Bearer *** header.
     #[serde(default)]
     pub api_key: String,
     /// List of model names this agent advertises as available for inference.
@@ -327,6 +407,7 @@ impl Default for InferenceConfig {
     fn default() -> Self {
         Self {
             enabled: default_inference_enabled(),
+            backend_type: InferenceBackendType::default(),
             url: default_inference_url(),
             timeout_secs: default_inference_timeout(),
             api_key: String::new(),

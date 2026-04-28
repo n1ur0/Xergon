@@ -1133,13 +1133,34 @@ async fn run_command(config_path: Option<PathBuf>) -> Result<()> {
 
     // Start API server (blocks until shutdown)
     if config.inference.enabled {
+        // Determine effective backend URL based on backend_type
+        let effective_url = if config.inference.backend_type == xergon_agent::config::InferenceBackendType::LlamaCpp {
+            // When using llama.cpp backend, prefer the dedicated llama_server URL
+            if !config.llama_server.url.is_empty() {
+                config.llama_server.url.clone()
+            } else {
+                config.inference.url.clone()
+            }
+        } else {
+            config.inference.url.clone()
+        };
+
         info!(
-            backend_url = %config.inference.url,
+            backend_type = ?config.inference.backend_type,
+            backend_url = %effective_url,
             "Inference proxy enabled — adding /v1/chat/completions and /v1/models routes"
         );
 
+        // Build llama.cpp config if using llama.cpp backend
+        let llama_config = if config.inference.backend_type == xergon_agent::config::InferenceBackendType::LlamaCpp {
+            Some(config.llama_server.clone())
+        } else {
+            None
+        };
+
         let inference_state = xergon_agent::inference::InferenceState {
             config: config.inference.clone(),
+            llama_config,
             http_client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(
                     config.inference.timeout_secs,

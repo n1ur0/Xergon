@@ -972,6 +972,13 @@ fn build_config_toml(
         "http://127.0.0.1:8080"
     };
 
+    // Determine backend_type based on the inference URL
+    let backend_type = if inference_url.contains("8080") {
+        "llama_cpp"
+    } else {
+        "ollama"
+    };
+
     // Format served_models as TOML array
     let served_models_toml = if served_models.is_empty() {
         String::new()
@@ -1021,9 +1028,19 @@ min_settlement_nanoerg = 1_000_000_000
 [llama_server]
 url = "{llama_url}"
 health_check_interval_secs = 60
+ctx_size = 4096
+threads = 0
+gpu_layers = 0
+n_batch = 512
+use_fp16 = false
+use_flash_attn = false
+lock_gpu = false
+model_name = "default"
+contiguous_ctx = true
 
 [inference]
 enabled = {inference_enabled}
+backend_type = "{backend_type}"
 url = "{inference_url}"
 timeout_secs = 120{served_models_toml}
 
@@ -1042,5 +1059,6 @@ heartbeat_interval_secs = 60
         inference_enabled = inference_enabled,
         llama_url = llama_url,
         served_models_toml = served_models_toml,
+        backend_type = backend_type,
     )
 }

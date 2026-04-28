@@ -129,6 +129,39 @@ url = "http://127.0.0.1:8080"
 # Default: 60
 health_check_interval_secs = 60
 
+# ─── llama.cpp-specific parameters ─────────────────────────────────────────────
+# Context size (tokens) — max tokens in prompt + completion.
+# Default: 4096
+ctx_size = 4096
+
+# Number of CPU threads to use (0 = auto detect).
+# Default: 0 (auto)
+threads = 0
+
+# Number of GPU layers to offload (0 = CPU only).
+# Default: 0 (CPU only)
+gpu_layers = 0
+
+# Batch size for prompt processing.
+# Default: 512
+n_batch = 512
+
+# Use FP16 for inference (default: false — use FP32 for safety).
+use_fp16 = false
+
+# Use GPU flash attention (default: false).
+use_flash_attn = false
+
+# Lock GPU to memory to prevent VRAM swap (default: false).
+lock_gpu = false
+
+# String to identify this model in logs.
+# Default: "default"
+model_name = "default"
+
+# Contiguous context for prompt processing (default: true).
+contiguous_ctx = true
+
 
 # ── Inference ─────────────────────────────────────────────────────────────────
 # OpenAI-compatible inference proxy exposed by the agent to the relay.
@@ -137,6 +170,11 @@ health_check_interval_secs = 60
 # Enable the inference proxy endpoint.
 # Default: true
 enabled = true
+
+# Backend type: "ollama", "llama_cpp", "vllm", or "openai".
+# When set to "llama_cpp", the llama_server URL is used instead of url below.
+# Default: "ollama"
+backend_type = "ollama"
 
 # Base URL of the LLM backend (Ollama, llama.cpp, vLLM, etc.).
 # Default: "http://127.0.0.1:11434" (Ollama default)
