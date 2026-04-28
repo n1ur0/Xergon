@@ -283,18 +283,14 @@ fund_box() {
     log_info "Funding ${label} with $(echo "scale=6; $amount_nanoerg / 1000000000" | bc) ERG..."
 
     local response
+    # API expects direct array format: [{"address": "...", "value": ...}]
     response=$(curl -s -X POST "${ERGO_NODE_URL}/wallet/payment/send" \
         -H "Content-Type: application/json" \
         ${ERGO_API_KEY:+-H "api_key: ${ERGO_API_KEY}"} \
-        -d "{
-            \"requests\": [{
-                \"address\": \"${p2s_address}\",
-                \"value\": ${amount_nanoerg},
-                \"assets\": []
-            }],
-            \"fee\": ${FEE_NANOERG},
-            \"inputsRaw\": []
-        }")
+        -d "[{
+            \"address\": \"${p2s_address}\",
+            \"value\": ${amount_nanoerg}
+        }]")
 
     if [[ "$VERBOSE" == true ]]; then
         echo "  Response: ${response}"
