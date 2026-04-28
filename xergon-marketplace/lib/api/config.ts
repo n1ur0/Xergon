@@ -8,8 +8,8 @@
 // This is a client module - wallet helpers use localStorage
 "use client";
 
-export const API_BASE = (process.env.NEXT_PUBLIC_API_BASE || 'http://127.0.0.1:9090') + '/v1';
-export const RELAY_BASE = API_BASE;
+// Import relay URL from central config (re-exported for client use)
+export { API_BASE, RELAY_BASE } from "./server-sdk";
 
 // ── Wallet auth helpers ───────────────────────────────────────────────
 

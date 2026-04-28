@@ -73,5 +73,5 @@
   }
 
   // Final guard: deployer authorization + NFT + script preservation
-  proveDlog(deployerPk) && outPreservesNftAndScript
+    deployerPk && outPreservesNftAndScript
 }

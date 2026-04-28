@@ -48,6 +48,7 @@ pub mod config;
 pub mod content_safety;
 pub mod gossip;
 pub mod governance;
+#[cfg(feature = "gpu-rental")]
 pub mod gpu_rental;
 pub mod hardware;
 pub mod health_deep;
