@@ -133,14 +133,14 @@ curl -sSL https://degens.world/xergon | sh
 
 **Tasks:**
 - [x] Build `xergon-installer` shell script (curl|sh bootstrap)
-- [ ] Binary distribution: pre-built musl static binaries for linux/amd64, linux/arm64, darwin/arm64
+- [x] Binary distribution: pre-built musl static binaries for linux/amd64, linux/arm64, darwin/arm64
 - [x] Interactive TUI setup menu (clap-based interactive prompts)
 - [x] Auto-detect: GPU (nvidia-smi), Ergo node (port 9053), wallet status, LLM backends
 - [x] Auto-install: Ollama if no backend detected, pull recommended models
 - [x] Config file generation from menu choices
 - [x] systemd/launchd service installation
-- [ ] `xergon status` -- show PoNW score, ERG balance, models serving, uptime
-- [ ] `xergon update` -- self-update to latest binary
+- [x] `xergon status` -- show PoNW score, ERG balance, models serving, uptime
+- [x] `xergon update` -- self-update to latest binary
 
 **User install (AI practitioner):**
 ```
