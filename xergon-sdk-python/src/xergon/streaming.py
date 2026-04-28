@@ -8,7 +8,7 @@ from the relay into ChatCompletionChunk objects.
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Dict, Generator, Iterator, List, Optional, Union
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterator, Dict, Generator, Iterator, List, Optional
 
 import httpx
 
@@ -20,29 +20,28 @@ if TYPE_CHECKING:
 __all__ = ["stream_chat", "astream_chat"]
 
 
+def _chunk_from_line(line: str) -> Optional[ChatCompletionChunk]:
+    """Parse a single SSE data: line into a ChatCompletionChunk or None."""
+    stripped = line.strip()
+    if not stripped or stripped.startswith(":"):
+        return None
+    if not stripped.startswith("data: "):
+        return None
+    data = stripped[6:]
+    if data.strip() == "[DONE]":
+        return None
+    try:
+        return ChatCompletionChunk.model_validate(json.loads(data))
+    except (json.JSONDecodeError, Exception):
+        return None
+
+
 def _parse_sse_chunks(line_iter: Iterator[str]) -> Generator[ChatCompletionChunk, None, None]:
-    """Parse SSE lines into ChatCompletionChunk objects.
-
-    Args:
-        line_iter: Iterator yielding individual lines from the SSE stream.
-
-    Yields:
-        ChatCompletionChunk objects parsed from the stream.
-    """
+    """Parse SSE lines into ChatCompletionChunk objects."""
     for line in line_iter:
-        line = line.strip()
-        if not line or line.startswith(":"):
-            continue
-        if line.startswith("data: "):
-            data = line[6:]
-            if data.strip() == "[DONE]":
-                return
-            try:
-                chunk_data = json.loads(data)
-                yield ChatCompletionChunk.model_validate(chunk_data)
-            except (json.JSONDecodeError, Exception):
-                # Skip malformed chunks
-                continue
+        chunk = _chunk_from_line(line)
+        if chunk is not None:
+            yield chunk
 
 
 async def _parse_sse_chunks_async(
@@ -50,18 +49,9 @@ async def _parse_sse_chunks_async(
 ) -> "AsyncGenerator[ChatCompletionChunk, None]":
     """Async version of _parse_sse_chunks."""
     async for line in line_iter:
-        line = line.strip()
-        if not line or line.startswith(":"):
-            continue
-        if line.startswith("data: "):
-            data = line[6:]
-            if data.strip() == "[DONE]":
-                return
-            try:
-                chunk_data = json.loads(data)
-                yield ChatCompletionChunk.model_validate(chunk_data)
-            except (json.JSONDecodeError, Exception):
-                continue
+        chunk = _chunk_from_line(line)
+        if chunk is not None:
+            yield chunk
 
 
 def stream_chat(

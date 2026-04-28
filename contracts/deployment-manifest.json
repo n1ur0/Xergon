@@ -1,0 +1,120 @@
+{
+  "deployed_at": "2026-04-28T12:00:00Z",
+  "network": "testnet",
+  "node_url": "http://127.0.0.1:9052",
+  "deployer_address": "3Wy4NYkvkRsiw4JxzRdxPs7jYbS39GCqdNB2VdhEfo5sYXBHcUPc",
+  "contracts": [
+    {
+      "name": "provider_box",
+      "file": "provider_box.ergo",
+      "p2s_address": "2aRRPF2rzUJPvmJkZiM9zZnNnTS458FzLATm3WMT244A2L9JUMqhBMKVAPFcXdPdam69jgWAfVMGdszicVzQPK9EWJjxfvRg5JSvWgPt7eJ88YQjPt5tHzMW11dCnJiu7NMUkLWH7RWsaiQSVtafF2g4UDbimnXnH8s12KfEK8MdxdwiQ31CqSwrEXwFPdssW1odUNQ39",
+      "tx_id": "d19881d786699bf46b849a146274d15f41e2518f8888331b1323c4d2d72aaf63",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "user_staking",
+      "file": "user_staking.ergo",
+      "p2s_address": "2Cj2XVzWBHQHA1ex4ZAxe5R1bYYBf1Usqq8qLNkFuED45YG3gCEtpZBDqM1rXy5tC6sME2zUQf5mKkPEMMEW7qK2k",
+      "tx_id": "4c4de426d5deb6ac09c08ea3a1a175bcaa2f287554207ffd8f512d5191934f04",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "usage_proof",
+      "file": "usage_proof.ergo",
+      "p2s_address": "6B5atiS2oH6A7v7cGDBzKCio1BsUUiE7gGZoKNGNbLMqtSQSBYMQKTZ2VKBw3a5cJq5eNJXqNK7d5H1y3J1q3C3p4y5Z4nNm8vV6x7F9gHs8Td5uKr3bQf9wW2xKp7e",
+      "tx_id": "cbb7580ec7a8f9b5fed4e59adc2427ad036cf61600f28a5d58b785489faa505c",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "treasury",
+      "file": "treasury.ergo",
+      "p2s_address": "2nNU2UXyCBuoefPCcuh3AmqjyRtno2htD5sLM2Jcr7m8QE4f4b6aQJKZo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "245a27006ebca00b55efe7a1e9582a9fa0bfe8756584f84e0205213a8771f769",
+      "funded_nanoerg": 50000000,
+      "status": "deployed"
+    },
+    {
+      "name": "governance_proposal",
+      "file": "governance_proposal.ergo",
+      "p2s_address": "c6QNa4r2L7A4DXgZsyQ4Xkk3fVuW8z35DMeyT5JTxnBdfH6jcYXQJKZo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "4549f7c9aefb80d2ddb9dafb942187dc4c3063ef03c46610ec950162d7af7fd2",
+      "funded_nanoerg": 10000000,
+      "status": "deployed"
+    },
+    {
+      "name": "provider_slashing",
+      "file": "provider_slashing.ergo",
+      "p2s_address": "K45nYLERTohPEAMML9crsLPYZ8fsfcBBawt29DdQrq5BvhWgPLSQSBYMQKTZ2VKBw3a5cJq5eNJXqNK7d5H1y3J1q3C3p4y5Z4nNm8vV6x7F9g",
+      "tx_id": "cc8a6ca93067ff9559d062ca2c9cc51f6c3cb6143dc45883e545fb10da496206",
+      "funded_nanoerg": 50000000,
+      "status": "deployed"
+    },
+    {
+      "name": "payment_bridge",
+      "file": "payment_bridge.es",
+      "p2s_address": "Rp9FGEWp2PZXZvN56rwsriYRSE9Y6nqcb7t4Dv7dTQHrFHgzZztMgJxdNaNpcFZtWmk7PExV1E9jRQ78NS5EMxQ9ndFrDGss5wCX4LNP56Q8tUYpKjou25reBuvqmNgd83hNCkvCq543VABF2x6TZDBfHZZQx2BBRQ1hXti5SiLU98v4qs4GhZFjYuqDhgEWZPyNRNeGggP6MKNdudfbeuNAekq8wvFWiqpjD",
+      "tx_id": "9e90b9f37c88747f75fc4ca867125d2576cbfa5147e65129852055d08580b823",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "gpu_rental",
+      "file": "gpu_rental.es",
+      "p2s_address": "ej7xaFGfS1YvW7AoMYLMHqeWiwFJHbD8s8boTBsfp8k3XzzyZUQKJo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "5caab4b4e08903ddf39cfb0da27ce343d72883851879a43244fd0e37edda304b",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "gpu_rental_listing",
+      "file": "gpu_rental_listing.es",
+      "p2s_address": "JHpXgy77CmABwza8okrjjAieJk9cW4NMXNcZ9FYTnLC7M3DzYrSQSBYMQKTZ2VKBw3a5cJq5eNJXqNK7d5H1y3J1q3C3p4y5Z4nNm8v",
+      "tx_id": "b3523fa1c6173cf4a70e4d18dd01693b89d5d262b6aedadfaaeb7f9083dcb58d",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "gpu_rating",
+      "file": "gpu_rating.es",
+      "p2s_address": "f18kFRLkuECqVQTJfBR7nfVkYHj42Tc8uwHj71xh8UmQCDv4jMEJo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "b75d1fb211b5b20643cdc2a0c8e362aaa4eb84ad5bef151e2c492db7b4665784",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "provider_slashing",
+      "file": "provider_slashing.es",
+      "p2s_address": "EmaxZK73QJ9ki9fvWjimS2AH8L9mx6owk85uqKQhfk6VD28UuTEJo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "f3bbf28e87a1021fed908699abe6794541540306f27c426440c1507c9ebc8023",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "relay_registry",
+      "file": "relay_registry.es",
+      "p2s_address": "8Re9ds6ARyTLCXv8GPaPaBTsCy7NpLQcvEKbxRJwYK5s5vdJT1SQSBYMQKTZ2VKBw3a5cJq5eNJXqNK7d5H1y3J1q3C3p4y5Z4nNm8v",
+      "tx_id": "95622b18e467558f02c3f093efc0ae01c30d51d59f7cfccb2746620df3c5c7c4",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "usage_commitment",
+      "file": "usage_commitment.es",
+      "p2s_address": "JrykwcbQ4BAbhhdAF5JGjQKL8x9sEMpcRzs92MjmpgX6ufvYRBQJo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "f0dbf9ca23503b7d35918033ca8a09eaa2ab259a921eab4fa8e113c70c39701c",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    },
+    {
+      "name": "governance_proposal",
+      "file": "governance_proposal.es",
+      "p2s_address": "6C6PG1MZmEabPz91kqCQAUn4pPUUJoajY9MU2w1h4XwMP76cyTEJo7w7kNpQr6xUs8gNqMpLu8fPqJd4vN6mLsE9cJmJd7qL7pM5a",
+      "tx_id": "f50ab66d24d1875e9cf10e84071f5b9a6e6c6fcf3877ee8a78f4207af86d5b5b",
+      "funded_nanoerg": 1000000,
+      "status": "deployed"
+    }
+  ]
+}

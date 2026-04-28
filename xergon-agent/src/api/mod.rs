@@ -757,6 +757,10 @@ fn build_router_inner(
         .route("/v1/contracts/governance/proposal", post(contracts_governance_proposal_handler))
         .route("/v1/contracts/governance/vote", post(contracts_governance_vote_handler))
         .route("/v1/contracts/governance/proposals", get(contracts_governance_proposals_handler))
+        // On-chain action routes (Phase 2)
+        .route("/v1/contracts/provider/heartbeat", post(contracts_heartbeat_handler))
+        .route("/v1/contracts/usage_proof", post(contracts_usage_proof_handler))
+        .route("/v1/contracts/provider/pay", post(contracts_pay_provider_handler))
         .with_state(state.clone());
 
     // Governance lifecycle API routes (SDK-facing: /v1/governance/*)
@@ -3802,6 +3806,257 @@ async fn contracts_governance_proposals_handler(
         }
     }
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------------------
+// On-chain action handlers (Phase 2 — heartbeat, usage proof, provider payment)
+// -----------------------------------------------------------------------------------------------------------------------------------------------
+
+/// POST /v1/contracts/provider/heartbeat
+///
+/// Submit a heartbeat transaction that updates the provider's on-chain box
+/// registers (R8 last heartbeat height, R6 updated models, etc.).
+///
+/// Body: {
+///   "provider_nft_id": "<token_id>",
+///   "endpoint_url": "http://provider:9099",
+///   "models_json": "["model-v1"]",
+///   "ponw_score": 500,
+///   "region": "us-east"
+/// }
+///
+/// Response: { "tx_id": "<hex>", "provider_nft_id": "<token_id>" }
+#[derive(Debug, Deserialize)]
+pub struct ContractsHeartbeatRequest {
+    pub provider_nft_id: String,
+    pub endpoint_url: String,
+    pub models_json: String,
+    pub ponw_score: i32,
+    pub region: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ContractsHeartbeatResponse {
+    pub tx_id: String,
+    pub provider_nft_id: String,
+}
+
+async fn contracts_heartbeat_handler(
+    State(_state): State<AppState>,
+    Json(req): Json<ContractsHeartbeatRequest>,
+) -> Response {
+    if req.provider_nft_id.trim().is_empty() {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "provider_nft_id is required",
+        );
+    }
+    if req.endpoint_url.trim().is_empty() {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "endpoint_url is required",
+        );
+    }
+
+    let client = node_client_from_env();
+
+    // The `_new_height` arg is ignored — we always fetch the current height from the node.
+    match crate::protocol::actions::submit_heartbeat(
+        &client,
+        &req.provider_nft_id,
+        0, // new_height (ignored — node provides real height)
+        &req.endpoint_url,
+        &req.models_json,
+        req.ponw_score,
+        &req.region,
+    )
+    .await
+    {
+        Ok(tx_id) => {
+            info!(
+                tx_id = %tx_id,
+                provider_nft_id = %req.provider_nft_id,
+                "Heartbeat submitted via /v1/contracts/provider/heartbeat"
+            );
+            Json(ContractsHeartbeatResponse {
+                tx_id,
+                provider_nft_id: req.provider_nft_id,
+            })
+            .into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, provider_nft_id = %req.provider_nft_id, "Heartbeat failed");
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "heartbeat_failed",
+                &format!("Heartbeat transaction failed: {e}"),
+            )
+        }
+    }
+}
+
+/// POST /v1/contracts/usage_proof
+///
+/// Submit a usage proof box recording an inference completion on-chain.
+///
+/// Body: {
+///   "user_pk_hex": "<33-byte-hex>",
+///   "provider_id": "provider-name",
+///   "model": "model-name",
+///   "token_count": 42,
+///   "timestamp_ms": 1700000000000,
+///   "proof_tree_hex": "<compiled ergo tree hex (optional)>",
+///   "min_value_nanoerg": 1000000
+/// }
+///
+/// Response: { "tx_id": "<hex>" }
+#[derive(Debug, Deserialize)]
+pub struct ContractsUsageProofRequest {
+    pub user_pk_hex: String,
+    pub provider_id: String,
+    pub model: String,
+    pub token_count: i32,
+    pub timestamp_ms: i64,
+    #[serde(default)]
+    pub proof_tree_hex: String,
+    #[serde(default = "default_min_box_value")]
+    pub min_value_nanoerg: u64,
+}
+
+fn default_min_box_value() -> u64 {
+    1_000_000 // 0.001 ERG
+}
+
+#[derive(Debug, Serialize)]
+pub struct ContractsUsageProofResponse {
+    pub tx_id: String,
+}
+
+async fn contracts_usage_proof_handler(
+    State(_state): State<AppState>,
+    Json(req): Json<ContractsUsageProofRequest>,
+) -> Response {
+    if req.user_pk_hex.trim().is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request", "user_pk_hex is required");
+    }
+    if req.provider_id.trim().is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request", "provider_id is required");
+    }
+    if req.model.trim().is_empty() {
+        return json_error(StatusCode::BAD_REQUEST, "invalid_request", "model is required");
+    }
+
+    let client = node_client_from_env();
+
+    match crate::protocol::actions::submit_usage_proof(
+        &client,
+        &req.user_pk_hex,
+        &req.provider_id,
+        &req.model,
+        req.token_count,
+        req.timestamp_ms,
+        &req.proof_tree_hex,
+        req.min_value_nanoerg,
+    )
+    .await
+    {
+        Ok(tx_id) => {
+            info!(
+                tx_id = %tx_id,
+                provider_id = %req.provider_id,
+                model = %req.model,
+                token_count = req.token_count,
+                "Usage proof submitted via /v1/contracts/usage_proof"
+            );
+            Json(ContractsUsageProofResponse { tx_id }).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, provider_id = %req.provider_id, "Usage proof failed");
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "usage_proof_failed",
+                &format!("Usage proof transaction failed: {e}"),
+            )
+        }
+    }
+}
+
+/// POST /v1/contracts/provider/pay
+///
+/// Pay a provider for inference services by sending ERG from the node wallet
+/// to their registered P2PK address (looked up from their on-chain box).
+///
+/// Body: {
+///   "provider_nft_id": "<token_id>",
+///   "amount_nanoerg": 1000000
+/// }
+///
+/// Response: { "tx_id": "<hex>", "provider_nft_id": "<token_id>", "amount_nanoerg": 1000000 }
+#[derive(Debug, Deserialize)]
+pub struct ContractsPayProviderRequest {
+    pub provider_nft_id: String,
+    pub amount_nanoerg: u64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ContractsPayProviderResponse {
+    pub tx_id: String,
+    pub provider_nft_id: String,
+    pub amount_nanoerg: u64,
+}
+
+async fn contracts_pay_provider_handler(
+    State(_state): State<AppState>,
+    Json(req): Json<ContractsPayProviderRequest>,
+) -> Response {
+    if req.provider_nft_id.trim().is_empty() {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_request",
+            "provider_nft_id is required",
+        );
+    }
+    if req.amount_nanoerg < 1_000_000 {
+        return json_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_amount",
+            "amount_nanoerg must be at least 1,000,000 (0.001 ERG)",
+        );
+    }
+
+    let client = node_client_from_env();
+
+    match crate::protocol::actions::pay_provider(&client, &req.provider_nft_id, req.amount_nanoerg).await {
+        Ok(tx_id) => {
+            info!(
+                tx_id = %tx_id,
+                provider_nft_id = %req.provider_nft_id,
+                amount_nanoerg = req.amount_nanoerg,
+                "Provider payment sent via /v1/contracts/provider/pay"
+            );
+            Json(ContractsPayProviderResponse {
+                tx_id,
+                provider_nft_id: req.provider_nft_id,
+                amount_nanoerg: req.amount_nanoerg,
+            })
+            .into_response()
+        }
+        Err(e) => {
+            tracing::error!(
+                error = %e,
+                provider_nft_id = %req.provider_nft_id,
+                "Provider payment failed"
+            );
+            json_error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "payment_failed",
+                &format!("Provider payment failed: {e}"),
+            )
+        }
+    }
+}
+
 
 // ---------------------------------------------------------------------------
 // ErgoAuth API handlers (JWT-based authentication)

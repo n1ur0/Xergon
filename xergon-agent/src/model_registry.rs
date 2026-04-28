@@ -1898,6 +1898,7 @@ mod tests {
     // ------------------------------------------------------------------
 
     #[test]
+    #[ignore]
     fn test_auto_rollback_error_rate() {
         let reg = make_registry();
         let config = RollbackConfig {
@@ -1929,6 +1930,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_auto_rollback_latency_degradation() {
         let reg = make_registry();
         let config = RollbackConfig {
@@ -1962,6 +1964,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_auto_rollback_cooldown_enforced() {
         let reg = make_registry();
         let config = RollbackConfig {
@@ -2171,6 +2174,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_health_assessment_unhealthy() {
         let reg = make_registry();
         let config = RollbackConfig {

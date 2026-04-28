@@ -1,4 +1,6 @@
-# Build stage
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 1: Builder
+# ─────────────────────────────────────────────────────────────────────────────
 FROM rust:1.86-bookworm AS builder
 
 WORKDIR /app
@@ -10,16 +12,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Cache dependencies
-COPY Cargo.toml Cargo.lock ./
-RUN mkdir src && echo "fn main() {}" > src/main.rs
+# Copy manifests first (for dependency caching)
+COPY Cargo.toml ./
+# Generate lockfile if not present (supports gitignored Cargo.lock)
+RUN if [ ! -f Cargo.lock ]; then cargo generate-lockfile; fi
+
+# Placeholder src to warm up cargo cache
+RUN mkdir -p src && echo "fn main() {}\" > src/main.rs
 RUN cargo build --release && rm -rf src
 
-# Build actual binary
+# Copy actual source and rebuild
 COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
-# Runtime stage
+# ─────────────────────────────────────────────────────────────────────────────
+# Stage 2: Runtime
+# ─────────────────────────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -27,17 +35,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/xergon-relay /usr/local/bin/
+# Create non-root user and data directory
+RUN useradd -r -s /bin/false xergon && \
+    mkdir -p /app/data /etc/xergon && \
+    chown -R xergon:xergon /app
 
-# Copy default config (can be overridden via volume mount)
+COPY --from=builder /app/target/release/xergon-relay /usr/local/bin/
 COPY config.toml.example /etc/xergon/config.toml.example
 
-RUN useradd -r -s /bin/false xergon && \
-    mkdir -p /app/data && \
-    chown xergon:xergon /app/data
+# Set default env (can be overridden)
+ENV CONFIG_PATH=/etc/xergon/config.toml
+ENV SETTLEMENT_DB_PATH=/app/data/settlement.db
+ENV RUST_BACKTRACE=1
+ENV RUST_LOG=info
 
 USER xergon
-
 WORKDIR /app
 
 EXPOSE 9090
