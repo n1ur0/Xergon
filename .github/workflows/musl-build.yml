@@ -44,9 +44,15 @@ jobs:
               cargo build --release \
                 --target x86_64-unknown-linux-musl \
                 --features "ergo-lib,gpu-rental"
-              # Copy binary out of container build dir
+              cargo build --release \
+                --target x86_64-unknown-linux-musl \
+                --features "ergo-lib,gpu-rental" \
+                --bin xergon
+              # Copy binaries out of container build dir
               mkdir -p /ws/target/musl-release
               cp /ws/target/x86_64-unknown-linux-musl/release/xergon-agent \
+                 /ws/target/musl-release/
+              cp /ws/target/x86_64-unknown-linux-musl/release/xergon \
                  /ws/target/musl-release/
             '
         timeout-minutes: 30
@@ -54,10 +60,13 @@ jobs:
       - name: Package
         run: |
           mkdir -p dist
+          tar -czf dist/xergon-linux-amd64.tar.gz \
+            -C xergon-agent/target/x86_64-unknown-linux-musl/release/ \
+            xergon
           tar -czf dist/xergon-agent-linux-musl.tar.gz \
             -C xergon-agent/target/x86_64-unknown-linux-musl/release/ \
             xergon-agent
-          echo "$(cat xergon-agent/target/x86_64-unknown-linux-musl/release/.cargo-lock 2>/dev/null | grep xergon || true)"
+          sha256sum dist/*.tar.gz | tee dist/checksums.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -92,6 +101,7 @@ jobs:
           tar -czf dist/xergon-agent-linux-amd64.tar.gz \
             -C xergon-agent/target/release/ \
             xergon-agent
+          sha256sum dist/*.tar.gz | tee dist/checksums.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
