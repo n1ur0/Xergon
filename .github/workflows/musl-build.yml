@@ -87,13 +87,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           prefix-key: v1
+          working-directory: xergon-agent
 
       - name: Build GNU binary
         run: |
-          cargo build --release --features "ergo-lib,gpu-rental"
+          cd xergon-agent && cargo build --release --features "ergo-lib,gpu-rental"
+          cd xergon-agent && cargo build --release --features "ergo-lib,gpu-rental" --bin xergon
 
       - name: Run tests
-        run: cargo test --lib --features "ergo-lib,gpu-rental"
+        run: |
+          cd xergon-agent && cargo test --lib --features "ergo-lib,gpu-rental"
 
       - name: Package
         run: |
