@@ -114,25 +114,30 @@ fn derive_public_key(secret_key: &[u8; 32]) -> Result<String> {
     Ok(hex::encode(encoded.as_bytes()))
 }
 
-/// Derive an Ergo mainnet P2PK address from a compressed secp256k1 public key.
-/// Payload: [0x01 mainnet prefix | 33-byte PK | 4-byte blake2b256 checksum]
-/// Result: base58-encoded with "4" prefix, e.g. "4AhCX...".
-fn derive_ergo_address(compressed_pk_hex: &str) -> Result<String> {
+/// Derive an Ergo P2PK address from a compressed secp256k1 public key.
+/// For mainnet: payload = [0x01 | 33-byte PK | checksum] -> "4..." prefix
+/// For testnet: payload = [0x11 | 33-byte PK | checksum] -> "3..." prefix
+fn derive_ergo_address(compressed_pk_hex: &str, testnet: bool) -> Result<String> {
     let pk_bytes = hex::decode(compressed_pk_hex).context("Invalid public key hex")?;
     anyhow::ensure!(pk_bytes.len() == 33, "Public key must be 33 bytes");
 
     let mut payload = Vec::with_capacity(38);
-    payload.push(0x01); // mainnet P2PK prefix
+    // Ergo address version: version = (network << 4) | type_id
+    // network: mainnet=0x00, testnet=0x01; type: P2PK=0x01
+    // testnet P2PK = (0x01 << 4) | 0x01 = 0x11, mainnet P2PK = 0x01
+    payload.push(if testnet { 0x11 } else { 0x01 });
     payload.extend_from_slice(&pk_bytes);
 
     let checksum = blake2b256(&payload);
     payload.extend_from_slice(&checksum[..4]);
 
-    Ok(format!("4{}", bs58::encode(&payload).into_string()))
+    // bs58 encoding of [version | pk | checksum] produces addresses starting
+    // with '3' (testnet 0x11) or '4' (mainnet 0x01) — no manual prefix needed
+    Ok(bs58::encode(&payload).into_string())
 }
 
 /// Generate a new wallet and save it to disk encrypted.
-pub fn generate_wallet(password: &str) -> Result<Wallet> {
+pub fn generate_wallet(password: &str, testnet: bool) -> Result<Wallet> {
     if wallet_exists() {
         anyhow::bail!(
             "Wallet already exists at {}. Remove it first.",
@@ -143,7 +148,7 @@ pub fn generate_wallet(password: &str) -> Result<Wallet> {
     let mnemonic = generate_mnemonic()?;
     let secret_key = derive_secret_key(&mnemonic)?;
     let public_key = derive_public_key(&secret_key)?;
-    let _address = derive_ergo_address(&public_key)?;
+    let _address = derive_ergo_address(&public_key, testnet)?;
 
     let wallet = Wallet {
         mnemonic: mnemonic.clone(),
@@ -153,6 +158,45 @@ pub fn generate_wallet(password: &str) -> Result<Wallet> {
 
     let wf = encrypt_wallet(&wallet, password)?;
     save_wallet(&wf)?;
+    Ok(wallet)
+}
+
+/// Generate a new wallet and print mnemonic + TESTNET address (does NOT save).
+/// Use this for testnet deployments where you need the mnemonic to sign txs locally.
+pub fn generate_wallet_testnet() -> Result<Wallet> {
+    let mnemonic = generate_mnemonic()?;
+    let secret_key = derive_secret_key(&mnemonic)?;
+    let public_key = derive_public_key(&secret_key)?;
+    let address = derive_ergo_address(&public_key, true)?; // testnet = true
+
+    let wallet = Wallet {
+        mnemonic: mnemonic.clone(),
+        secret_key: hex::encode(secret_key),
+        public_key: public_key.clone(),
+    };
+
+    println!();
+    println!("========================================");
+    println!("  XERGON TESTNET WALLET (DO NOT SAVE)");
+    println!("========================================");
+    println!();
+    println!("  MNEMONIC (15 words):");
+    println!("  ");
+    for (i, word) in mnemonic.split_whitespace().enumerate() {
+        print!("  {:2}. {}", i + 1, word);
+        if i % 5 == 4 {
+            println!();
+        }
+    }
+    println!();
+    println!();
+    println!("  TESTNET ADDRESS: {}", address);
+    println!("  (starts with '3' = testnet P2PK)");
+    println!();
+    println!("  WARNING: This wallet is NOT saved to disk.");
+    println!("  Copy the mnemonic now - it cannot be recovered.");
+    println!("========================================");
+
     Ok(wallet)
 }
 
@@ -170,7 +214,7 @@ pub fn generate_wallet_interactive() -> Result<Wallet> {
     let mnemonic = generate_mnemonic()?;
     let secret_key = derive_secret_key(&mnemonic)?;
     let public_key = derive_public_key(&secret_key)?;
-    let address = derive_ergo_address(&public_key)?;
+    let address = derive_ergo_address(&public_key, false)?; // mainnet
 
     let wallet = Wallet {
         mnemonic: mnemonic.clone(),
@@ -246,7 +290,7 @@ fn encrypt_wallet(wallet: &Wallet, password: &str) -> Result<WalletFile> {
         .encrypt(nonce, wallet.mnemonic.as_bytes())
         .map_err(|e| anyhow::anyhow!("Encryption failed: {}", e))?;
 
-    let address = derive_ergo_address(&wallet.public_key)?;
+    let address = derive_ergo_address(&wallet.public_key, false)?;
 
     Ok(WalletFile {
         encrypted_mnemonic: hex::encode(&ciphertext),
