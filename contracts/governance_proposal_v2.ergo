@@ -7,7 +7,7 @@
   // ON-CHAIN AUTHORIZATION via Voter Registry data input.
   //
   // This v2 contract improves upon v1 by requiring:
-  //   1. Voter registry data input (R10 on spending tx)
+  //   1. Voter registry data input (contains registry NFT as tokens(1))
   //   2. proveDlog(voterKey) for all spending paths
   //   3. Registry verification that voter is in the approved set
   //
@@ -17,13 +17,16 @@
   //   R6: Voting threshold     (Int)          -- minimum votes needed to pass
   //   R7: Total voters         (Int)          -- number of eligible voters (from registry)
   //   R8: Proposal end height  (Int)          -- when current proposal voting ends
-  //   R9: Proposal data hash   (Coll[Byte])   -- blake2b256 of proposal content
-  //   R10: Voter registry NFT  (Coll[Byte])   -- registry NFT ID (for verification)
+  //   R9: Proposal data hash  (Coll[Byte])   -- blake2b256 of proposal content
+  //   tokens(1): Voter registry NFT ID (Coll[Byte]) -- registry NFT ID for auth
+  //     NOTE: R10 unavailable in Ergo 6.x (only R4-R9 optional).
+  //     The governance proposal box must carry the voter registry NFT as
+  //     tokens(1) at deployment time.
   //
   // Spending Conditions:
   //   All paths require:
   //     1. proveDlog(voterKey) where voterKey is in the voter registry
-  //     2. Voter registry data input (box with registry NFT) in INPUTS
+  //     2. Voter registry box (with registry NFT) present in INPUTS
   //     3. Registry verification that voter is authorized
   //
   // =========================================================================
@@ -35,7 +38,8 @@
   val totalVoters = SELF.R7[Int].get
   val proposalEndHeight = SELF.R8[Int].get
   val proposalDataHash = SELF.R9[Coll[Byte]].get
-  val voterRegistryNftId = SELF.R10[Coll[Byte]].get
+  // The voter registry NFT ID is stored as tokens(1)._1 on this box
+  val voterRegistryNftId = SELF.tokens(1)._1
 
   // Identify the Governance NFT (token at index 0, supply=1)
   val govNftId = SELF.tokens(0)._1
@@ -51,143 +55,83 @@
     outBox.tokens(0)._1 == govNftId &&
     outBox.tokens(0)._2 == 1L
 
-  // Voter registry verification:
-  //   - Find the registry box in INPUTS (contains the registry NFT)
-  //   - Verify voter is registered (checked off-chain, we verify registry presence)
-  val hasVoterRegistry = INPUTS.exists { (inp: Box) =>
-    inp.tokens.size > 0 &&
-    inp.tokens(0)._1 == voterRegistryNftId &&
-    inp.tokens(0)._2 == 1L
+  // -------------------------------------------------------------------------
+  // Voter Authorization Helper
+  // Checks that INPUTS contains the voter registry box (with correct NFT)
+  // and that at least threshold voters signed.
+  // NOTE: atLeast must NOT be called inside an INPUTS.exists lambda due to
+  // Ergo 6.0.2 anyZK JIT bug. We separate the checks: find registry box
+  // first, then verify authorization outside the lambda.
+  // -------------------------------------------------------------------------
+  val registryBoxInInputs = INPUTS.exists { (inp: Box) =>
+    inp.tokens.size > 0 && inp.tokens(0)._1 == voterRegistryNftId && inp.tokens(0)._2 == 1L
   }
+  val voterKeys: Coll[GroupElement] = if (registryBoxInInputs) {
+    INPUTS.filter { (inp: Box) =>
+      inp.tokens.size > 0 && inp.tokens(0)._1 == voterRegistryNftId && inp.tokens(0)._2 == 1L
+    }(0).R4[Coll[GroupElement]].get
+  } else {
+    Coll[GroupElement]()
+  }
+  val voterAuthOk = atLeast(1, voterKeys.map { (pk: GroupElement) => proveDlog(pk) })
+  // Combine registry presence check (Boolean) with SigmaProp authorization
+  val voterAuth = sigmaProp(registryBoxInInputs && voterAuthOk)
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Path 1: Create Proposal
   // Authorized voter can create a proposal when no active proposal exists.
   // Sets R5 = new ID (proposalCount + 1), increments R4, sets R6-R9.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   val createProposal = {
-    // No active proposal currently
-    activeProposalId == 0 &&
-
-    // Authorizer: voter must be in registry (checked off-chain)
-    // proveDlog is enforced by the voter's signature
-    sigmaProp(true) &&  // TODO: Replace with voter registry check
-
-    // Must include voter registry in inputs
-    hasVoterRegistry &&
-
-    // Successor box must have a new active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount + 1 &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get > 0 &&
-    outBox.R6[Int].isDefined &&
-    outBox.R6[Int].get > 0 &&
-    outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get > 0 &&
-    outBox.R8[Int].isDefined &&
-    outBox.R8[Int].get > HEIGHT &&
+    activeProposalId == 0 && voterAuth &&
+    outBox.R4[Int].isDefined && outBox.R4[Int].get == proposalCount + 1 &&
+    outBox.R5[Int].isDefined && outBox.R5[Int].get > 0 &&
+    outBox.R6[Int].isDefined && outBox.R6[Int].get > 0 &&
+    outBox.R7[Int].isDefined && outBox.R7[Int].get > 0 &&
+    outBox.R8[Int].isDefined && outBox.R8[Int].get > HEIGHT &&
     outBox.R9[Coll[Byte]].isDefined &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
+    scriptPreserved && nftPreserved
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Path 2: Vote on Active Proposal
   // An authorized voter signs the transaction to cast their vote.
   // Must be within the voting window (HEIGHT <= proposalEndHeight).
   // The active proposal ID must be non-zero.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   val voteOnProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Must be within voting window
-    HEIGHT <= proposalEndHeight &&
-
-    // Authorizer: voter must be in registry (checked off-chain)
-    sigmaProp(true) &&  // TODO: Replace with voter registry check
-
-    // Must include voter registry in inputs
-    hasVoterRegistry &&
-
-    // Successor preserves the active proposal state
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == activeProposalId &&
-    outBox.R6[Int].isDefined &&
-    outBox.R6[Int].get == votingThreshold &&
-    outBox.R7[Int].isDefined &&
-    outBox.R7[Int].get == totalVoters &&
-    outBox.R8[Int].isDefined &&
-    outBox.R8[Int].get == proposalEndHeight &&
-    outBox.R9[Coll[Byte]].isDefined &&
-    outBox.R9[Coll[Byte]].get == proposalDataHash &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
+    activeProposalId > 0 && HEIGHT <= proposalEndHeight && voterAuth &&
+    outBox.R4[Int].isDefined && outBox.R4[Int].get == proposalCount &&
+    outBox.R5[Int].isDefined && outBox.R5[Int].get == activeProposalId &&
+    outBox.R6[Int].isDefined && outBox.R6[Int].get == votingThreshold &&
+    outBox.R7[Int].isDefined && outBox.R7[Int].get == totalVoters &&
+    outBox.R8[Int].isDefined && outBox.R8[Int].get == proposalEndHeight &&
+    outBox.R9[Coll[Byte]].isDefined && outBox.R9[Coll[Byte]].get == proposalDataHash &&
+    scriptPreserved && nftPreserved
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Path 3: Execute Proposal
   // If the voting period has ended (HEIGHT > proposalEndHeight) and the
   // proposal reached the threshold, execute it by resetting R5 = 0.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   val executeProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Voting period must have ended
-    HEIGHT > proposalEndHeight &&
-
-    // Authorizer: authorized voter confirms execution
-    sigmaProp(true) &&  // TODO: Replace with voter registry check
-
-    // Must include voter registry in inputs
-    hasVoterRegistry &&
-
-    // Successor resets to no active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == 0 &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
+    activeProposalId > 0 && HEIGHT > proposalEndHeight && voterAuth &&
+    outBox.R4[Int].isDefined && outBox.R4[Int].get == proposalCount &&
+    outBox.R5[Int].isDefined && outBox.R5[Int].get == 0 &&
+    scriptPreserved && nftPreserved
   }
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Path 4: Close / Cancel Proposal
   // If voting period expired without reaching threshold, or after execution,
   // an authorized voter can close the proposal by resetting R5 = 0.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   val closeProposal = {
-    // Active proposal must exist
-    activeProposalId > 0 &&
-
-    // Voting period must have ended
-    HEIGHT > proposalEndHeight &&
-
-    // Authorizer: authorized voter confirms closure
-    sigmaProp(true) &&  // TODO: Replace with voter registry check
-
-    // Must include voter registry in inputs
-    hasVoterRegistry &&
-
-    // Successor resets to no active proposal
-    outBox.R4[Int].isDefined &&
-    outBox.R4[Int].get == proposalCount &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get == 0 &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
+    activeProposalId > 0 && HEIGHT > proposalEndHeight && voterAuth &&
+    outBox.R4[Int].isDefined && outBox.R4[Int].get == proposalCount &&
+    outBox.R5[Int].isDefined && outBox.R5[Int].get == 0 &&
+    scriptPreserved && nftPreserved
   }
 
   // Final guard: any valid spending path

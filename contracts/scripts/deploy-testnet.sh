@@ -245,7 +245,7 @@ compile_contract() {
     response=$(curl -s -X POST "${ERGO_NODE_URL}/script/p2sAddress" \
         -H "Content-Type: application/json" \
         ${ERGO_API_KEY:+-H "api_key: ${ERGO_API_KEY}"} \
-        -d "{\"source\": $(echo "$source" | jq -Rs .)}")
+        -d "{\"source\": $(echo "$source" | jq -Rs .), \"treeVersion\": \"0\"}")
 
     if [[ "$VERBOSE" == true ]]; then
         echo "  Request source length: ${#source} chars"
@@ -388,7 +388,7 @@ for contract_file in "${CONTRACTS[@]}"; do
     response=$(curl -s -X POST "${ERGO_NODE_URL}/script/p2sAddress" \
         -H "Content-Type: application/json" \
         ${ERGO_API_KEY:+-H "api_key: ${ERGO_API_KEY}"} \
-        -d "{\"source\": $(cat "$tmp_source" | jq -Rs .)}")
+        -d "{\"source\": $(cat \"$tmp_source\" | jq -Rs .), \"treeVersion\": \"0\"}")
 
     rm -f "$tmp_source"
 
