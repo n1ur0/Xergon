@@ -7,7 +7,7 @@ export type ResolvedTheme = "light" | "dark";
 interface ThemeState {
   theme: Theme;
   resolvedTheme: ResolvedTheme;
-  setTheme: (theme: Theme) => void;
+  _setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
 }
 
@@ -36,7 +36,7 @@ export const useThemeStore = create<ThemeState>()(
       theme: "system",
       resolvedTheme: "dark",
 
-      setTheme: (theme: Theme) => {
+      _setTheme: (theme: Theme) => {
         const resolved = resolveTheme(theme);
         applyThemeClass(resolved);
         set({ theme, resolvedTheme: resolved });
@@ -46,7 +46,7 @@ export const useThemeStore = create<ThemeState>()(
         const { theme } = get();
         const next: Theme =
           theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
-        get().setTheme(next);
+        get()._setTheme(next);
       },
     }),
     {
@@ -67,7 +67,7 @@ export const useThemeStore = create<ThemeState>()(
 if (typeof window !== "undefined") {
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", () => {
-    const { theme, setTheme } = useThemeStore.getState();
+    const { theme } = useThemeStore.getState();
     if (theme === "system") {
       const resolved = resolveTheme("system");
       applyThemeClass(resolved);

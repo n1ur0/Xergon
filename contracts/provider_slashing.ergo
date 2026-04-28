@@ -81,7 +81,7 @@
     HEIGHT > challengeWindowEnd &&
     slashedFlag == 0 &&
     OUTPUTS.exists { (b: Box) =>
-      b.propositionBytes == PK(providerPk).propBytes &&
+      b.propositionBytes == proveDlog(providerPk).propBytes &&
       b.value >= SELF.value - 1000000L
     }
   }

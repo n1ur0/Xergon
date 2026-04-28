@@ -1,0 +1,66 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start services with docker compose
+        run: docker compose up -d --wait
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for services to initialize..."
+          sleep 15
+
+      - name: Run CI assertions (health checks)
+        run: bash tests/ci-assertions.sh
+        env:
+          AGENT_URL: http://localhost:9099
+          RELAY_URL: http://localhost:9090
+          MARKETPLACE_URL: http://localhost:3000
+
+      - name: Run integration test suite
+        run: bash tests/integration-test.sh --quick
+        env:
+          ERGO_NODE_URL: http://localhost:9053
+        continue-on-error: true
+
+      - name: Run marketplace tests
+        run: bash tests/run-marketplace-tests.sh --quick
+        env:
+          RELAY_URL: http://localhost:9090
+
+      - name: Run performance tests
+        run: bash tests/performance-tests.sh
+        env:
+          RELAY_URL: http://localhost:9090
+          MARKETPLACE_URL: http://localhost:3000
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Agent logs ==="
+          docker compose logs xergon-agent --tail=50 || true
+          echo "=== Relay logs ==="
+          docker compose logs xergon-relay --tail=50 || true
+          echo "=== Marketplace logs ==="
+          docker compose logs xergon-marketplace --tail=50 || true
+
+      - name: Teardown
+        if: always()
+        run: docker compose down --volumes --remove-orphans

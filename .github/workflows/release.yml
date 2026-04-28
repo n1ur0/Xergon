@@ -25,13 +25,13 @@ jobs:
             artifact_suffix: aarch64-unknown-linux-musl
             use_cross: true
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: ubuntu-latest
             artifact_suffix: x86_64-apple-darwin
-            use_cross: false
+            use_cross: true
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: ubuntu-latest
             artifact_suffix: aarch64-apple-darwin
-            use_cross: false
+            use_cross: true
 
     steps:
       - uses: actions/checkout@v4
@@ -81,49 +81,77 @@ jobs:
             cd xergon-relay && cargo build --release --target ${{ matrix.target }}
           fi
 
+      - name: Build xergon (user CLI)
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cd xergon-agent && cross build --release --bin xergon --target ${{ matrix.target }}
+          else
+            cd xergon-agent && cargo build --release --bin xergon --target ${{ matrix.target }}
+          fi
+
       # ── Package ──
       - name: Package artifacts
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           TARGET="${{ matrix.artifact_suffix }}"
-          STAGING="staging/${TARGET}"
+          # Derive os/arch from the full target triple for consistent asset naming
+          # (must match the pattern cmd_update expects: xergon-{os}-{arch})
+          case "$TARGET" in
+            x86_64-unknown-linux-musl)   OS="linux"   ARCH="amd64" ;;
+            aarch64-unknown-linux-musl)  OS="linux"   ARCH="aarch64" ;;
+            x86_64-apple-darwin)         OS="darwin"  ARCH="x86_64" ;;
+            aarch64-apple-darwin)        OS="darwin"  ARCH="aarch64" ;;
+          esac
+          STAGING="staging/${OS}-${ARCH}"
           mkdir -p "$STAGING"
 
           # Copy binaries
-          cp xergon-agent/target/${{ matrix.target }}/release/xergon-agent "$STAGING/"
-          cp xergon-relay/target/${{ matrix.target }}/release/xergon-relay "$STAGING/"
-          chmod +x "$STAGING/xergon-agent" "$STAGING/xergon-relay"
+          cp xergon-agent/target/${{ matrix.target }}/release/xergon-agent "staging/"
+          cp xergon-relay/target/${{ matrix.target }}/release/xergon-relay "staging/"
+          cp xergon-agent/target/${{ matrix.target }}/release/xergon "staging/"
+          chmod +x staging/xergon-agent staging/xergon-relay staging/xergon
 
           # Copy config examples
-          cp xergon-agent/config.toml.example "$STAGING/"
-          cp xergon-relay/config.toml.example "$STAGING/"
+          cp xergon-agent/config.toml.example "staging/"
 
-          # Create per-binary archives
+          # Create per-binary archives with consistent os-arch naming (matches cmd_update pattern)
           cd staging
-          tar czf "xergon-agent-${VERSION}-${TARGET}.tar.gz" -C "$TARGET" xergon-agent config.toml.example
-          mv "$TARGET/config.toml.example" "$TARGET/config.toml.example.relay"
-          tar czf "xergon-relay-${VERSION}-${TARGET}.tar.gz" -C "$TARGET" xergon-relay config.toml.example.relay
-          mv "$TARGET/config.toml.example.relay" "$TARGET/config.toml.example"
+          tar czf "xergon-${VERSION}-${OS}-${ARCH}.tar.gz" xergon config.toml.example
+          tar czf "xergon-agent-${VERSION}-${OS}-${ARCH}.tar.gz" xergon-agent config.toml.example
+          tar czf "xergon-relay-${VERSION}-${OS}-${ARCH}.tar.gz" xergon-relay config.toml.example
 
           # Generate SHA256 checksums
-          sha256sum "xergon-agent-${VERSION}-${TARGET}.tar.gz" > "xergon-agent-${VERSION}-${TARGET}.tar.gz.sha256"
-          sha256sum "xergon-relay-${VERSION}-${TARGET}.tar.gz" > "xergon-relay-${VERSION}-${TARGET}.tar.gz.sha256"
+          sha256sum "xergon-${VERSION}-${OS}-${ARCH}.tar.gz" > "xergon-${VERSION}-${OS}-${ARCH}.tar.gz.sha256"
+          sha256sum "xergon-agent-${VERSION}-${OS}-${ARCH}.tar.gz" > "xergon-agent-${VERSION}-${OS}-${ARCH}.tar.gz.sha256"
+          sha256sum "xergon-relay-${VERSION}-${OS}-${ARCH}.tar.gz" > "xergon-relay-${VERSION}-${OS}-${ARCH}.tar.gz.sha256"
 
-          echo "Packaged for ${TARGET}:"
+          echo "Packaged for ${OS}-${ARCH}:"
           ls -lh *.tar.gz*
 
       # ── Upload ──
+      - name: Upload xergon CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xergon-${{ matrix.artifact_suffix }}
+          path: |
+            staging/xergon-${{ steps.version.outputs.VERSION }}-*.tar.gz
+            staging/xergon-${{ steps.version.outputs.VERSION }}-*.tar.gz.sha256
+
       - name: Upload agent artifact
         uses: actions/upload-artifact@v4
         with:
           name: xergon-agent-${{ matrix.artifact_suffix }}
-          path: staging/xergon-agent-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}.tar.gz*
+          path: |
+            staging/xergon-agent-${{ steps.version.outputs.VERSION }}-*.tar.gz
+            staging/xergon-agent-${{ steps.version.outputs.VERSION }}-*.tar.gz.sha256
 
       - name: Upload relay artifact
         uses: actions/upload-artifact@v4
         with:
           name: xergon-relay-${{ matrix.artifact_suffix }}
-          path: staging/xergon-relay-${{ steps.version.outputs.VERSION }}-${{ matrix.artifact_suffix }}.tar.gz*
+          path: |
+            staging/xergon-relay-${{ steps.version.outputs.VERSION }}-*.tar.gz
+            staging/xergon-relay-${{ steps.version.outputs.VERSION }}-*.tar.gz.sha256
 
   # ── Create Release ────────────────────────────────────────────────────────
   release:
@@ -140,10 +168,13 @@ jobs:
         run: echo "VERSION=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      - name: Copy install.sh
+        run: cp "${{ github.workspace }}/install.sh" dist/
 
       - name: Generate combined checksums
         working-directory: dist
@@ -153,7 +184,7 @@ jobs:
           echo "" >> "xergon-${VERSION}-checksums.txt"
           echo "Generated on $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> "xergon-${VERSION}-checksums.txt"
           echo "" >> "xergon-${VERSION}-checksums.txt"
-          sha256sum *.tar.gz >> "xergon-${VERSION}-checksums.txt"
+          sha256sum *.tar.gz install.sh >> "xergon-${VERSION}-checksums.txt"
           echo ""
           echo "Combined checksums:"
           cat "xergon-${VERSION}-checksums.txt"
@@ -163,12 +194,13 @@ jobs:
         run: ls -lh
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ steps.version.outputs.VERSION }}
           files: |
             dist/*.tar.gz
             dist/*.sha256
+            dist/install.sh
             dist/xergon-${{ steps.version.outputs.VERSION }}-checksums.txt
           generate_release_notes: true
 
@@ -188,7 +220,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./xergon-relay
           file: ./xergon-relay/Dockerfile
@@ -214,7 +246,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./xergon-agent
           file: ./xergon-agent/Dockerfile
@@ -240,7 +272,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: ./xergon-marketplace
           file: ./xergon-marketplace/Dockerfile

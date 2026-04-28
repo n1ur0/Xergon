@@ -6,7 +6,7 @@
  * empty data on error.
  */
 
-import { sdk } from "./config";
+import { sdk } from "./server-sdk";
 
 // ── Types (matching relay snake_case JSON, kept for marketplace compat) ──
 

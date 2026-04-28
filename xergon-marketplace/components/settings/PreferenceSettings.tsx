@@ -42,7 +42,7 @@ const THEME_OPTIONS: Array<{ value: Theme; label: string; icon: string }> = [
 
 export function PreferenceSettings() {
   const theme = useThemeStore((s) => s.theme);
-  const setTheme = useThemeStore((s) => s.setTheme);
+  const setTheme = useThemeStore((s) => s._setTheme);
   const locale = useLocaleStore((s) => s.locale);
   const setLocale = useLocaleStore((s) => s.setLocale);
 

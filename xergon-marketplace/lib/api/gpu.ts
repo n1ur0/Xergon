@@ -5,7 +5,7 @@
  * SDK calls are wrapped for graceful error handling.
  */
 
-import { sdk } from "./config";
+import { sdk } from "./server-sdk";
 
 // ── Types ──
 

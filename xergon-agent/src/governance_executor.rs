@@ -14,7 +14,7 @@ use tracing::{info, warn};
 
 use crate::governance::{
     GovernanceError, OnChainGovernance, OnChainProposal,
-    ProposalCategory, ProposalStore, TallyResult,
+    ProposalCategory, ProposalStage, ProposalStore, TallyResult,
 };
 
 // ---------------------------------------------------------------------------
@@ -105,10 +105,7 @@ pub struct GovernanceExecutor {
     onchain: Arc<OnChainGovernance>,
     proposals: DashMap<String, ProposalSummary>,
     delegations: DashMap<String, Delegation>,
-    receipts: DashMap<String, ExecutionReceipt>,
-    #[allow(dead_code)]
-    receipt_counter: AtomicU64,
-    current_height: AtomicU64,
+    receipts: DashMap<String, ExecutionReceipt>,    current_height: AtomicU64,
 }
 
 impl GovernanceExecutor {
@@ -124,7 +121,6 @@ impl GovernanceExecutor {
             proposals: DashMap::new(),
             delegations: DashMap::new(),
             receipts: DashMap::new(),
-            receipt_counter: AtomicU64::new(0),
             current_height: AtomicU64::new(0),
         }
     }
@@ -212,9 +208,10 @@ impl GovernanceExecutor {
     pub fn execute_proposal(&self, proposal_id: &str) -> Result<ExecutionReceipt, GovernanceError> {
         let proposal = self.store.get_proposal(proposal_id)?;
 
-        if proposal.stage.is_terminal() {
+        // Can only execute proposals in Voting stage that have passed
+        if proposal.stage != ProposalStage::Voting {
             return Err(GovernanceError::ProposalFinalized(format!(
-                "Proposal {} is already in stage {:?}",
+                "Proposal {} is in stage {:?}, must be in Voting stage to execute",
                 proposal_id, proposal.stage
             )));
         }
@@ -236,6 +233,7 @@ impl GovernanceExecutor {
 
         let tx_result = self.onchain.build_execute_tx(&box_id, vec![])?;
 
+        // Advance stage to Executed
         self.store.advance_stage(proposal_id)?;
 
         let elapsed = start.elapsed().as_millis() as u64;
@@ -457,6 +455,10 @@ impl GovernanceExecutor {
 
         let height = self.current_height.load(Ordering::Relaxed) as u32;
         let mut executed = 0u64;
+        // Track proposals executed in this call to avoid double-execution
+        // when the same proposal is encountered twice (e.g., after advance_stage
+        // updates the store but the local proposals map hasn't been refreshed yet)
+        let mut executed_this_call: Vec<String> = Vec::new();
 
         let proposals: Vec<String> = self
             .proposals
@@ -466,12 +468,36 @@ impl GovernanceExecutor {
             .collect();
 
         for pid in proposals {
+            // Skip if already executed in this call
+            if executed_this_call.contains(&pid) {
+                continue;
+            }
+
             if let Ok(proposal) = self.store.get_proposal(&pid) {
+                // Handle proposals in "created" stage that have passed their vote end height
+                if proposal.stage == ProposalStage::Created && proposal.vote_end_height <= height {
+                    // Advance to voting first
+                    if self.store.advance_stage(&pid).is_err() {
+                        continue;
+                    }
+                    // Re-fetch to get updated stage
+                    if let Ok(updated) = self.store.get_proposal(&pid) {
+                        if updated.stage != ProposalStage::Voting {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+
                 if proposal.vote_end_height <= height {
                     match self.tally_proposal(&pid) {
                         Ok(tally) if tally.passes => {
                             match self.execute_proposal(&pid) {
-                                Ok(_) => executed += 1,
+                                Ok(_) => {
+                                    executed += 1;
+                                    executed_this_call.push(pid);
+                                }
                                 Err(e) => warn!(proposal_id = %pid, error = %e, "Auto-execute failed"),
                             }
                         }
@@ -640,6 +666,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let receipt = executor.execute_proposal(&summary.proposal_id).unwrap();
         assert_eq!(receipt.result, "success");
         assert!(receipt.tx_id.starts_with("tx_exec"));
@@ -663,6 +692,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let first_result = executor.execute_proposal(&summary.proposal_id);
         assert!(first_result.is_ok(), "First execution should succeed: {:?}", first_result);
         
@@ -805,6 +837,9 @@ mod tests {
                 .unwrap();
         }
 
+        // Advance to Voting stage first
+        executor.store.advance_stage(&summary.proposal_id).unwrap();
+        
         let vote_end = summary.expires_at + 100;
         executor.set_height(vote_end);
 

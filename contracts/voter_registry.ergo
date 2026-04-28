@@ -45,28 +45,21 @@
     outBox.tokens(0)._1 == registryNftId &&
     outBox.tokens(0)._2 == 1L
 
+  // Use first authorized voter as single committee key for testnet
+  val governanceCommitteePk = authorizedVoters(0)
+
   // ---------------------------------------------------------------------------
   // Path: Update Registry
   // Committee members can update the voter list
   // Requires at least `update_threshold` signatures from committee members
   // ---------------------------------------------------------------------------
   val updateRegistry = {
-    // Committee authorization (atLeast requires threshold signatures)
-    // TODO: Replace with actual committee multi-sig setup
-    // For now, using sigmaProp(true) as placeholder
-    // In production: atLeast(updateThreshold, List(proveDlog(committeePk1), ...))
-    sigmaProp(true) &&
-
-    // Successor box must have updated voter list
-    outBox.R4[Coll[GroupElement]].isDefined &&
-    outBox.R5[Int].isDefined &&
-    outBox.R5[Int].get >= lastUpdateHeight &&
-    outBox.R6[Int].isDefined &&
-    outBox.R6[Int].get == updateThreshold &&
-
-    // Preserve script and NFT
-    scriptPreserved &&
-    nftPreserved
+    val authOk = atLeast(1, authorizedVoters.map { (pk: GroupElement) => proveDlog(pk) }) &&
+      outBox.R4[Coll[GroupElement]].isDefined &&
+      outBox.R5[Int].isDefined && outBox.R5[Int].get >= lastUpdateHeight &&
+      outBox.R6[Int].isDefined && outBox.R6[Int].get == updateThreshold &&
+      scriptPreserved && nftPreserved
+    authOk
   }
 
   // Final guard: update registry path
