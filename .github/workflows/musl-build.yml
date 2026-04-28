@@ -1,0 +1,166 @@
+name: Build & Release (musl static)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - feat/relay-deployment-pipeline
+    tags:
+      - 'v*'
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  OPENSSL_STATIC: "1"
+
+jobs:
+  # ── musl static build (Docker on Ubuntu host) ────────────────────────────────
+  build-musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq docker.io > /dev/null
+          sudo systemctl enable docker
+          sudo systemctl start docker
+
+      - name: Build musl static binary
+        run: |
+          docker run --rm \
+            -e "OPENSSL_STATIC=1" \
+            -e "CARGO_TARGET_DIR=/ws/target" \
+            -v "${{ github.workspace }}/xergon-agent:/ws" \
+            -w /ws \
+            rust:slim sh -c '
+              set -e
+              apt-get update -qq 2>&1 | tail -2
+              apt-get install -y -qq musl-tools linux-libc-dev perl make > /dev/null 2>&1
+              export PATH="/usr/local/cargo/bin:$PATH"
+              rustup target add x86_64-unknown-linux-musl 2>&1 | tail -2
+              cargo build --release \
+                --target x86_64-unknown-linux-musl \
+                --features "ergo-lib,gpu-rental"
+              cargo build --release \
+                --target x86_64-unknown-linux-musl \
+                --features "ergo-lib,gpu-rental" \
+                --bin xergon
+              # Copy binaries out of container build dir
+              mkdir -p /ws/target/musl-release
+              cp /ws/target/x86_64-unknown-linux-musl/release/xergon-agent \
+                 /ws/target/musl-release/
+              cp /ws/target/x86_64-unknown-linux-musl/release/xergon \
+                 /ws/target/musl-release/
+            '
+        timeout-minutes: 30
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -czf dist/xergon-linux-amd64.tar.gz \
+            -C xergon-agent/target/x86_64-unknown-linux-musl/release/ \
+            xergon
+          tar -czf dist/xergon-agent-linux-musl.tar.gz \
+            -C xergon-agent/target/x86_64-unknown-linux-musl/release/ \
+            xergon-agent
+          sha256sum dist/*.tar.gz | tee dist/checksums.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xergon-agent-musl
+          path: dist/xergon-agent-linux-musl.tar.gz
+
+  # ── standard release build (GNU/glibc on Ubuntu) ────────────────────────────
+  build-gnu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          prefix-key: v1
+          working-directory: xergon-agent
+
+      - name: Build GNU binary
+        run: |
+          cd xergon-agent && cargo build --release --features "ergo-lib,gpu-rental"
+          cd xergon-agent && cargo build --release --features "ergo-lib,gpu-rental" --bin xergon
+
+      - name: Run tests
+        run: |
+          cd xergon-agent && cargo test --lib --features "ergo-lib,gpu-rental"
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tar -czf dist/xergon-agent-linux-amd64.tar.gz \
+            -C xergon-agent/target/release/ \
+            xergon-agent
+          sha256sum dist/*.tar.gz | tee dist/checksums.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: xergon-agent-gnu
+          path: dist/xergon-agent-linux-amd64.tar.gz
+
+  # ── release (only on tags) ──────────────────────────────────────────────────
+  release:
+    needs: [build-musl, build-gnu]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum *.tar.gz > checksums.txt
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*.tar.gz dist/**/checksums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── installer sanity check ──────────────────────────────────────────────────
+  test-installer:
+    needs: build-musl
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download musl artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: xergon-agent-musl
+          path: dist
+
+      - name: Smoke-test installer download URL
+        run: |
+          tar -tzf dist/xergon-agent-linux-musl.tar.gz | grep xergon-agent
+          echo "✓ musl tarball contains binary"
+
+      - name: Smoke-test binary execution
+        run: |
+          tar -xzf dist/xergon-agent-linux-musl.tar.gz -C /tmp/
+          /tmp/xergon-agent --version
+          echo "✓ binary executes"

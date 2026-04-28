@@ -21,7 +21,7 @@ use chrono::Utc;
 use dashmap::DashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -223,12 +223,6 @@ impl E2ETestSuite {
             config: RwLock::new(config),
             test_counter: AtomicU64::new(0),
         }
-    }
-
-    /// Generate a unique test run ID.
-    #[allow(dead_code)]
-    fn next_test_id(&self) -> String {
-        format!("e2e-{}", self.test_counter.fetch_add(1, Ordering::SeqCst))
     }
 
     /// Register a new test.

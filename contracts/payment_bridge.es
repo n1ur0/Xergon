@@ -72,8 +72,8 @@
   // singleton amount is preserved, even if spent outside the bridge contract.
   //
   // ErgoTree for sigmaProp(true): version=1, constantSegregation, TrivialProp.True
-  // Hex: 100e080201 (6 bytes)
-  val archiveGuardBytes: Coll[Byte] = Coll[Byte](0x10, 0x0e, 0x08, 0x02, 0x01)
+  // Hex: 100e080201 (6 bytes) — explicit .toByte to avoid Coll[Int] inference
+  val archiveGuardBytes: Coll[Byte] = Coll[Byte](16.toByte, 14.toByte, 8.toByte, 2.toByte, 1.toByte)
   // Minimum value for the archive box: 0.001 ERG to prevent dust
   val archiveMinNanoerg = 1000000L
 

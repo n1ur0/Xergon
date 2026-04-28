@@ -9,8 +9,6 @@ description = "Xergon Agent - Rust sidecar for Ergo nodes providing PoNW scoring
 tokio = { version = "1", features = ["full", "signal"] }
 # HTTP client for probing peers
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
-# Streaming support
-tokio-stream = "0.1"
 futures-util = "0.3"
 async-stream = "0.3"
 # HTTP server for our own REST API
@@ -51,8 +49,6 @@ libc = "0.2"
 clap = { version = "4", features = ["derive", "env"] }
 # Concurrent collections
 dashmap = "6"
-# Rate limiting
-governor = "0.7"
 hostname = "0.4.2"
 # Ergo blockchain library (optional, heavy C-bindings via sigma-rust)
 ergo-lib = { version = "0.28", optional = true }
@@ -65,24 +61,26 @@ regex = "1"
 # Base58 encoding (for P2S address decoding in compile_contracts binary)
 bs58 = "0.5"
 # SSH tunnel management for GPU rental access
-ssh2 = "0.9"
+ssh2 = { version = "0.9", optional = true }
 # Semver version comparison (for self-update)
 semver = "1"
 # secp256k1 elliptic curve (for ErgoAuth signature verification)
 k256 = { version = "0.13", features = ["ecdsa", "schnorr", "serde"] }
 # JWT encoding/decoding
 jsonwebtoken = "9"
-# Base64 (for ErgoAuth signature/proof decoding)
-base64 = "0.22"
 # UUID generation for request IDs
 uuid = { version = "1", features = ["v4"] }
+# OpenSSL (vendored static) — used by ssh2/libssh2-sys for musl static builds
+# The 'vendored' feature forces openssl-sys to build OpenSSL from source, eliminating system OpenSSL deps
+openssl = { version = "0.10", features = ["vendored"] }
 
 [dev-dependencies]
 tempfile = "3"
 
 [features]
-default = []
+default = ["ergo-lib", "gpu-rental"]
 ergo-lib = ["dep:ergo-lib"]
+gpu-rental = ["dep:ssh2"]
 
 [profile.release]
 opt-level = 3
