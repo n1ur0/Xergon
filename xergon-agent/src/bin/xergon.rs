@@ -59,6 +59,18 @@ enum Commands {
         /// Stream responses (default: true)
         #[arg(long, default_value = "true")]
         stream: bool,
+
+        /// System prompt to set context/persona
+        #[arg(long)]
+        system: Option<String>,
+
+        /// Request structured JSON output
+        #[arg(long)]
+        json: bool,
+
+        /// Route to a specific provider public key (hex)
+        #[arg(long)]
+        provider: Option<String>,
     },
 
     /// List available models from the relay
@@ -194,8 +206,8 @@ async fn main() -> Result<()> {
 
     match cli.command {
         Commands::Setup => cmd_setup(&cli.relay_url).await,
-        Commands::Ask { prompt, model, stream } => {
-            cmd_ask(&cli.relay_url, prompt, model, stream).await
+        Commands::Ask { prompt, model, stream, system, json, provider } => {
+            cmd_ask(&cli.relay_url, prompt, model, stream, system, json, provider).await
         }
         Commands::Models => cmd_models(&cli.relay_url).await,
         Commands::Balance => cmd_balance(&cli.relay_url).await,
@@ -453,6 +465,9 @@ async fn cmd_ask(
     prompt: Option<String>,
     model: Option<String>,
     stream: bool,
+    system: Option<String>,
+    json_mode: bool,
+    provider: Option<String>,
 ) -> Result<()> {
     let wallet = require_wallet()?;
     let prompt_text = read_prompt(prompt)?;
@@ -462,11 +477,39 @@ async fn cmd_ask(
     }
 
     let model_name = model.unwrap_or_else(|| "auto".to_string());
-    let body = serde_json::json!({
+
+    // Build messages array: system prompt (optional) + user prompt
+    let mut messages: Vec<serde_json::Value> = Vec::new();
+
+    if let Some(ref sys) = system {
+        if !sys.is_empty() {
+            messages.push(serde_json::json!({
+                "role": "system",
+                "content": sys
+            }));
+        }
+    }
+
+    messages.push(serde_json::json!({
+        "role": "user",
+        "content": prompt_text
+    }));
+
+    let mut body = serde_json::json!({
         "model": model_name,
-        "messages": [{"role": "user", "content": prompt_text}],
+        "messages": messages,
         "stream": stream,
     });
+
+    // Add response_format for JSON mode
+    if json_mode {
+        body["response_format"] = serde_json::json!({ "type": "json_object" });
+    }
+
+    // Add provider routing if specified
+    if let Some(ref prov) = provider {
+        body["provider"] = serde_json::json!(prov);
+    }
 
     let body_bytes = serde_json::to_vec(&body)?;
     let (req_builder, _client) = build_signed_request(
@@ -498,6 +541,11 @@ async fn cmd_ask(
         let mut stream = resp.bytes_stream();
         use futures_util::StreamExt;
 
+        let mut total_tokens: u64 = 0;
+        let mut completion_tokens: u64 = 0;
+        let mut prompt_tokens: u64 = 0;
+        let mut response_model: String = String::new();
+
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.context("Failed to read stream chunk")?;
             let text = String::from_utf8_lossy(&chunk);
@@ -507,9 +555,32 @@ async fn cmd_ask(
                 if let Some(data) = line.strip_prefix("data: ") {
                     if data.trim() == "[DONE]" {
                         println!();
+                        println!();
+                        println!("  ─────────────────────────────────────────");
+                        if !response_model.is_empty() {
+                            println!("  Model: {}", response_model);
+                        }
+                        if prompt_tokens > 0 || completion_tokens > 0 || total_tokens > 0 {
+                            println!(
+                                "  Tokens: {} prompt, {} completion, {} total",
+                                prompt_tokens, completion_tokens, total_tokens
+                            );
+                        }
                         return Ok(());
                     }
                     if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                        // Track usage from last chunk if available
+                        if let Some(usage) = json.get("usage").or_else(|| json.get("xergon_usage")) {
+                            total_tokens = usage.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(total_tokens);
+                            completion_tokens = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(completion_tokens);
+                            prompt_tokens = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(prompt_tokens);
+                        }
+                        // Track model name
+                        if let Some(m) = json.get("model").and_then(|v| v.as_str()) {
+                            if response_model.is_empty() {
+                                response_model = m.to_string();
+                            }
+                        }
                         // Extract delta content from choices[0].delta.content
                         if let Some(content) = json
                             .get("choices")
@@ -527,6 +598,17 @@ async fn cmd_ask(
             }
         }
         println!();
+        println!();
+        println!("  ─────────────────────────────────────────");
+        if !response_model.is_empty() {
+            println!("  Model: {}", response_model);
+        }
+        if prompt_tokens > 0 || completion_tokens > 0 || total_tokens > 0 {
+            println!(
+                "  Tokens: {} prompt, {} completion, {} total",
+                prompt_tokens, completion_tokens, total_tokens
+            );
+        }
     } else {
         // Non-streaming: print full response
         let body: serde_json::Value = resp
@@ -546,6 +628,24 @@ async fn cmd_ask(
         } else {
             // Fallback: print raw JSON
             println!("{}", serde_json::to_string_pretty(&body)?);
+        }
+
+        // Show token usage for non-streaming if available
+        if let Some(usage) = body.get("usage") {
+            let total = usage.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let prompt = usage.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let completion = usage.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            if total > 0 {
+                println!();
+                println!("  ─────────────────────────────────────────");
+                if let Some(model) = body.get("model").and_then(|v| v.as_str()) {
+                    println!("  Model: {}", model);
+                }
+                println!(
+                    "  Tokens: {} prompt, {} completion, {} total",
+                    prompt, completion, total
+                );
+            }
         }
     }
 
