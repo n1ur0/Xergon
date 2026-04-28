@@ -46,7 +46,7 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.3",
     "jsdom": "^29.0.1",
-    "postcss": "^8.5.0",
+    "postcss": "^8.5.12",
     "server-only": "^0.0.1",
     "supertest": "^7.2.2",
     "tailwindcss": "^4.0.0",
