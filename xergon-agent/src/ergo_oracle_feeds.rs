@@ -7,7 +7,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 
 use chrono::Utc;
 use dashmap::DashMap;
@@ -327,11 +326,7 @@ pub struct ErgoOracleService {
     /// Deviation alerts counter.
     deviation_alerts: Arc<std::sync::atomic::AtomicU64>,
     /// Maximum deviation threshold before alert (percentage).
-    deviation_threshold_pct: Arc<std::sync::atomic::AtomicU64>,
-    /// Poll start instant for interval tracking.
-    #[allow(dead_code)]
-    last_poll_instant: Arc<std::sync::Mutex<Instant>>,
-}
+    deviation_threshold_pct: Arc<std::sync::atomic::AtomicU64>,}
 
 impl ErgoOracleService {
     /// Create a new oracle service with default configuration.
@@ -350,7 +345,6 @@ impl ErgoOracleService {
             total_feeds: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             deviation_alerts: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             deviation_threshold_pct: Arc::new(std::sync::atomic::AtomicU64::new(10)), // 10%
-            last_poll_instant: Arc::new(std::sync::Mutex::new(Instant::now())),
         };
 
         // Register default sources

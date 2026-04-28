@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 # ==============================================================================
 # Xergon Network Installer
-# One-liner: curl -sSL https://degens.world/xergon | sh
+# One-liner: curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh
 #
 # Supports: install, update, uninstall
 # Dependencies: curl, tar, sh (standard Unix)
@@ -13,7 +13,7 @@ set -e
 
 XERGON_VERSION="${XERGON_VERSION:-latest}"
 XERGON_REPO="n1ur0/Xergon-Network"
-XERGON_BASE_URL="https://github.com/${XERGON_REPO}/releases"
+XERGON_BASE_URL="https://github.com/n1ur0/Xergon-Network/releases"
 BINARY_NAME="xergon-agent"
 
 # Directory structure
@@ -371,7 +371,7 @@ do_update() {
 
     if [ ! -f "${XERGON_BIN}/${BINARY_NAME}" ]; then
         error "Xergon agent not found at ${XERGON_BIN}/${BINARY_NAME}"
-        error "Run install first: curl -sSL https://degens.world/xergon | sh"
+        error "Run install first: curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh"
         exit 1
     fi
 
@@ -458,23 +458,90 @@ do_uninstall() {
     printf "\n"
     info "Xergon Network has been uninstalled."
     printf "\n"
-    printf "${DIM}  To reinstall: curl -sSL https://degens.world/xergon | sh${RESET}\n"
+    printf "${DIM}  To reinstall: curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh${RESET}\n"
     printf "\n"
 }
 
-# ── Help Command ───────────────────────────────────────────────────────────────
+# ── Status Command ─────────────────────────────────────────────────────────────
+
+do_status() {
+    banner
+    info "Xergon Network status"
+    printf "\n"
+
+    # Binary version
+    step "Agent binary"
+    if [ -f "${XERGON_BIN}/${BINARY_NAME}" ]; then
+        local version
+        version="$("${XERGON_BIN}/${BINARY_NAME}" --version 2>/dev/null | head -1)"
+        success "${version:-${BINARY_NAME}} (installed)"
+    else
+        warn "${BINARY_NAME} not found at ${XERGON_BIN}/${BINARY_NAME}"
+    fi
+
+    # Ergo node connectivity
+    step "Ergo node"
+    ERGO_NODE_URL="${ERGO_NODE_URL:-http://127.0.0.1:9053}"
+    node_info="$(curl -sf --max-time 5 "${ERGO_NODE_URL}/info" 2>/dev/null)" || true
+    if [ -n "$node_info" ]; then
+        local height name state peers
+        height="$(printf '%s' "$node_info" | sed -n 's/.*"height":\([0-9]*\).*/\1/p')"
+        name="$(printf '%s' "$node_info" | sed -n 's/.*"name":"\([^"]*\)".*/\1/p')"
+        state="$(printf '%s' "$node_info" | sed -n 's/.*"state":"\([^"]*\)".*/\1/p')"
+        peers="$(printf '%s' "$node_info" | sed -n 's/.*"peers":\([0-9]*\).*/\1/p')"
+        printf "    ${CYAN}Node${RESET}   : ${GREEN}%s${RESET}\n" "${name:-Ergo node}"
+        printf "    ${CYAN}Height${RESET} : ${GREEN}%s${RESET}\n" "${height:-?}"
+        printf "    ${CYAN}State${RESET}  : ${GREEN}%s${RESET}\n" "${state:-?}"
+        printf "    ${CYAN}Peers${RESET}  : ${GREEN}%s${RESET}\n" "${peers:-?}"
+        success "Connected to ${ERGO_NODE_URL}"
+    else
+        warn "Cannot reach Ergo node at ${ERGO_NODE_URL}"
+        printf "    Hint: Ensure \`ergo-daemon\` is running and port 9053 is accessible\n"
+    fi
+
+    # Agent running status
+    step "Agent daemon"
+    if curl -sf --max-time 3 "http://127.0.0.1:9099/xergon/status" >/dev/null 2>&1; then
+        success "Agent daemon is running"
+    else
+        warn "Agent daemon is not running"
+        printf "    Start with: ${BOLD}xergon-agent run${RESET}\n"
+    fi
+
+    # Wallet state
+    step "Wallet"
+    if [ -f "${XERGON_HOME}/data/wallet/ergo-wallet.state" ]; then
+        success "Wallet state file present"
+    elif [ -f "${XERGON_HOME}/data/wallet.conf" ]; then
+        info "Wallet config exists (seed may need initialization)"
+    else
+        warn "No wallet found — run: ${BOLD}xergon-agent setup${RESET}"
+    fi
+
+    # Config
+    if [ -f "${XERGON_HOME}/config.toml" ]; then
+        printf "\n"
+        info "Config: ${XERGON_HOME}/config.toml"
+    fi
+
+    printf "\n"
+}
+
+# ── Help Command ────────────────────────────────────────────────────────────────
 
 do_help() {
     banner
     printf "  ${BOLD}USAGE${RESET}\n"
-    printf "    curl -sSL https://degens.world/xergon | sh            # install\n"
-    printf "    curl -sSL https://degens.world/xergon | sh -s -- update    # update\n"
-    printf "    curl -sSL https://degens.world/xergon | sh -s -- uninstall  # uninstall\n"
+    printf "    curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh            # install\n"
+    printf "    curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh -s -- update    # update\n"
+    printf "    curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh -s -- uninstall  # uninstall\n"
+    printf "    curl -sSL https://github.com/n1ur0/Xergon-Network/releases/latest/download/install.sh | sh -s -- status     # status\n"
     printf "\n"
     printf "  ${BOLD}COMMANDS${RESET}\n"
-    printf "    install     Install xergon-agent (default) \n"
+    printf "    install     Install xergon-agent (default)\n"
     printf "    update      Update to latest version\n"
     printf "    uninstall   Remove xergon-agent from system\n"
+    printf "    status      Show agent + Ergo node status\n"
     printf "    help        Show this help message\n"
     printf "\n"
     printf "  ${BOLD}OPTIONS${RESET}\n"
@@ -493,7 +560,7 @@ do_help() {
     printf "\n"
 }
 
-# ── Main ───────────────────────────────────────────────────────────────────────
+# ── Main ────────────────────────────────────────────────────────────────────────
 
 main() {
     # Parse command (first argument, default: install)
@@ -503,6 +570,7 @@ main() {
         install|"")   do_install   ;;
         update)       do_update    ;;
         uninstall)    do_uninstall ;;
+        status)       do_status    ;;
         help|--help|-h) do_help    ;;
         *)
             error "Unknown command: ${COMMAND}"

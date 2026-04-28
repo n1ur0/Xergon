@@ -64,23 +64,6 @@ impl ProtocolStep {
             ProtocolStep::GovernanceExecute,
         ]
     }
-
-    #[allow(dead_code)]
-    fn description(&self) -> &'static str {
-        match self {
-            ProtocolStep::ProviderRegister => "Register new provider on-chain with NFT and stake",
-            ProtocolStep::ProviderHeartbeat => "Provider sends heartbeat to refresh state box",
-            ProtocolStep::InferenceRequest => "User sends inference request through relay",
-            ProtocolStep::UsageProofCreation => "Usage proof box created as immutable receipt",
-            ProtocolStep::SettlementExecution => "Settle payment from user staking to provider",
-            ProtocolStep::ProviderDeregister => "Provider deregisters and extracts stake",
-            ProtocolStep::RentTopUp => "Top up storage rent before box expires",
-            ProtocolStep::SlashingEvent => "Slash provider stake for misbehavior",
-            ProtocolStep::GovernanceProposal => "Create on-chain governance proposal",
-            ProtocolStep::GovernanceVote => "Cast vote on governance proposal",
-            ProtocolStep::GovernanceExecute => "Execute passed governance proposal",
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -261,12 +244,6 @@ impl MockErgoNode {
     async fn box_exists(&self, box_id: &str) -> bool {
         let state = self.state.read().await;
         state.boxes.get(box_id).map(|b| !b.spent).unwrap_or(false)
-    }
-
-    #[allow(dead_code)]
-    async fn get_box(&self, box_id: &str) -> Option<MockBox> {
-        let state = self.state.read().await;
-        state.boxes.get(box_id).cloned()
     }
 
     fn record_coverage(&self, step: &ProtocolStep, passed: bool, duration_ms: u64) {
@@ -751,12 +728,6 @@ mod tests {
     }
 
     #[test]
-    fn test_protocol_step_descriptions() {
-        assert!(!ProtocolStep::ProviderRegister.description().is_empty());
-        assert!(!ProtocolStep::GovernanceExecute.description().is_empty());
-    }
-
-    #[test]
     fn test_protocol_step_all() {
         let steps = ProtocolStep::all_steps();
         assert_eq!(steps.len(), 11);
@@ -774,15 +745,6 @@ mod tests {
     async fn test_spend_nonexistent_box() {
         let node = MockErgoNode::new();
         assert!(!node.spend_box("nonexistent").await);
-    }
-
-    #[tokio::test]
-    async fn test_get_box() {
-        let node = MockErgoNode::new();
-        node.create_box("get-001".to_string(), "0001".to_string(), 100, HashMap::new(), vec![]).await;
-        let box_state = node.get_box("get-001").await;
-        assert!(box_state.is_some());
-        assert_eq!(box_state.unwrap().box_id, "get-001");
     }
 
     #[test]
