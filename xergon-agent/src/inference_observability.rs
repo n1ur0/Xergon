@@ -287,11 +287,7 @@ pub struct InferenceObservability {
     /// Index: span_id -> trace_id (for span lookup)
     span_trace_index: DashMap<String, String>,
     /// Configuration.
-    config: Arc<tokio::sync::RwLock<ObservabilityConfig>>,
-    /// Runtime statistics.
-    #[allow(dead_code)]
-    stats: ObservabilityStats,
-    /// Atomic counters for lock-free updates.
+    config: Arc<tokio::sync::RwLock<ObservabilityConfig>>,    /// Atomic counters for lock-free updates.
     traces_created: AtomicU64,
     spans_created: AtomicU64,
     traces_exported: AtomicU64,
@@ -313,7 +309,6 @@ impl InferenceObservability {
             operation_index: DashMap::new(),
             span_trace_index: DashMap::new(),
             config: Arc::new(tokio::sync::RwLock::new(config)),
-            stats: ObservabilityStats::default(),
             traces_created: AtomicU64::new(0),
             spans_created: AtomicU64::new(0),
             traces_exported: AtomicU64::new(0),

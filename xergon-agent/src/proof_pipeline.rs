@@ -241,12 +241,7 @@ pub struct ProofPipeline {
     stats_fraud_detected: AtomicU64,
     stats_verification_time_sum: AtomicU64,
     stats_verification_count: AtomicU64,
-    stats_batches_processed: AtomicU64,
-    #[allow(dead_code)]
-    submission_counter: AtomicU64,
-    #[allow(dead_code)]
-    batch_counter: AtomicU64,
-    current_block_height: AtomicU64,
+    stats_batches_processed: AtomicU64,    current_block_height: AtomicU64,
 }
 
 impl ProofPipeline {
@@ -272,8 +267,6 @@ impl ProofPipeline {
             stats_verification_time_sum: AtomicU64::new(0),
             stats_verification_count: AtomicU64::new(0),
             stats_batches_processed: AtomicU64::new(0),
-            submission_counter: AtomicU64::new(0),
-            batch_counter: AtomicU64::new(0),
             current_block_height: AtomicU64::new(1_000_000),
         };
         pipeline.config.insert("config".to_string(), config);

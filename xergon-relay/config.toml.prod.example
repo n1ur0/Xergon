@@ -1,0 +1,35 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# Xergon Relay — Production Configuration Reference
+# ══════════════════════════════════════════════════════════════════════════════
+# Copy this file to config.toml and replace all CHANGE_ME_IN_PROD values.
+# Environment variables can override config values via CONFIG_PATH / SETTLEMENT_DB_PATH.
+# ══════════════════════════════════════════════════════════════════════════════
+
+[server]
+host = "0.0.0.0"           # Interface to bind to (use 127.0.0.1 for internal-only)
+port = 9090               # TCP port for the relay API
+
+# ── Pre-registered Providers ─────────────────────────────────────────────────
+# These are static provider entries. Providers can also register dynamically
+# via POST /register which bypasses this list.
+#
+# Fields:
+#   id        — unique provider identifier (used in routing)
+#   name      — human-readable display name
+#   base_url  — the provider's inference API endpoint
+#   api_key   — provider's own API key for their backend (env var recommended)
+
+[[providers]]
+id = "CHANGE_ME_IN_PROD-1"
+name = "Production GPU Provider 1"
+base_url = "CHANGE_ME_IN_PROD https://provider1.example.com/v1"
+api_key = "CHANGE_ME_IN_PROD_provider_key"
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Runtime Environment Variables (alternative to config)
+# ══════════════════════════════════════════════════════════════════════════════
+# CONFIG_PATH         — path to config.toml (default: config.toml)
+# SETTLEMENT_DB_PATH  — path to SQLite settlement DB (default: data/settlement.db)
+# RUST_LOG            — tracing log level (default: info)
+# RUST_BACKTRACE      — enable backtraces (default: 1)
+# ══════════════════════════════════════════════════════════════════════════════

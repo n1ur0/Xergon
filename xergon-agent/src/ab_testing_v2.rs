@@ -475,7 +475,7 @@ impl ABTestV2Manager {
 
         let z = (p1 - p2).abs() / se;
         // Convert z-score to confidence (simplified)
-        let confidence = 1.0 - 2.0 * (-z * 0.7071).exp(); // approximation
+        let confidence = 1.0 - 2.0 * (-z * std::f64::consts::FRAC_1_SQRT_2).exp(); // approximation
         Some(confidence.min(1.0))
     }
 

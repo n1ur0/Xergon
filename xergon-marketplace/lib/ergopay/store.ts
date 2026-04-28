@@ -7,6 +7,7 @@
 
 import type { StoredErgoPayRequest } from "@/lib/ergopay/types";
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const REQUEST_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 const requests = new Map<string, StoredErgoPayRequest>();
@@ -17,6 +18,7 @@ function ensureCleanup() {
   if (cleanupTimer) return;
   cleanupTimer = setInterval(() => {
     const now = Date.now();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for (const [id, req] of requests) {
       if (req.expiresAt < now) {
         req.status = "expired";
