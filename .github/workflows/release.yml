@@ -25,13 +25,13 @@ jobs:
             artifact_suffix: aarch64-unknown-linux-musl
             use_cross: true
           - target: x86_64-apple-darwin
-            os: ubuntu-latest
+            os: macos-13
             artifact_suffix: x86_64-apple-darwin
-            use_cross: true
+            use_cross: false
           - target: aarch64-apple-darwin
-            os: ubuntu-latest
+            os: macos-latest
             artifact_suffix: aarch64-apple-darwin
-            use_cross: true
+            use_cross: false
 
     steps:
       - uses: actions/checkout@v4
