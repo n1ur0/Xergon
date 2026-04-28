@@ -115,7 +115,7 @@ pub async fn submit_rating_tx(
 /// Compute blake2b256 hash of the given bytes.
 fn blake2b256_hash(data: &[u8]) -> Vec<u8> {
     use blake2::{Blake2b, Digest as _};
-    use digest::generic_array::typenum::U32;
+    use generic_array::typenum::U32;
     type Blake2b256 = Blake2b<U32>;
     let mut hasher = Blake2b256::new();
     hasher.update(data);

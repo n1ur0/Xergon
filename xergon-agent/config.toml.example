@@ -249,18 +249,18 @@ usage_proof_tree_hex = ""
 # ── Airdrop ───────────────────────────────────────────────────────────────────
 # ERG airdrop service for new users.
 
-# [airdrop]
+[airdrop]
 # Enable the airdrop endpoint.
 # Default: false
-# enabled = false
+enabled = false
 
 # Amount of ERG to airdrop per new user (nanoERG).
 # Default: 10_000_000 (0.01 ERG)
-# amount_nanoerg = 10000000
+amount_nanoerg = 10000000
 
 # Maximum total ERG that can be airdropped.
 # Default: 100.0
-# max_total_erg = 100.0
+max_total_erg = 100.0
 
 # Treasury box ID to fund from (optional, informational).
 # treasury_box_id = ""
@@ -270,7 +270,7 @@ usage_proof_tree_hex = ""
 
 # Minimum seconds between airdrops for the same public key.
 # Default: 86400 (24 hours)
-# cooldown_secs = 86400
+cooldown_secs = 86400
 
 # Ergo node URL for wallet API calls (defaults to ergo_node.rest_url if empty).
 # ergo_node_url = ""
@@ -280,7 +280,7 @@ usage_proof_tree_hex = ""
 
 # Transaction fee in nanoERG.
 # Default: 1_100_000 (0.0011 ERG)
-# fee_nanoerg = 1100000
+fee_nanoerg = 1100000
 
 
 # ── GPU Rental ────────────────────────────────────────────────────────────────

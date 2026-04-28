@@ -1100,6 +1100,7 @@ mod tests {
     fn test_inference_config_has_api_key_field() {
         let cfg = InferenceConfig {
             enabled: true,
+            backend_type: InferenceBackendType::Ollama,
             url: "http://localhost:11434".into(),
             timeout_secs: 120,
             api_key: "inference-secret".into(),

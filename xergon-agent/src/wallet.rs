@@ -16,7 +16,7 @@ use aes_gcm::{
 };
 use anyhow::{Context, Result};
 use blake2::{Blake2b, Digest as _};
-use digest::generic_array::typenum::U32;
+use generic_array::typenum::U32;
 use hkdf::Hkdf;
 use k256::elliptic_curve::sec1::ToEncodedPoint;
 use k256::SecretKey;
