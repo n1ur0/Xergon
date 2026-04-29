@@ -9,7 +9,11 @@
 "use client";
 
 // Import relay URL from central config (re-exported for client use)
-export { API_BASE, RELAY_BASE } from "./server-sdk";
+// Derive RELAY_BASE from API_BASE (strip /v1 suffix if present)
+import { API_BASE } from "@/lib/api/client-api";
+export const RELAY_BASE = API_BASE.replace(/\/v1$/, "") || API_BASE;
+export { API_BASE };
+
 
 // ── Wallet auth helpers ───────────────────────────────────────────────
 

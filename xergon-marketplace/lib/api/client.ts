@@ -6,7 +6,6 @@
  */
 
 import { getWalletPk, API_BASE } from "./config";
-import { sdk } from "./server-sdk";
 
 // ── Legacy types (marketplace-specific, kept for compatibility) ──
 
@@ -82,11 +81,16 @@ export class ApiError extends Error {
 export const endpoints = {
   /** List available models (returns marketplace ModelInfo[]) */
   listModels: async (): Promise<ModelInfo[]> => {
-    const models = await sdk.models.list();
-    return models.map((m) => ({
+    const walletPk = getWalletPk();
+    const res = await fetch(`${API_BASE}/v1/models`, {
+      headers: walletPk ? { "x-user-pk": walletPk } : {},
+    });
+    if (!res.ok) throw new Error(`Failed to list models: ${res.status}`);
+    const data = await res.json();
+    return (data.data || []).map((m: { id: string; owned_by?: string; pricing?: string }) => ({
       id: m.id,
       name: m.id,
-      provider: m.ownedBy ?? "unknown",
+      provider: m.owned_by ?? "unknown",
       tier: "standard",
       pricePerInputTokenNanoerg: m.pricing ? parseInt(m.pricing, 10) : undefined,
       pricePerOutputTokenNanoerg: m.pricing ? parseInt(m.pricing, 10) : undefined,
@@ -97,22 +101,12 @@ export const endpoints = {
   },
 
   /** Run inference (OpenAI-compatible chat completion) */
-  infer: (req: InferenceRequest) =>
-    sdk.chat.completions.create({
-      model: req.model,
-      messages: [{ role: "user", content: req.prompt }],
-      maxTokens: req.maxTokens,
-      temperature: req.temperature,
-    }),
-
-  /** Stream inference (SSE) -- returns raw Response for manual streaming */
-  inferStream: (req: InferenceRequest, signal?: AbortSignal) => {
+  infer: async (req: InferenceRequest): Promise<any> => {
     const walletPk = getWalletPk();
-    return fetch(`${API_BASE}/v1/chat/completions`, {
+    const res = await fetch(`${API_BASE}/v1/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "text/event-stream",
         ...(walletPk ? { "x-user-pk": walletPk } : {}),
       },
       body: JSON.stringify({
@@ -120,12 +114,16 @@ export const endpoints = {
         messages: [{ role: "user", content: req.prompt }],
         max_tokens: req.maxTokens,
         temperature: req.temperature,
-        stream: true,
       }),
-      signal,
     });
+    if (!res.ok) throw new Error(`Inference failed: ${res.status}`);
+    return res.json();
   },
 
   /** Get provider leaderboard (public) */
-  leaderboard: () => sdk.leaderboard(),
+  leaderboard: async (): Promise<any> => {
+    const res = await fetch(`${API_BASE}/v1/leaderboard`);
+    if (!res.ok) throw new Error(`Failed to fetch leaderboard: ${res.status}`);
+    return res.json();
+  },
 };
