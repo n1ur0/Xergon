@@ -35,7 +35,7 @@ hex = "0.4"
 blake2 = "0.10"
 blake3 = "1"
 digest = "0.11"
-generic-array = "0.14"
+generic-array = "1.4"
 # Wallet & signing
 bip39 = "2"
 aes-gcm = "0.10"
