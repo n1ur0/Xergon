@@ -20,42 +20,34 @@
   "liveNow": false,
   "panels": [
     {
-      "title": "Overview",
+      "title": "Settlement Pipeline",
       "type": "row",
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
       "panels": []
     },
     {
-      "title": "Uptime",
+      "title": "Pending Settlements",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "time() - xergon_agent_start_timestamp_seconds",
+          "expr": "xergon_settlement_pending",
           "legendFormat": "",
-          "format": "table"
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "red", "value": 0 }
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 50 }
             ]
-          },
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": { "text": "DOWN", "color": "red" }
-              }
-            }
-          ]
+          }
         }
       },
       "options": {
@@ -65,14 +57,15 @@
       }
     },
     {
-      "title": "Inference Requests (5m)",
+      "title": "Completed Settlements (5m)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum(increase(xergon_inference_requests_total[5m]))",
-          "legendFormat": ""
+          "expr": "sum(increase(xergon_settlement_completed_total[5m]))",
+          "legendFormat": "",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -92,25 +85,24 @@
       }
     },
     {
-      "title": "Avg Latency",
+      "title": "Failed Settlements (5m)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "xergon_inference_latency_ms",
-          "legendFormat": ""
+          "expr": "sum(increase(xergon_settlement_failed_total[5m]))",
+          "legendFormat": "",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 5000 },
-              { "color": "red", "value": 30000 }
+              { "color": "red", "value": 1 }
             ]
           }
         }
@@ -122,25 +114,58 @@
       }
     },
     {
-      "title": "Error Rate (5m)",
+      "title": "Settlement Volume (5m)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum(increase(xergon_inference_errors_total[5m])) / clamp_min(sum(increase(xergon_inference_requests_total[5m])), 1)",
-          "legendFormat": ""
+          "expr": "sum(increase(xergon_settlement_volume_nanoerg[5m])) / 1000000000",
+          "legendFormat": "",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
+          "unit": "ERG",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.1 },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "title": "Avg Settlement Latency",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "xergon_settlement_latency_ms",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "yellow", "value": 0.05 },
-              { "color": "red", "value": 0.1 }
+              { "color": "yellow", "value": 300000 },
+              { "color": "red", "value": 600000 }
             ]
           }
         }
@@ -154,12 +179,13 @@
     {
       "title": "Wallet Balance",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
           "expr": "xergon_wallet_balance_nanoerg / 1000000000",
-          "legendFormat": ""
+          "legendFormat": "",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
@@ -183,44 +209,20 @@
       }
     },
     {
-      "title": "Active Providers",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        {
-          "expr": "xergon_relay_providers_active",
-          "legendFormat": ""
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "green", "value": 3 }
-            ]
-          }
-        }
-      },
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "title": "Inference Request Rate",
+      "title": "Settlement Rate (5m)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "sum by (instance) (rate(xergon_inference_requests_total[5m]))",
-          "legendFormat": "{{instance}}",
+          "expr": "rate(xergon_settlement_completed_total[5m])",
+          "legendFormat": "completed",
           "refId": "A"
+        },
+        {
+          "expr": "rate(xergon_settlement_failed_total[5m])",
+          "legendFormat": "failed",
+          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -235,20 +237,21 @@
       }
     },
     {
-      "title": "Inference Latency",
+      "title": "ERG Volume Settled Over Time",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "xergon_inference_latency_ms",
-          "legendFormat": "{{instance}}",
+          "expr": "rate(xergon_settlement_volume_nanoerg[5m]) / 1000000000",
+          "legendFormat": "ERG/s",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "unit": "ERG/s",
+          "decimals": 6,
           "color": { "mode": "palette-classic" }
         }
       },
@@ -258,73 +261,7 @@
       }
     },
     {
-      "title": "Tokens Processed",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        {
-          "expr": "sum by (instance) (rate(xergon_inference_tokens_total[5m]))",
-          "legendFormat": "{{instance}}",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" }
-        }
-      },
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" }
-      }
-    },
-    {
-      "title": "Chain Sync Height",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        {
-          "expr": "xergon_chain_sync_height",
-          "legendFormat": "sync height",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" }
-        }
-      },
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" }
-      }
-    },
-    {
-      "title": "P2P Peers",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 13 },
-      "datasource": { "type": "prometheus", "uid": "${datasource}" },
-      "targets": [
-        {
-          "expr": "xergon_p2p_peers_known",
-          "legendFormat": "peers",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "color": { "mode": "palette-classic" }
-        }
-      },
-      "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" }
-      }
-    },
-    {
-      "title": "ERG Balance Over Time",
+      "title": "Wallet Balance Over Time",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
@@ -348,74 +285,70 @@
       }
     },
     {
-      "title": "Relay",
-      "type": "row",
-      "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
-      "panels": []
-    },
-    {
-      "title": "Relay Requests by Type",
+      "title": "Pending Settlements Over Time",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "rate(xergon_relay_requests_chat_total[5m])",
-          "legendFormat": "chat",
+          "expr": "xergon_settlement_pending",
+          "legendFormat": "pending",
           "refId": "A"
-        },
-        {
-          "expr": "rate(xergon_relay_requests_models_total[5m])",
-          "legendFormat": "models",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(xergon_relay_requests_gpu_total[5m])",
-          "legendFormat": "gpu",
-          "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "short",
           "color": { "mode": "palette-classic" }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" }
+        "legend": { "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
       }
     },
     {
-      "title": "Relay Errors",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "title": "Settlement Latency Histogram",
+      "type": "heatmap",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 21 },
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "targets": [
         {
-          "expr": "rate(xergon_relay_errors_4xx_total[5m])",
-          "legendFormat": "4xx",
+          "expr": "sum by (le) (rate(xergon_settlement_latency_bucket[5m]))",
+          "legendFormat": "{{le}}",
           "refId": "A"
-        },
-        {
-          "expr": "rate(xergon_relay_errors_5xx_total[5m])",
-          "legendFormat": "5xx",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
+          "unit": "ms"
+        }
+      }
+    },
+    {
+      "title": "Settlement Error Breakdown",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "targets": [
+        {
+          "expr": "sum by (error_type) (increase(xergon_settlement_errors_total[5m]))",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
           "color": { "mode": "palette-classic" }
         }
       },
       "options": {
-        "legend": { "displayMode": "table", "placement": "bottom" }
+        "legend": { "displayMode": "table", "placement": "right" }
       }
     }
   ],
   "schemaVersion": 39,
-  "tags": ["xergon", "agent", "relay"],
+  "tags": ["xergon", "settlement"],
   "templating": {
     "list": [
       {
@@ -429,7 +362,7 @@
   "time": { "from": "now-1h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Xergon Network",
-  "uid": "xergon-network",
+  "title": "Xergon Settlement Status",
+  "uid": "xergon-settlement-status",
   "version": 1
 }
